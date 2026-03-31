@@ -13,7 +13,7 @@ keywords = [
 ]
 license = { file = "LICENSE" }
 authors = [
-  { name = "Zach Welz", email = "Zachary.Welz@epeerless.us" },
+  { name = "Zach Welz", email = "welz.zach@gmail.com" },
 ]
 requires-python = ">=3.11"
 classifiers = [
