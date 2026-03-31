@@ -1,0 +1,161 @@
+[build-system]
+build-backend = "flit_core.buildapi"
+requires = [
+  "flit-core>=3.7.1,<4",
+]
+
+[project]
+name = "holonic"
+version = "0.1.0"
+description = "Tbd..."
+readme = "README.md"
+keywords = [
+]
+license = { file = "LICENSE" }
+authors = [
+  { name = "Zach Welz", email = "Zachary.Welz@epeerless.us" },
+]
+requires-python = ">=3.11"
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Education",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: BSD License",
+  "Natural Language :: English",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+]
+optional-dependencies.docs = [
+  "myst-parser",
+  "pydata-sphinx-theme",
+  "sphinx>=7",
+]
+optional-dependencies.lint = [
+  "mypy",
+  "pyproject-fmt>=2.5",
+  "ruff>=0.6",
+  "ssort>=0.12",
+]
+optional-dependencies.test = [
+  "pytest",
+  "pytest-cov",
+  "pytest-html",
+  "pytest-json-report",
+  "pytest-xdist",
+]
+urls."Bug Tracker" = "tbd"
+urls.Documentation = "tbd"
+urls."Source" = "tbd"
+
+[tool.flit.sdist]
+exclude = [
+  ".gitignore",
+]
+
+[tool.ruff]
+line-length = 100
+cache-dir = "build/.ruff_cache"
+
+format.docstring-code-line-length = 100
+lint.select = [
+  "D",
+  "E",
+  "F",
+  "I",
+  "PLE",
+  "PLW",
+  "UP",
+]
+lint.ignore = [
+  "D105",
+]
+lint.per-file-ignores."src/holonic/test/__*.py" = [
+  "D",
+]
+lint.per-file-ignores."src/holonic/test/test*.py" = [
+  "D",
+]
+lint.pydocstyle.convention = "google"
+
+[tool.pytest.ini_options]
+junit_family = "xunit2"
+cache_dir = "build/.pytest_cache"
+addopts = [
+  "--pyargs",
+  "holonic",
+  # for contributors
+  "--cov-report=term-missing:skip-covered",
+  "--color=yes",
+  # for review
+  "--html=build/reports/pytest.html",
+  "--self-contained-html",
+  "--cov-report=html:build/reports/htmlcov",
+  "--cov-report=xml:build/reports/coverage.xml",
+  "--cov-context=test",
+  # coverage
+  "--cov=holonic",
+  "--no-cov-on-fail",
+  # for robots
+  "--junitxml=build/reports/pytest.xunit.xml",
+  "--json-report",
+  # misc
+  "-vv",
+  "--ff",
+]
+
+[tool.coverage.run]
+data_file = "build/reports/.coverage"
+omit = [
+  "*/test/test*.py",
+  "*/holonic/utils.py",
+]
+
+[tool.coverage.html]
+show_contexts = true
+
+[tool.coverage.paths]
+holonic = [
+  "src/holonic",
+  "*/src/holonic",
+]
+
+[tool.coverage.report]
+exclude_also = [
+  "raise NotImplementedError*",
+  "except LookupError",
+  "except RuntimeError",
+  "raise TypeError",
+  "except TypeError",
+]
+
+[tool.mypy]
+# broken by ipywidgetsplugins = "pydantic.mypy"
+cache_dir = "build/.mypy_cache"
+sqlite_cache = true
+python_version = "3.11"
+allow_redefinition = true
+check_untyped_defs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+show_error_codes = true
+warn_return_any = true
+warn_unused_ignores = true
+disable_error_code = "type-abstract"
+# disallow_any_unimported = true
+#exclude = [
+#  "^.+/holonic/test.+\\.py$",
+#]
+
+[[tool.mypy.overrides]]
+module = [
+  "importlib.metadata",
+]
+ignore_missing_imports = true

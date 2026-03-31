@@ -1,0 +1,174 @@
+[workspace]
+name = "holonic"
+channels = ["conda-forge"]
+platforms = ["win-64"]
+
+[pypi-dependencies]
+holonic = { path=".", editable=true}
+yfiles-jupyter-graphs = ">=1.7.0"
+
+[dependencies]
+python = ">=3.11"
+pip = ">=25"
+polars = "*"
+rdflib = ">=7.0.0"
+pyshacl = ">=0.26.0"
+pydantic =  ">=2.0.0"
+
+# generic tasks ###########################################
+[tasks]
+
+[tasks.lint-fix]
+description = """Run all lint fixers"""
+depends-on = ["fix-pyproject", "fix-ssort", "format-ruff", "fix-ruff", "mypy"]
+cmd = "echo 🚧"
+
+[tasks.lint-check]
+description = """Run all lint checkers"""
+depends-on = ["check-pyproject", "check-ssort", "check-ruff", "mypy"]
+cmd = "echo 🔎"
+
+[feature.tasks-test.tasks]
+
+[feature.tasks-test.tasks.test]
+cmd = "pytest"
+
+[feature.tasks-lint.tasks.fix-pyproject]
+cmd = "pyproject-fmt pyproject.toml"
+inputs = ["pyproject.toml"]
+
+[feature.tasks-lint.tasks.fix-ssort]
+cmd = "ssort src/**/*.py"
+inputs = ["src/**/*.py"]
+
+[feature.tasks-lint.tasks.format-ruff]
+cmd = "ruff format src src/**/*.py"
+inputs = ["src/**/*.py"]
+
+[feature.tasks-lint.tasks.fix-ruff]
+cmd = "ruff check src/ --fix"
+inputs = ["src/**/*.py"]
+
+[feature.tasks-lint.tasks.mypy]
+cmd = "mypy --show-error-codes -p holonic"
+inputs = ["src/**/*.py"]
+
+[feature.tasks-lint.tasks.check-pyproject]
+cmd = "pyproject-fmt pyproject.toml --check"
+inputs = ["pyproject.toml"]
+
+[feature.tasks-lint.tasks.check-ssort]
+cmd = "ssort --check src/**/*.py"
+inputs = ["src/**/*.py"]
+
+[feature.tasks-lint.tasks.check-ruff]
+cmd = "ruff check src/"
+inputs = ["src/**/*.py"]
+
+[feature.tasks-docs.tasks.autogen]
+description = "Autobuild the code documentation"
+cmd = "sphinx-apidoc -f -o ./docs/source/auto ./src/holonic ./src/holonic/test"
+
+[feature.tasks-docs.tasks.build_html_docs]
+description = "Build the documentation"
+cmd = "sphinx-build -a -E -b html ./docs/source ./build/docs"
+depends-on = ["autogen"]
+
+[feature.tasks-start.tasks.first]
+description = "Set up and test"
+depends-on = ["lint-check", "test", "build_html_docs"]
+
+[feature.tasks-jlite.tasks.build_jl]
+description = "Create jupyterlite page"
+cmd = "jupyter lite build --contents jupyterlite/content  --output-dir build/docs/demo"
+
+[feature.tasks-lab.tasks.serve]
+description = "Serve local jupyterlab"
+cmd = "jupyter lab"
+
+
+[environments.dev]
+features = [
+  "deps-lint",
+  "deps-test",
+  "deps-docs",
+  "deps-jlite",
+  "deps-lab",
+  "tasks-lint",
+  "tasks-test",
+  "tasks-docs",
+  "tasks-start",
+  "tasks-jlite",
+  "tasks-lab"
+]
+
+
+[environments.py311]
+features  = [
+  "py311",
+  "deps-lint",
+  "deps-test",
+  "deps-docs",
+  "tasks-lint",
+  "tasks-test",
+]
+
+[environments.py312]
+features  = [
+  "py312",
+  "deps-lint",
+  "deps-test",
+  "deps-docs",
+  "deps-jlite",
+  "tasks-lint",
+  "tasks-test",
+  "tasks-docs",
+  "tasks-jlite",
+]
+
+[environments.py313]
+features  = [
+  "py313",
+  "deps-lint",
+  "deps-test",
+  "deps-docs",
+  "tasks-lint",
+  "tasks-test",
+]
+
+[feature.py311.dependencies]
+python = "3.11.*"
+
+[feature.py312.dependencies]
+python = "3.12.*"
+
+[feature.py313.dependencies]
+python = "3.13.*"
+
+[feature.deps-lint.dependencies]
+mypy = "*"
+pyproject-fmt = ">=2.5"
+ruff = ">=0.6"
+ssort = ">=0.12"
+
+[feature.deps-test.dependencies]
+pytest = "*"
+pytest-cov = "*"
+pytest-html = "*"
+pytest-xdist = "*"
+pytest-json-report = "*"
+
+[feature.deps-docs.dependencies]
+myst-parser = "*"
+pydata-sphinx-theme = "*"
+sphinx = ">=7"
+
+[feature.deps-lab.dependencies]
+jupyterlab = ">=4,<5"
+ipydatagrid = "*"
+
+[feature.deps-jlite.dependencies]
+jupyterlite-core = "*"
+jupyterlite-pyodide-kernel = "*"
+jupyterlab = ">=4,<5"
+voici = "*"
