@@ -4,20 +4,18 @@
 
 A lightweight Python client for building holonic knowledge graphs (based on Cagel's four-graph holonic RDF model) backed by rdflib, Apache Jena Fuseki, or any SPARQL-compliant quad store.
 
-
 ## The Four-Graph Model
 
 Every `Holon` has four (or more!) named graphs, each answering a distinct question:
 
-| Layer          | Question                | RDF Mechanism                       | Constructed With                         |
-| -------------- | ----------------------- | ----------------------------------- | ---------------------------------------- |
-| **Interior**   | What is true inside?    | Named graph, A-Box triples          | `interior_ttl=` or `load_interior()`     |
-| **Boundary**   | What is allowed?        | SHACL shapes, portal definitions    | `boundary_ttl=` or `load_boundary()`     |
-| **Projection** | What do outsiders see?  | External bindings, translated vocab | `projection_ttl=` or `load_projection()` |
-| **Context**    | Where does this belong? | Membership, temporal annotations    | `context_ttl=` or `load_context()`       |
+| Layer          | Question                | RDF Mechanism                       |
+| -------------- | ----------------------- | ----------------------------------- |
+| **Interior**   | What is true inside?    | Named graph, A-Box triples          |
+| **Boundary**   | What is allowed?        | SHACL shapes, portal definitions    |
+| **Projection** | What do outsiders see?  | External bindings, translated vocab |
+| **Context**    | Where does this belong? | Membership, temporal annotations    |
 
 The holon's IRI threads through all four layers as both the identity anchor and a subject in cross-layer triples.
-
 
 ## Design Principle
 
@@ -27,22 +25,18 @@ A holon is not a Python object containing four `rdflib.Graph` attributes. A holo
 
 ## Install
 
-```bash
-pip install holonic                     # core (rdflib + pyshacl)
-pip install holonic[fuseki]             # + Fuseki backend
-pip install holonic[entailment]         # + RDFS materialization
-pip install holonic[dev]                # all extras + tests + docs
-```
-
-> Conda-forge support coming soon!
+> pypi and conda-forge support coming soon!
 
 ## Dev Install and Serve Jupyter Notebooks
+
+> Note: Requires `pixi.sh` and `conda`/`mamba`.
 
 ```bash
 pixi run serve
 ```
 
 ## Quick Start
+
 ```python
 from holonic import HolonicDataset
 
@@ -71,11 +65,11 @@ rows = ds.query('''
 
 ## Backends
 
-| Backend | Import | Infrastructure |
-|---------|--------|----------------|
-| `RdflibBackend` | `from holonic import RdflibBackend` | None (in-memory) |
-| `FusekiBackend` | `from holonic.backends.fuseki_backend import FusekiBackend` | Fuseki server |
-| Custom | Implement `GraphBackend` protocol | Any quad store |
+| Backend         | Import                                                      | Infrastructure   |
+| --------------- | ----------------------------------------------------------- | ---------------- |
+| `RdflibBackend` | `from holonic import RdflibBackend`                         | None (in-memory) |
+| `FusekiBackend` | `from holonic.backends.fuseki_backend import FusekiBackend` | Fuseki server    |
+| Custom          | Implement `GraphBackend` protocol                           | Any quad store   |
 
 ```python
 # Fuseki backend
@@ -85,7 +79,6 @@ ds = HolonicDataset(
     backend=FusekiBackend("http://localhost:3030", "holarchy")
 )
 ```
-
 
 ## Key Concepts
 
@@ -167,23 +160,14 @@ topo = ds.project_holarchy()
 
 The package includes a lightweight OWL 2 RL vocabulary (`holonic/ontology/cga.ttl`) and SHACL shapes (`cga-shapes.ttl`) defining the structural concepts: `cga:Holon`, `cga:TransformPortal`, `cga:hasInterior`, `cga:hasBoundary`, `cga:constructQuery`, etc.
 
-## Examples
+## Example Notebooks
 
-| Example | Description |
-|---------|-------------|
-| `examples/01_holon_basics.py` | Holon creation, multi-interior, membrane validation |
-| `examples/02_portal_traversal.py` | Portal discovery, multi-hop paths, provenance |
-| `examples/03_gra_interop.py` | Cross-standard GRA message translation (OMS→FACE) |
-| `examples/04_projections.py` | Type/literal/blank-node collapse, pipelines, holarchy projection |
-
-```bash
-# Run as scripts
-python examples/01_holon_basics.py
-
-# Or convert to notebooks
-pip install jupytext
-jupytext --to notebook examples/04_projections.py
-```
+| Example                              | Description                                                      |
+| ------------------------------------ | ---------------------------------------------------------------- |
+| `examples/01_holon_basics.ipynb`     | Holon creation, multi-interior, membrane validation              |
+| `examples/02_portal_traversal.ipynb` | Portal discovery, multi-hop paths, provenance                    |
+| `examples/03_cco_to_schemaorg.ipynb` | Cross-standard data translation (CCO→Schema.org)                 |
+| `examples/04_projections.ipynb`      | Type/literal/blank-node collapse, pipelines, holarchy projection |
 
 ## Documentation
 
@@ -192,11 +176,25 @@ pip install holonic[docs]
 cd docs && sphinx-build -b html . _build/html
 ```
 
+Or
+
+```bash
+pixi run build_html_docs
+```
+
+and open the `index.html`
+
 ## Tests
 
 ```bash
 pip install holonic[dev]
 pytest
+```
+
+or 
+
+```bash
+pixi run test
 ```
 
 ## Architecture

@@ -47,3 +47,7 @@ docs/source/auto
 # Jupyterlite
 *.doit.db
 _output
+
+# Other
+rdf_gen/
+data/render_templates/
