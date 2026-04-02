@@ -1679,34 +1679,34 @@ packages:
 - pypi: ./
   name: holonic
   version: 0.2.1
-  sha256: 6c6ca6e5740efe311904b09a85a5b01de66fc881a147cd62b09d5337cd96083b
+  sha256: c97f0fc1363156351cdc28b693b2dff636050cf9149e4431bc74607c134ea174
   requires_dist:
-  - rdflib>=7.0
+  - pydantic>=2
   - pyshacl>=0.25
-  - pydantic>=2.0
-  - aiohttp>=3.9 ; extra == 'fuseki'
-  - owlrl>=6.0 ; extra == 'entailment'
-  - yfiles-jupyter-graphs>=1.7 ; extra == 'viz'
-  - ipywidgets>=8.0 ; extra == 'viz'
-  - sphinx>=7.0 ; extra == 'docs'
-  - sphinx-autodoc-typehints ; extra == 'docs'
-  - sphinx-rtd-theme ; extra == 'docs'
-  - myst-parser ; extra == 'docs'
-  - jupytext>=1.16 ; extra == 'notebooks'
-  - jupyter ; extra == 'notebooks'
-  - pytest>=8.0 ; extra == 'dev'
+  - rdflib>=7
+  - holonic[docs,entailment,fuseki,notebooks,viz] ; extra == 'dev'
+  - pytest>=8 ; extra == 'dev'
   - pytest-cov ; extra == 'dev'
   - ruff ; extra == 'dev'
-  - holonic[fuseki,entailment,viz,docs,notebooks] ; extra == 'dev'
+  - myst-parser ; extra == 'docs'
+  - sphinx>=7 ; extra == 'docs'
+  - sphinx-autodoc-typehints ; extra == 'docs'
+  - sphinx-rtd-theme ; extra == 'docs'
+  - owlrl>=6 ; extra == 'entailment'
+  - aiohttp>=3.9 ; extra == 'fuseki'
   - mypy ; extra == 'lint'
   - pyproject-fmt>=2.5 ; extra == 'lint'
   - ruff>=0.6 ; extra == 'lint'
   - ssort>=0.12 ; extra == 'lint'
+  - jupyter ; extra == 'notebooks'
+  - jupytext>=1.16 ; extra == 'notebooks'
   - pytest ; extra == 'test'
   - pytest-cov ; extra == 'test'
   - pytest-html ; extra == 'test'
   - pytest-json-report ; extra == 'test'
   - pytest-xdist ; extra == 'test'
+  - ipywidgets>=8 ; extra == 'viz'
+  - yfiles-jupyter-graphs>=1.7 ; extra == 'viz'
   requires_python: '>=3.11'
   editable: true
 - conda: https://conda.anaconda.org/conda-forge/noarch/hpack-4.1.0-pyhd8ed1ab_0.conda

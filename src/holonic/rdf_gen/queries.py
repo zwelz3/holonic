@@ -1,5 +1,4 @@
-"""
-queries.py — Execute SPARQL queries and format results for templates.
+"""queries.py — Execute SPARQL queries and format results for templates.
 
 Result types
 ------------
@@ -12,7 +11,7 @@ grouped   Dict of lists, grouped by first column value.
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any, Optional, Union
+from typing import Any
 
 from rdflib import Graph, Literal, URIRef
 from rdflib.term import Node as RDFNode
@@ -46,8 +45,7 @@ def execute_select(
     result_type: str = "list",
     shorten_uris: bool = False,
 ) -> Any:
-    """
-    Execute a SPARQL SELECT query and return formatted results.
+    """Execute a SPARQL SELECT query and return formatted results.
 
     Parameters
     ----------
@@ -60,7 +58,7 @@ def execute_select(
     shorten_uris : bool
         If True, apply local-name shortening to URI values.
 
-    Returns
+    Returns:
     -------
     Depending on result_type:
         'scalar'  — single Python value
@@ -100,8 +98,7 @@ def execute_select(
 
 
 def execute_construct(graph: Graph, query: str) -> Graph:
-    """
-    Execute a SPARQL CONSTRUCT query and return the result graph.
+    """Execute a SPARQL CONSTRUCT query and return the result graph.
     """
     result = Graph()
     for triple in graph.query(query):

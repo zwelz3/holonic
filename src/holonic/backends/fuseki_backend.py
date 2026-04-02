@@ -10,7 +10,6 @@ Requires: aiohttp
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from typing import Any
 
@@ -54,6 +53,7 @@ class FusekiBackend:
     ):
         # Lazy import — don't require aiohttp unless this backend is used
         from holonic.backends._fuseki_client import FusekiClient
+
         self.base_url = base_url
         self.dataset = dataset
         self._client_kwargs = client_kwargs
@@ -111,24 +111,25 @@ class FusekiBackend:
             for b in result.get("results", {}).get("bindings", []):
                 rows.append({k: v["value"] for k, v in b.items()})
             return rows
+
         return self._call(_q)
 
     def construct(self, sparql: str, **bindings: Any) -> Graph:
         async def _q(c):
-            result = await c.query_sparql(
-                sparql, accept="text/turtle"
-            )
+            result = await c.query_sparql(sparql, accept="text/turtle")
             g = Graph()
             raw = result.get("raw", "")
             if raw:
                 g.parse(data=raw, format="turtle")
             return g
+
         return self._call(_q)
 
     def ask(self, sparql: str, **bindings: Any) -> bool:
         async def _q(c):
             result = await c.query_sparql(sparql)
             return result.get("boolean", False)
+
         return self._call(_q)
 
     def update(self, sparql: str) -> None:
@@ -139,4 +140,5 @@ class FusekiBackend:
     def list_named_graphs(self) -> list[str]:
         async def _q(c):
             return await c.list_named_graphs()
+
         return self._call(_q)

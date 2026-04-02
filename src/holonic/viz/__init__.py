@@ -8,22 +8,22 @@ yFiles node/edge data.
 Requires: yfiles-jupyter-graphs, ipywidgets
 """
 
-from holonic.viz.widgets import (
-    HolonViz,
-    HolarchyViz,
-    SPARQLExplorer,
-)
-from holonic.viz.graph_builder import (
-    holon_to_yfiles,
-    holarchy_to_yfiles,
-    projected_to_yfiles,
-    sparql_result_to_yfiles,
-)
 from holonic.viz.formatters import (
     format_compartmented,
     format_shacl_shape,
     format_simple,
     format_typed,
+)
+from holonic.viz.graph_builder import (
+    holarchy_to_yfiles,
+    holon_to_yfiles,
+    projected_to_yfiles,
+    sparql_result_to_yfiles,
+)
+from holonic.viz.widgets import (
+    HolarchyViz,
+    HolonViz,
+    SPARQLExplorer,
 )
 
 __all__ = [

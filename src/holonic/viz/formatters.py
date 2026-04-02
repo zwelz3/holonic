@@ -32,6 +32,44 @@ def format_typed(node: ProjectedNode) -> str:
     return name
 
 
+def _filter_display_attrs(
+    attrs: dict[str, Any],
+    exclude_keys: set[str] | None = None,
+) -> dict[str, Any]:
+    """Filter attributes for display, removing noisy RDF infrastructure."""
+    skip = exclude_keys or set()
+    skip_fragments = {
+        "rdf-syntax-ns#type",
+        "label",  # already shown as node name
+        "22-rdf-syntax",
+    }
+    result = {}
+    for k, v in attrs.items():
+        k_lower = k.lower()
+        if k in skip:
+            continue
+        if any(frag in k_lower for frag in skip_fragments):
+            continue
+        result[k] = v
+    return result
+
+
+def _format_value(val: Any, max_len: int = 35) -> str:
+    """Format a value for display in a node attribute line."""
+    if isinstance(val, dict):
+        # Nested blank node — show key count
+        return f"{{...{len(val)} fields}}"
+    if isinstance(val, list):
+        if len(val) <= 3:
+            items = ", ".join(str(v)[:15] for v in val)
+            return f"[{items}]"
+        return f"[{len(val)} items]"
+    s = str(val)
+    if len(s) > max_len:
+        return s[: max_len - 1] + "…"
+    return s
+
+
 def format_compartmented(
     node: ProjectedNode,
     *,
@@ -78,6 +116,50 @@ def format_compartmented(
             lines.append(f"  {k}: {v}")
 
     return "\n".join(lines)
+
+
+def _format_shape_property(prop: Any) -> str:
+    """Format a single SHACL property constraint line."""
+    if not isinstance(prop, dict):
+        return f"  · {prop}"
+
+    # Extract key fields
+    SH = "http://www.w3.org/ns/shacl#"
+    path = prop.get(f"{SH}path", prop.get("path", "?"))
+    datatype = prop.get(f"{SH}datatype", prop.get("datatype"))
+    min_count = prop.get(f"{SH}minCount", prop.get("minCount"))
+    max_count = prop.get(f"{SH}maxCount", prop.get("maxCount"))
+    severity = prop.get(f"{SH}severity", prop.get("severity"))
+
+    # Severity icon
+    if severity:
+        sev_str = str(severity)
+        if "Violation" in sev_str:
+            icon = "✗"
+        elif "Warning" in sev_str:
+            icon = "⚠"
+        else:
+            icon = "ℹ"
+    else:
+        icon = "·"
+
+    # Path
+    path_name = shorten_uri(str(path)) if isinstance(path, str) else str(path)
+
+    # Datatype
+    dt_str = f"[{shorten_uri(str(datatype))}]" if datatype else ""
+
+    # Cardinality
+    lo = str(min_count) if min_count is not None else "0"
+    hi = str(max_count) if max_count is not None else "*"
+    card = f"{lo}..{hi}"
+
+    parts = [f"  {icon} {path_name:15s}"]
+    if dt_str:
+        parts.append(f" {dt_str:10s}")
+    parts.append(f" {card}")
+
+    return "".join(parts)
 
 
 def format_shacl_shape(
@@ -140,85 +222,3 @@ def format_shacl_shape(
         lines.append("  [closed]")
 
     return "\n".join(lines)
-
-
-def _format_shape_property(prop: Any) -> str:
-    """Format a single SHACL property constraint line."""
-    if not isinstance(prop, dict):
-        return f"  · {prop}"
-
-    # Extract key fields
-    SH = "http://www.w3.org/ns/shacl#"
-    path = prop.get(f"{SH}path", prop.get("path", "?"))
-    datatype = prop.get(f"{SH}datatype", prop.get("datatype"))
-    min_count = prop.get(f"{SH}minCount", prop.get("minCount"))
-    max_count = prop.get(f"{SH}maxCount", prop.get("maxCount"))
-    severity = prop.get(f"{SH}severity", prop.get("severity"))
-
-    # Severity icon
-    if severity:
-        sev_str = str(severity)
-        if "Violation" in sev_str:
-            icon = "✗"
-        elif "Warning" in sev_str:
-            icon = "⚠"
-        else:
-            icon = "ℹ"
-    else:
-        icon = "·"
-
-    # Path
-    path_name = shorten_uri(str(path)) if isinstance(path, str) else str(path)
-
-    # Datatype
-    dt_str = f"[{shorten_uri(str(datatype))}]" if datatype else ""
-
-    # Cardinality
-    lo = str(min_count) if min_count is not None else "0"
-    hi = str(max_count) if max_count is not None else "*"
-    card = f"{lo}..{hi}"
-
-    parts = [f"  {icon} {path_name:15s}"]
-    if dt_str:
-        parts.append(f" {dt_str:10s}")
-    parts.append(f" {card}")
-
-    return "".join(parts)
-
-
-def _filter_display_attrs(
-    attrs: dict[str, Any],
-    exclude_keys: set[str] | None = None,
-) -> dict[str, Any]:
-    """Filter attributes for display, removing noisy RDF infrastructure."""
-    skip = exclude_keys or set()
-    skip_fragments = {
-        "rdf-syntax-ns#type",
-        "label",  # already shown as node name
-        "22-rdf-syntax",
-    }
-    result = {}
-    for k, v in attrs.items():
-        k_lower = k.lower()
-        if k in skip:
-            continue
-        if any(frag in k_lower for frag in skip_fragments):
-            continue
-        result[k] = v
-    return result
-
-
-def _format_value(val: Any, max_len: int = 35) -> str:
-    """Format a value for display in a node attribute line."""
-    if isinstance(val, dict):
-        # Nested blank node — show key count
-        return f"{{...{len(val)} fields}}"
-    if isinstance(val, list):
-        if len(val) <= 3:
-            items = ", ".join(str(v)[:15] for v in val)
-            return f"[{items}]"
-        return f"[{len(val)} items]"
-    s = str(val)
-    if len(s) > max_len:
-        return s[:max_len - 1] + "…"
-    return s

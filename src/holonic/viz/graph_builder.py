@@ -15,29 +15,47 @@ graph_builder by ensuring that:
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
 
 from rdflib import Graph
 
 from holonic.projections import (
-    ProjectedEdge,
     ProjectedGraph,
     ProjectedNode,
     project_to_lpg,
-    collapse_reification,
 )
 from holonic.viz import styles
 from holonic.viz.formatters import (
     format_compartmented,
     format_shacl_shape,
-    format_simple,
     format_typed,
 )
-
 
 # ── Label formatter type ──
 
 LabelFormatter = Callable[[ProjectedNode], str]
+
+
+def _infer_layer(node: ProjectedNode, default: str) -> str:
+    """Infer the visual layer from the node's types."""
+    for t in node.types:
+        t_lower = t.lower()
+        if "nodeshape" in t_lower or "shape" in t_lower:
+            return "boundary"
+        if "holon" in t_lower:
+            return "holon"
+        if "portal" in t_lower:
+            return "portal"
+        if "activity" in t_lower:
+            return "context"
+    return default
+
+
+def _primary_type(node: ProjectedNode) -> str:
+    """Return a short primary type name for shape mapping."""
+    if node.types:
+        return styles.shorten_uri(node.types[0])
+    return "default"
 
 
 # ══════════════════════════════════════════════════════════════
@@ -108,28 +126,6 @@ def projected_to_yfiles(
     return nodes, edges
 
 
-def _infer_layer(node: ProjectedNode, default: str) -> str:
-    """Infer the visual layer from the node's types."""
-    for t in node.types:
-        t_lower = t.lower()
-        if "nodeshape" in t_lower or "shape" in t_lower:
-            return "boundary"
-        if "holon" in t_lower:
-            return "holon"
-        if "portal" in t_lower:
-            return "portal"
-        if "activity" in t_lower:
-            return "context"
-    return default
-
-
-def _primary_type(node: ProjectedNode) -> str:
-    """Return a short primary type name for shape mapping."""
-    if node.types:
-        return styles.shorten_uri(node.types[0])
-    return "default"
-
-
 # ══════════════════════════════════════════════════════════════
 # Holon → yFiles (via HolonicDataset)
 # ══════════════════════════════════════════════════════════════
@@ -162,8 +158,8 @@ def holon_to_yfiles(
         Node label formatter.  Default: compartmented.
     """
     from holonic.sparql import (
-        GET_HOLON_INTERIORS,
         GET_HOLON_BOUNDARIES,
+        GET_HOLON_INTERIORS,
     )
 
     all_nodes: list[dict] = []
@@ -175,15 +171,17 @@ def holon_to_yfiles(
 
     # Create holon group node
     if show_group:
-        all_nodes.append({
-            "id": holon_iri,
-            "properties": {
-                "label": holon_label,
-                "layer": "holon",
-                "type": "holon",
-                "is_group": True,
-            },
-        })
+        all_nodes.append(
+            {
+                "id": holon_iri,
+                "properties": {
+                    "label": holon_label,
+                    "layer": "holon",
+                    "type": "holon",
+                    "is_group": True,
+                },
+            }
+        )
 
     # Map layer role → (query_template, layer_name)
     layer_specs = {
@@ -192,8 +190,10 @@ def holon_to_yfiles(
     }
 
     # Also check projection and context
-    PROJ_Q = 'PREFIX cga: <urn:holonic:ontology:> SELECT ?graph WHERE { <HOLON> cga:hasProjection ?graph }'
-    CTX_Q = 'PREFIX cga: <urn:holonic:ontology:> SELECT ?graph WHERE { <HOLON> cga:hasContext ?graph }'
+    PROJ_Q = "PREFIX cga: <urn:holonic:ontology:> SELECT ?graph WHERE { <HOLON> cga:hasProjection ?graph }"
+    CTX_Q = (
+        "PREFIX cga: <urn:holonic:ontology:> SELECT ?graph WHERE { <HOLON> cga:hasContext ?graph }"
+    )
     layer_specs["projection"] = (PROJ_Q, "projection")
     layer_specs["context"] = (CTX_Q, "context")
 
@@ -211,16 +211,18 @@ def holon_to_yfiles(
         # Create layer group
         layer_group_id = f"{holon_iri}/{role}"
         if show_group:
-            all_nodes.append({
-                "id": layer_group_id,
-                "properties": {
-                    "label": f"{holon_label} / {role}",
-                    "layer": layer_name,
-                    "type": "layer_group",
-                    "is_group": True,
-                    "parent": holon_iri,
-                },
-            })
+            all_nodes.append(
+                {
+                    "id": layer_group_id,
+                    "properties": {
+                        "label": f"{holon_label} / {role}",
+                        "layer": layer_name,
+                        "type": "layer_group",
+                        "is_group": True,
+                        "parent": holon_iri,
+                    },
+                }
+            )
 
         # Merge all graphs for this layer role
         merged = Graph()
@@ -250,38 +252,6 @@ def holon_to_yfiles(
         all_edges.extend(edges)
 
     return all_nodes, all_edges
-
-
-# ══════════════════════════════════════════════════════════════
-# Holarchy topology → yFiles
-# ══════════════════════════════════════════════════════════════
-
-
-def holarchy_to_yfiles(
-    ds,
-    *,
-    show_internals: bool = False,
-    layers: list[str] | None = None,
-    label_fn: LabelFormatter = format_typed,
-) -> tuple[list[dict], list[dict]]:
-    """Build yFiles data for the holarchy topology.
-
-    Parameters
-    ----------
-    ds :
-        A HolonicDataset instance.
-    show_internals :
-        If True, expand each holon to show its layer contents.
-        If False, show holons as single nodes with portal edges.
-    layers :
-        When show_internals=True, which layers to display.
-    label_fn :
-        Node label formatter for topology mode.
-    """
-    if show_internals:
-        return _holarchy_expanded(ds, layers=layers, label_fn=label_fn)
-    else:
-        return _holarchy_collapsed(ds, label_fn=label_fn)
 
 
 def _holarchy_collapsed(
@@ -323,20 +293,55 @@ def _holarchy_expanded(
 
     # Add portal edges between holon groups
     from holonic.sparql import ALL_PORTALS
+
     portal_rows = ds.backend.query(ALL_PORTALS)
     for i, r in enumerate(portal_rows):
-        all_edges.append({
-            "id": f"portal_e_{i}",
-            "start": r["source"],
-            "end": r["target"],
-            "properties": {
-                "label": r.get("label", "portal"),
-                "predicate": "cga:portal",
-                "layer": "portal",
-            },
-        })
+        all_edges.append(
+            {
+                "id": f"portal_e_{i}",
+                "start": r["source"],
+                "end": r["target"],
+                "properties": {
+                    "label": r.get("label", "portal"),
+                    "predicate": "cga:portal",
+                    "layer": "portal",
+                },
+            }
+        )
 
     return all_nodes, all_edges
+
+
+# ══════════════════════════════════════════════════════════════
+# Holarchy topology → yFiles
+# ══════════════════════════════════════════════════════════════
+
+
+def holarchy_to_yfiles(
+    ds,
+    *,
+    show_internals: bool = False,
+    layers: list[str] | None = None,
+    label_fn: LabelFormatter = format_typed,
+) -> tuple[list[dict], list[dict]]:
+    """Build yFiles data for the holarchy topology.
+
+    Parameters
+    ----------
+    ds :
+        A HolonicDataset instance.
+    show_internals :
+        If True, expand each holon to show its layer contents.
+        If False, show holons as single nodes with portal edges.
+    layers :
+        When show_internals=True, which layers to display.
+    label_fn :
+        Node label formatter for topology mode.
+    """
+    if show_internals:
+        return _holarchy_expanded(ds, layers=layers, label_fn=label_fn)
+    else:
+        return _holarchy_collapsed(ds, label_fn=label_fn)
 
 
 # ══════════════════════════════════════════════════════════════

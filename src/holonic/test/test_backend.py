@@ -1,8 +1,9 @@
 """Tests for GraphBackend protocol and rdflib implementation."""
 
 import pytest
-from rdflib import Graph, URIRef, Literal
-from holonic.backends import RdflibBackend, GraphBackend
+from rdflib import Graph, URIRef
+
+from holonic.backends import GraphBackend, RdflibBackend
 
 
 class TestProtocolConformance:
@@ -17,9 +18,13 @@ class TestRdflibBackend:
         return RdflibBackend()
 
     def test_parse_and_retrieve(self, backend):
-        backend.parse_into("urn:g:1", """
+        backend.parse_into(
+            "urn:g:1",
+            """
             <urn:s> <urn:p> "hello" .
-        """, "turtle")
+        """,
+            "turtle",
+        )
         g = backend.get_graph("urn:g:1")
         assert len(g) == 1
 
@@ -51,11 +56,14 @@ class TestRdflibBackend:
         assert not backend.graph_exists("urn:g:1")
 
     def test_query_select(self, backend):
-        backend.parse_into("urn:g:1", """
+        backend.parse_into(
+            "urn:g:1",
+            """
             @prefix ex: <urn:ex:> .
             ex:a ex:val 42 .
             ex:b ex:val 99 .
-        """)
+        """,
+        )
         rows = backend.query("""
             SELECT ?s ?v WHERE {
                 GRAPH <urn:g:1> { ?s <urn:ex:val> ?v }
@@ -67,9 +75,12 @@ class TestRdflibBackend:
         assert rows[1]["v"] == 99
 
     def test_construct(self, backend):
-        backend.parse_into("urn:g:1", """
+        backend.parse_into(
+            "urn:g:1",
+            """
             <urn:s> a <urn:T> ; <urn:name> "test" .
-        """)
+        """,
+        )
         g = backend.construct("""
             CONSTRUCT { ?s <urn:label> ?n }
             WHERE {

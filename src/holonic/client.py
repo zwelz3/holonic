@@ -11,24 +11,22 @@ from __future__ import annotations
 import logging
 import uuid
 from collections import deque
-from datetime import datetime, timezone
-from importlib.resources import files as pkg_files
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from rdflib import Graph, Literal, Namespace, URIRef
-from rdflib.namespace import RDFS, XSD, RDF
+from rdflib import Graph, Namespace
+from rdflib.namespace import RDF, RDFS, XSD
 
+from holonic import sparql as Q
 from holonic.backends.protocol import GraphBackend
 from holonic.backends.rdflib_backend import RdflibBackend
 from holonic.model import (
     HolonInfo,
-    MembraneBreachError,
     MembraneHealth,
     MembraneResult,
     PortalInfo,
 )
-from holonic import sparql as Q
 
 log = logging.getLogger(__name__)
 
@@ -37,6 +35,7 @@ REGISTRY_GRAPH = "urn:holarchy:registry"
 SH = Namespace("http://www.w3.org/ns/shacl#")
 
 _KNOWN_PREFIX_STR = f"@prefix rdf: <{RDF}> .\n@prefix sh: <{SH}> .\n@prefix rdfs: <{RDFS}> .\n@prefix xsd: <{XSD}> .\n"
+
 
 class HolonicDataset:
     """A holonic system backed by an RDF quad store.
@@ -53,6 +52,30 @@ class HolonicDataset:
         the dataset on construction.
     """
 
+    # ══════════════════════════════════════════════════════════
+    # Ontology loading
+    # ══════════════════════════════════════════════════════════
+
+    def _load_ontology(self) -> None:
+        """Load the CGA ontology and shapes into the dataset."""
+        ontology_dir = Path(__file__).parent / "ontology"
+
+        cga_path = ontology_dir / "cga.ttl"
+        if cga_path.exists():
+            with open(cga_path, encoding="utf-8") as f:
+                self.backend.parse_into("urn:holonic:ontology:cga", f.read(), "turtle")
+
+        log.setLevel(logging.INFO)
+        log.info("loaded ontology")
+
+        shapes_path = ontology_dir / "cga-shapes.ttl"
+        if shapes_path.exists():
+            with open(shapes_path, encoding="utf-8") as f:
+                self.backend.parse_into("urn:holonic:ontology:cga-shapes", f.read(), "turtle")
+
+        log.info("loaded shapes")
+        log.setLevel(logging.WARNING)
+
     def __init__(
         self,
         backend: GraphBackend | None = None,
@@ -65,34 +88,6 @@ class HolonicDataset:
 
         if load_ontology:
             self._load_ontology()
-
-    # ══════════════════════════════════════════════════════════
-    # Ontology loading
-    # ══════════════════════════════════════════════════════════
-
-    def _load_ontology(self) -> None:
-        """Load the CGA ontology and shapes into the dataset."""
-        ontology_dir = Path(__file__).parent / "ontology"
-
-        cga_path = ontology_dir / "cga.ttl"
-        if cga_path.exists():
-            with open(cga_path, encoding="utf-8") as f:
-                self.backend.parse_into(
-                    "urn:holonic:ontology:cga", f.read(), "turtle"
-                )
-
-        log.setLevel(logging.INFO)
-        log.info("loaded ontology")
-
-        shapes_path = ontology_dir / "cga-shapes.ttl"
-        if shapes_path.exists():
-            with open(shapes_path, encoding="utf-8") as f:
-                self.backend.parse_into(
-                    "urn:holonic:ontology:cga-shapes", f.read(), "turtle"
-                )
-        
-        log.info("loaded shapes")
-        log.setLevel(logging.WARNING)
 
     # ══════════════════════════════════════════════════════════
     # Holon management
@@ -116,7 +111,7 @@ class HolonicDataset:
         member_of :
             IRI of the parent holon (holarchy containment).
 
-        Note
+        Note:
         ----
         Depth is not stored — it is derivable from the cga:memberOf
         chain via ``compute_depth()``.
@@ -129,16 +124,27 @@ class HolonicDataset:
                 rdfs:label "{label}" .
         """
         if member_of:
-            ttl += f'    <{iri}> cga:memberOf <{member_of}> .\n'
+            ttl += f"    <{iri}> cga:memberOf <{member_of}> .\n"
 
         ttl = _KNOWN_PREFIX_STR + ttl
         self.backend.parse_into(self.registry_graph, ttl, "turtle")
         return iri
-    
+
+    def _register_layer(self, holon_iri: str, graph_iri: str, predicate: str) -> None:
+        ttl = f"""
+            @prefix cga: <urn:holonic:ontology:> .
+            <{holon_iri}> cga:{predicate} <{graph_iri}> .
+        """
+        self.backend.parse_into(self.registry_graph, ttl, "turtle")
+
     # TODO for all add_ methods, register the graph as a "subgraph" of the holon w/in the registry
 
     def add_interior(
-        self, holon_iri: str, ttl: str, *, graph_iri: str | None = None,
+        self,
+        holon_iri: str,
+        ttl: str,
+        *,
+        graph_iri: str | None = None,
     ) -> str:
         """Parse TTL into a named graph and register it as a holon's interior."""
         graph_iri = graph_iri or f"{holon_iri}/interior"
@@ -148,7 +154,11 @@ class HolonicDataset:
         return graph_iri
 
     def add_boundary(
-        self, holon_iri: str, ttl: str, *, graph_iri: str | None = None,
+        self,
+        holon_iri: str,
+        ttl: str,
+        *,
+        graph_iri: str | None = None,
     ) -> str:
         """Parse TTL into a named graph and register it as a holon's boundary."""
         graph_iri = graph_iri or f"{holon_iri}/boundary"
@@ -158,7 +168,11 @@ class HolonicDataset:
         return graph_iri
 
     def add_projection(
-        self, holon_iri: str, ttl: str, *, graph_iri: str | None = None,
+        self,
+        holon_iri: str,
+        ttl: str,
+        *,
+        graph_iri: str | None = None,
     ) -> str:
         """Parse TTL into a named graph and register it as a holon's projection."""
         graph_iri = graph_iri or f"{holon_iri}/projection"
@@ -168,7 +182,11 @@ class HolonicDataset:
         return graph_iri
 
     def add_context(
-        self, holon_iri: str, ttl: str, *, graph_iri: str | None = None,
+        self,
+        holon_iri: str,
+        ttl: str,
+        *,
+        graph_iri: str | None = None,
     ) -> str:
         """Parse TTL into a named graph and register it as a holon's context."""
         graph_iri = graph_iri or f"{holon_iri}/context"
@@ -176,13 +194,6 @@ class HolonicDataset:
         self.backend.parse_into(graph_iri, ttl, "turtle")
         self._register_layer(holon_iri, graph_iri, "hasContext")
         return graph_iri
-
-    def _register_layer(self, holon_iri: str, graph_iri: str, predicate: str) -> None:
-        ttl = f"""
-            @prefix cga: <urn:holonic:ontology:> .
-            <{holon_iri}> cga:{predicate} <{graph_iri}> .
-        """
-        self.backend.parse_into(self.registry_graph, ttl, "turtle")
 
     # ══════════════════════════════════════════════════════════
     # Holon discovery (SPARQL-driven)
@@ -252,9 +263,7 @@ class HolonicDataset:
         """
         self.backend.parse_into(graph_iri, ttl, "turtle")
         # Also ensure portal is visible from registry
-        self.backend.parse_into(
-            self.registry_graph, ttl, "turtle"
-        )
+        self.backend.parse_into(self.registry_graph, ttl, "turtle")
         return portal_iri
 
     # ══════════════════════════════════════════════════════════
@@ -294,9 +303,9 @@ class HolonicDataset:
 
     def find_portal(self, source_iri: str, target_iri: str) -> PortalInfo | None:
         """Find a direct portal between two holons.  Returns None if none exists."""
-        q = Q.FIND_PORTAL_DIRECT.replace(
-            "?source", f"<{source_iri}>"
-        ).replace("?target", f"<{target_iri}>")
+        q = Q.FIND_PORTAL_DIRECT.replace("?source", f"<{source_iri}>").replace(
+            "?target", f"<{target_iri}>"
+        )
         rows = self.backend.query(q)
         if not rows:
             return None
@@ -310,7 +319,9 @@ class HolonicDataset:
         )
 
     def find_path(
-        self, source_iri: str, target_iri: str,
+        self,
+        source_iri: str,
+        target_iri: str,
     ) -> list[PortalInfo] | None:
         """Find a portal chain via BFS over the SPARQL-discovered portal graph.
 
@@ -329,9 +340,7 @@ class HolonicDataset:
             adj.setdefault(p.source_iri, []).append(p)
 
         # BFS
-        queue: deque[tuple[str, list[PortalInfo]]] = deque(
-            [(source_iri, [])]
-        )
+        queue: deque[tuple[str, list[PortalInfo]]] = deque([(source_iri, [])])
         visited = {source_iri}
         while queue:
             current, path = queue.popleft()
@@ -368,7 +377,7 @@ class HolonicDataset:
             If provided, the resulting triples are also appended into
             this named graph in the dataset.
 
-        Returns
+        Returns:
         -------
         rdflib.Graph
             The projected triples.
@@ -409,7 +418,7 @@ class HolonicDataset:
         agent_iri :
             If provided, record PROV-O provenance.
 
-        Returns
+        Returns:
         -------
         (projected_graph, membrane_result_or_none)
         """
@@ -484,7 +493,8 @@ class HolonicDataset:
             )
 
         conforms, report_graph, report_text = pyshacl.validate(
-            data_graph, shacl_graph=shapes_graph,
+            data_graph,
+            shacl_graph=shapes_graph,
         )
 
         # Parse violations and warnings from report
@@ -529,7 +539,7 @@ class HolonicDataset:
         """Record a portal traversal as a PROV-O Activity via SPARQL UPDATE."""
         activity_iri = f"urn:prov:traversal:{uuid.uuid4().hex[:12]}"
         context_graph = context_graph or f"{target_iri}/context"
-        ts = datetime.now(timezone.utc).isoformat()
+        ts = datetime.now(UTC).isoformat()
 
         update = Q.RECORD_TRAVERSAL.format(
             context_graph=context_graph,
@@ -557,7 +567,7 @@ class HolonicDataset:
         """Record a membrane validation as a PROV-O Activity."""
         activity_iri = f"urn:prov:validation:{uuid.uuid4().hex[:12]}"
         context_graph = context_graph or f"{holon_iri}/context"
-        ts = datetime.now(timezone.utc).isoformat()
+        ts = datetime.now(UTC).isoformat()
 
         health_iri = f"urn:holonic:ontology:{health.value.capitalize()}"
         update = Q.RECORD_VALIDATION.format(
@@ -591,9 +601,7 @@ class HolonicDataset:
         try:
             import owlrl
         except ImportError:
-            raise ImportError(
-                "owlrl is required for RDFS materialization: pip install owlrl"
-            )
+            raise ImportError("owlrl is required for RDFS materialization: pip install owlrl")
 
         # Collect original interior triples
         interior_rows = self.backend.query(
@@ -609,7 +617,7 @@ class HolonicDataset:
         temp = Graph()
         for triple in originals:
             temp.add(triple)
-        for align_iri in (alignment_iris or []):
+        for align_iri in alignment_iris or []:
             align_rows = self.backend.query(
                 Q.GET_HOLON_INTERIORS.replace("?holon", f"<{align_iri}>")
             )
@@ -678,7 +686,7 @@ class HolonicDataset:
         **lpg_kwargs :
             Forwarded to project_to_lpg() — collapse_types, resolve_blanks, etc.
 
-        Returns
+        Returns:
         -------
         ProjectedGraph
         """
@@ -691,6 +699,7 @@ class HolonicDataset:
 
         if not graphs:
             from holonic.projections import ProjectedGraph
+
             return ProjectedGraph()
 
         merged = sum(graphs, Graph())
@@ -699,8 +708,11 @@ class HolonicDataset:
         if store_as:
             # Serialize back to triples for storage
             result_graph = Graph()
-            from rdflib import Literal as Lit, URIRef as URef
-            from rdflib.namespace import RDF as _RDF, RDFS as _RDFS
+            from rdflib import Literal as Lit
+            from rdflib import URIRef as URef
+            from rdflib.namespace import RDF as _RDF
+            from rdflib.namespace import RDFS as _RDFS
+
             PROJ = Namespace("urn:holonic:projection:")
             for iri, node in lpg.nodes.items():
                 subj = URef(iri)
@@ -709,11 +721,13 @@ class HolonicDataset:
                 if node.label:
                     result_graph.add((subj, _RDFS.label, Lit(node.label)))
             for edge in lpg.edges:
-                result_graph.add((
-                    URef(edge.source),
-                    URef(edge.predicate),
-                    URef(edge.target),
-                ))
+                result_graph.add(
+                    (
+                        URef(edge.source),
+                        URef(edge.predicate),
+                        URef(edge.target),
+                    )
+                )
             self.backend.put_graph(store_as, result_graph)
             self._register_layer(holon_iri, store_as, "hasProjection")
 
@@ -725,7 +739,7 @@ class HolonicDataset:
         Nodes are holons; edges are cga:memberOf and portal connections.
         Useful for visualizing the holarchy topology.
 
-        Returns
+        Returns:
         -------
         ProjectedGraph
         """
@@ -785,7 +799,7 @@ class HolonicDataset:
         store_as :
             If provided, store the result as a named graph.
 
-        Returns
+        Returns:
         -------
         rdflib.Graph
         """
@@ -814,15 +828,16 @@ class HolonicDataset:
         graphs = self.backend.list_named_graphs()
 
         lines = [
-            f"HolonicDataset",
+            "HolonicDataset",
             f"  Backend: {type(self.backend).__name__}",
             f"  Named graphs: {len(graphs)}",
             f"  Holons: {len(holons)}",
         ]
         for h in holons:
             lines.append(f"    {h.label or h.iri}")
-            lines.append(f"      interiors: {len(h.interior_graphs)}, "
-                        f"boundaries: {len(h.boundary_graphs)}")
+            lines.append(
+                f"      interiors: {len(h.interior_graphs)}, boundaries: {len(h.boundary_graphs)}"
+            )
 
         lines.append(f"  Portals: {len(portals_rows)}")
         for r in portals_rows:
@@ -837,13 +852,15 @@ class HolonicDataset:
         Depth is not stored — it is derived from structure.  A root
         holon (no memberOf) has depth 0.  Each memberOf hop adds 1.
 
+        > Note: limitations of dataset merging may result in limited cross-graph depth computation
+
         Parameters
         ----------
         holon_iri :
             If provided, compute depth for a single holon.
             If None, compute for all holons.
 
-        Returns
+        Returns:
         -------
         dict mapping holon IRI → depth (int).
         """
@@ -852,7 +869,9 @@ class HolonicDataset:
                 PREFIX cga: <urn:holonic:ontology:>
                 SELECT (COUNT(?ancestor) AS ?depth)
                 WHERE {{
-                    OPTIONAL {{ <{holon_iri}> cga:memberOf+ ?ancestor }}
+                    graph ?g {{
+                        OPTIONAL {{ <{holon_iri}> cga:memberOf+ ?ancestor }}           
+                    }}
                 }}
             """)
             d = rows[0]["depth"] if rows else 0
@@ -863,8 +882,10 @@ class HolonicDataset:
             PREFIX cga: <urn:holonic:ontology:>
             SELECT ?holon (COUNT(?ancestor) AS ?depth)
             WHERE {
-                ?holon a cga:Holon .
-                OPTIONAL { ?holon cga:memberOf+ ?ancestor }
+                graph ?g {        
+                    ?holon a cga:Holon .
+                    OPTIONAL { ?holon cga:memberOf+ ?ancestor }
+                }
             }
             GROUP BY ?holon
         """)

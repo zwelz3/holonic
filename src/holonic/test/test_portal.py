@@ -1,7 +1,6 @@
 """Tests for portal discovery, traversal, and path finding."""
 
 import pytest
-from holonic import HolonicDataset, RdflibBackend
 
 
 class TestPortalDiscovery:
@@ -55,9 +54,7 @@ class TestPortalTraversal:
 
     def test_traverse_raises_on_missing_portal(self, ds_with_holons):
         with pytest.raises(ValueError, match="No direct portal"):
-            ds_with_holons.traverse(
-                "urn:holon:target", "urn:holon:source"
-            )
+            ds_with_holons.traverse("urn:holon:target", "urn:holon:source")
 
     def test_traverse_portal_raises_on_unknown_portal(self, ds):
         with pytest.raises(ValueError, match="not found"):
@@ -85,12 +82,20 @@ class TestPathFinding:
         ds.add_interior("urn:holon:c", "")
 
         # A → B → C (no direct A → C)
-        ds.add_portal("urn:portal:a-to-b", "urn:holon:a", "urn:holon:b",
-                      "CONSTRUCT { ?s a <urn:T> } WHERE { ?s a <urn:T> }",
-                      label="A→B")
-        ds.add_portal("urn:portal:b-to-c", "urn:holon:b", "urn:holon:c",
-                      "CONSTRUCT { ?s a <urn:T> } WHERE { ?s a <urn:T> }",
-                      label="B→C")
+        ds.add_portal(
+            "urn:portal:a-to-b",
+            "urn:holon:a",
+            "urn:holon:b",
+            "CONSTRUCT { ?s a <urn:T> } WHERE { ?s a <urn:T> }",
+            label="A→B",
+        )
+        ds.add_portal(
+            "urn:portal:b-to-c",
+            "urn:holon:b",
+            "urn:holon:c",
+            "CONSTRUCT { ?s a <urn:T> } WHERE { ?s a <urn:T> }",
+            label="B→C",
+        )
 
         path = ds.find_path("urn:holon:a", "urn:holon:c")
         assert path is not None

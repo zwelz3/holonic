@@ -1,7 +1,5 @@
 """Tests for holon creation, discovery, and layer management."""
 
-import pytest
-from holonic import HolonicDataset, RdflibBackend
 
 
 class TestHolonCreation:
@@ -23,8 +21,7 @@ class TestHolonCreation:
 
     def test_add_holon_with_membership(self, ds):
         ds.add_holon("urn:holon:parent", "Parent")
-        ds.add_holon("urn:holon:child", "Child",
-                     member_of="urn:holon:parent")
+        ds.add_holon("urn:holon:child", "Child", member_of="urn:holon:parent")
         holons = ds.list_holons()
         assert len(holons) == 2
 
@@ -46,8 +43,7 @@ class TestComputeDepth:
 
     def test_child_has_depth_one(self, ds):
         ds.add_holon("urn:holon:root", "Root")
-        ds.add_holon("urn:holon:child", "Child",
-                     member_of="urn:holon:root")
+        ds.add_holon("urn:holon:child", "Child", member_of="urn:holon:root")
         depths = ds.compute_depth()
         assert depths.get("urn:holon:root") == 0
         assert depths.get("urn:holon:child") == 1
@@ -71,40 +67,57 @@ class TestComputeDepth:
 class TestLayers:
     def test_add_interior_creates_named_graph(self, ds):
         ds.add_holon("urn:holon:test", "Test")
-        ds.add_interior("urn:holon:test", """
+        ds.add_interior(
+            "urn:holon:test",
+            """
             <urn:thing:1> a <urn:type:Thing> .
-        """)
+        """,
+        )
         info = ds.get_holon("urn:holon:test")
         assert len(info.interior_graphs) == 1
         assert info.interior_graphs[0] == "urn:holon:test/interior"
 
     def test_multiple_interiors(self, ds):
         ds.add_holon("urn:holon:fused", "Fused")
-        ds.add_interior("urn:holon:fused", """
+        ds.add_interior(
+            "urn:holon:fused",
+            """
             <urn:a> a <urn:type:A> .
-        """, graph_iri="urn:holon:fused/interior/radar")
-        ds.add_interior("urn:holon:fused", """
+        """,
+            graph_iri="urn:holon:fused/interior/radar",
+        )
+        ds.add_interior(
+            "urn:holon:fused",
+            """
             <urn:b> a <urn:type:B> .
-        """, graph_iri="urn:holon:fused/interior/eo-ir")
+        """,
+            graph_iri="urn:holon:fused/interior/eo-ir",
+        )
 
         info = ds.get_holon("urn:holon:fused")
         assert len(info.interior_graphs) == 2
 
     def test_add_boundary(self, ds):
         ds.add_holon("urn:holon:test", "Test")
-        ds.add_boundary("urn:holon:test", """
+        ds.add_boundary(
+            "urn:holon:test",
+            """
             <urn:shape:S> a sh:NodeShape .
-        """)
+        """,
+        )
         info = ds.get_holon("urn:holon:test")
         assert len(info.boundary_graphs) == 1
 
     def test_layer_data_is_queryable(self, ds):
         ds.add_holon("urn:holon:test", "Test")
-        ds.add_interior("urn:holon:test", """
+        ds.add_interior(
+            "urn:holon:test",
+            """
             @prefix ex: <urn:ex:> .
             <urn:entity:1> a ex:Widget ;
                 ex:weight 42 .
-        """)
+        """,
+        )
         rows = ds.query("""
             PREFIX ex: <urn:ex:>
             SELECT ?s ?w WHERE {

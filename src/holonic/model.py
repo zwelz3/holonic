@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
 
 
 class MembraneHealth(Enum):
@@ -72,6 +71,5 @@ class MembraneBreachError(Exception):
     def __init__(self, result: MembraneResult):
         self.result = result
         super().__init__(
-            f"Membrane COMPROMISED for {result.holon_iri}: "
-            f"{len(result.violations)} violation(s)"
+            f"Membrane COMPROMISED for {result.holon_iri}: {len(result.violations)} violation(s)"
         )

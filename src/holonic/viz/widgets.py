@@ -21,24 +21,20 @@ SPARQLExplorer
 
 from __future__ import annotations
 
-from typing import Optional
-
 from rdflib import Graph
 
 from holonic.viz import styles
 from holonic.viz.formatters import (
     format_compartmented,
-    format_shacl_shape,
     format_simple,
     format_typed,
 )
 from holonic.viz.graph_builder import (
     LabelFormatter,
-    holon_to_yfiles,
     holarchy_to_yfiles,
+    holon_to_yfiles,
     sparql_result_to_yfiles,
 )
-
 
 # ── Built-in SPARQL projections for the explorer ──
 
@@ -173,6 +169,7 @@ PROJECTIONS: dict[str, dict] = {
 
 # ── yFiles mapping functions ──
 
+
 def _color_mapping(node: dict) -> str:
     props = node.get("properties", {})
     layer = props.get("layer", "default")
@@ -206,7 +203,7 @@ def _label_mapping(node: dict) -> str:
     return node.get("properties", {}).get("label", node.get("id", "?"))
 
 
-def _parent_mapping(node: dict) -> Optional[str]:
+def _parent_mapping(node: dict) -> str | None:
     return node.get("properties", {}).get("parent", None)
 
 
@@ -505,15 +502,15 @@ class SPARQLExplorer:
     """
 
     DEFAULT_NAMESPACES = {
-        "rdf":  "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+        "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
         "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
-        "xsd":  "http://www.w3.org/2001/XMLSchema#",
-        "owl":  "http://www.w3.org/2002/07/owl#",
-        "sh":   "http://www.w3.org/ns/shacl#",
-        "cga":  "urn:holonic:ontology:",
+        "xsd": "http://www.w3.org/2001/XMLSchema#",
+        "owl": "http://www.w3.org/2002/07/owl#",
+        "sh": "http://www.w3.org/ns/shacl#",
+        "cga": "urn:holonic:ontology:",
         "prov": "http://www.w3.org/ns/prov#",
         "skos": "http://www.w3.org/2004/02/skos/core#",
-        "dct":  "http://purl.org/dc/terms/",
+        "dct": "http://purl.org/dc/terms/",
     }
 
     def __init__(
@@ -530,10 +527,7 @@ class SPARQLExplorer:
         self._last_result: Graph | None = None
 
     def _prefix_block(self) -> str:
-        return "\n".join(
-            f"PREFIX {pfx}: <{iri}>"
-            for pfx, iri in sorted(self.namespaces.items())
-        )
+        return "\n".join(f"PREFIX {pfx}: <{iri}>" for pfx, iri in sorted(self.namespaces.items()))
 
     def execute(self, query: str) -> Graph:
         """Execute a SPARQL CONSTRUCT against the dataset."""
@@ -558,8 +552,7 @@ class SPARQLExplorer:
 
         # Namespace display
         ns_html = "<br>".join(
-            f"<code>{pfx}:</code> "
-            f"<span style='color:#888'>&lt;{iri}&gt;</span>"
+            f"<code>{pfx}:</code> <span style='color:#888'>&lt;{iri}&gt;</span>"
             for pfx, iri in sorted(self.namespaces.items())
         )
         ns_widget = widgets.HTML(
@@ -580,15 +573,10 @@ class SPARQLExplorer:
             layout=widgets.Layout(width="300px"),
         )
 
-        desc_label = widgets.HTML(
-            value="<i>Write a SPARQL CONSTRUCT query below.</i>"
-        )
+        desc_label = widgets.HTML(value="<i>Write a SPARQL CONSTRUCT query below.</i>")
 
         # Query textarea
-        default_query = (
-            self._prefix_block() + "\n\n"
-            + PROJECTIONS["Holarchy Structure"]["query"]
-        )
+        default_query = self._prefix_block() + "\n\n" + PROJECTIONS["Holarchy Structure"]["query"]
         query_area = widgets.Textarea(
             value=default_query,
             layout=widgets.Layout(width="100%", height="260px"),
@@ -639,18 +627,14 @@ class SPARQLExplorer:
                 query_area.value = self._prefix_block() + "\n\n" + q
                 desc_label.value = f"<i>{PROJECTIONS[name]['description']}</i>"
             else:
-                desc_label.value = (
-                    "<i>Write a SPARQL CONSTRUCT query below.</i>"
-                )
+                desc_label.value = "<i>Write a SPARQL CONSTRUCT query below.</i>"
 
         def on_execute(_):
             status.value = "<i style='color:#888'>Executing...</i>"
             try:
                 result = self.execute(query_area.value)
                 count = len(result)
-                status.value = (
-                    f"<span style='color:green'>✓ {count} triples</span>"
-                )
+                status.value = f"<span style='color:green'>✓ {count} triples</span>"
                 with graph_output:
                     graph_output.clear_output(wait=True)
                     if count > 0:
@@ -662,25 +646,30 @@ class SPARQLExplorer:
                         )
                         display(w)
                     else:
-                        display(widgets.HTML(
-                            "<div style='padding:20px; color:#888'>"
-                            "No results.</div>"
-                        ))
+                        display(
+                            widgets.HTML("<div style='padding:20px; color:#888'>No results.</div>")
+                        )
             except Exception as e:
-                status.value = (
-                    f"<span style='color:red'>✗ {e}</span>"
-                )
+                status.value = f"<span style='color:red'>✗ {e}</span>"
 
         preset_dropdown.observe(on_preset_change, names="value")
         exec_button.on_click(on_execute)
 
-        header = widgets.HBox([
-            preset_dropdown, layout_dropdown, label_dropdown, exec_button
-        ])
-        display(widgets.VBox([
-            ns_widget, header, desc_label, query_area, status, graph_output,
-        ]))
-        display(widgets.HTML("""
+        header = widgets.HBox([preset_dropdown, layout_dropdown, label_dropdown, exec_button])
+        display(
+            widgets.VBox(
+                [
+                    ns_widget,
+                    header,
+                    desc_label,
+                    query_area,
+                    status,
+                    graph_output,
+                ]
+            )
+        )
+        display(
+            widgets.HTML("""
             <style>
                 .monospace-textarea textarea {
                     font-family: 'Fira Code', 'Consolas', monospace !important;
@@ -688,4 +677,5 @@ class SPARQLExplorer:
                     line-height: 1.4 !important;
                 }
             </style>
-        """))
+        """)
+        )

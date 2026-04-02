@@ -9,11 +9,11 @@ name = "holonic"
 version = "0.2.1"
 description = "Graph-native holonic RDF systems"
 readme = "README.md"
-requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [
   { name = "Zach Welz", email = "welz.zach@gmail.com" },
 ]
+requires-python = ">=3.11"
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
@@ -26,66 +26,63 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Scientific/Engineering",
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "rdflib>=7.0",
-    "pyshacl>=0.25",
-    "pydantic>=2.0",
+  "pydantic>=2",
+  "pyshacl>=0.25",
+  "rdflib>=7",
 ]
-
-[project.optional-dependencies]
-fuseki = [
-    "aiohttp>=3.9",
+optional-dependencies.dev = [
+  "holonic[docs,entailment,fuseki,notebooks,viz]",
+  "pytest>=8",
+  "pytest-cov",
+  "ruff",
 ]
-entailment = [
-    "owlrl>=6.0",
+optional-dependencies.docs = [
+  "myst-parser",
+  "sphinx>=7",
+  "sphinx-autodoc-typehints",
+  "sphinx-rtd-theme",
 ]
-viz = [
-    "yfiles-jupyter-graphs>=1.7",
-    "ipywidgets>=8.0",
+optional-dependencies.entailment = [
+  "owlrl>=6",
 ]
-docs = [
-    "sphinx>=7.0",
-    "sphinx-autodoc-typehints",
-    "sphinx-rtd-theme",
-    "myst-parser",
+optional-dependencies.fuseki = [
+  "aiohttp>=3.9",
 ]
-notebooks = [
-    "jupytext>=1.16",
-    "jupyter",
-]
-dev = [
-    "pytest>=8.0",
-    "pytest-cov",
-    "ruff",
-    "holonic[fuseki,entailment,viz,docs,notebooks]",
-]
-lint = [
+optional-dependencies.lint = [
   "mypy",
   "pyproject-fmt>=2.5",
   "ruff>=0.6",
   "ssort>=0.12",
 ]
-test = [
+optional-dependencies.notebooks = [
+  "jupyter",
+  "jupytext>=1.16",
+]
+optional-dependencies.test = [
   "pytest",
   "pytest-cov",
   "pytest-html",
   "pytest-json-report",
   "pytest-xdist",
 ]
+optional-dependencies.viz = [
+  "ipywidgets>=8",
+  "yfiles-jupyter-graphs>=1.7",
+]
 
-
-[tool.flit.sdist]
-exclude = [
+[tool.flit]
+sdist.exclude = [
   ".gitignore",
 ]
 
 [tool.ruff]
 line-length = 100
 cache-dir = "build/.ruff_cache"
-
 format.docstring-code-line-length = 100
 lint.select = [
   "D",
@@ -107,10 +104,33 @@ lint.per-file-ignores."src/holonic/test/test*.py" = [
 ]
 lint.pydocstyle.convention = "google"
 
-[tool.pytest.ini_options]
-junit_family = "xunit2"
-cache_dir = "build/.pytest_cache"
-addopts = [
+[tool.mypy]
+# broken by ipywidgetsplugins = "pydantic.mypy"
+cache_dir = "build/.mypy_cache"
+sqlite_cache = true
+python_version = "3.11"
+allow_redefinition = true
+check_untyped_defs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+show_error_codes = true
+warn_return_any = true
+warn_unused_ignores = true
+disable_error_code = "type-abstract"
+overrides = [
+  # disallow_any_unimported = true
+  # exclude = [
+  #  "^.+/holonic/test.+\\.py$",
+  # ]
+  { module = [
+    "importlib.metadata",
+  ], ignore_missing_imports = true },
+]
+
+[tool.pytest]
+ini_options.junit_family = "xunit2"
+ini_options.cache_dir = "build/.pytest_cache"
+ini_options.addopts = [
   "--pyargs",
   "holonic",
   # for contributors
@@ -133,51 +153,21 @@ addopts = [
   "--ff",
 ]
 
-[tool.coverage.run]
-data_file = "build/reports/.coverage"
-omit = [
-  "*/test/test*.py",
+[tool.coverage]
+run.data_file = "build/reports/.coverage"
+run.omit = [
   "*/holonic/utils.py",
+  "*/test/test*.py",
 ]
-
-[tool.coverage.html]
-show_contexts = true
-
-[tool.coverage.paths]
-holonic = [
+paths.holonic = [
   "src/holonic",
   "*/src/holonic",
 ]
-
-[tool.coverage.report]
-exclude_also = [
-  "raise NotImplementedError*",
+report.exclude_also = [
   "except LookupError",
   "except RuntimeError",
-  "raise TypeError",
   "except TypeError",
+  "raise NotImplementedError*",
+  "raise TypeError",
 ]
-
-[tool.mypy]
-# broken by ipywidgetsplugins = "pydantic.mypy"
-cache_dir = "build/.mypy_cache"
-sqlite_cache = true
-python_version = "3.11"
-allow_redefinition = true
-check_untyped_defs = true
-disallow_untyped_defs = true
-no_implicit_optional = true
-show_error_codes = true
-warn_return_any = true
-warn_unused_ignores = true
-disable_error_code = "type-abstract"
-# disallow_any_unimported = true
-#exclude = [
-#  "^.+/holonic/test.+\\.py$",
-#]
-
-[[tool.mypy.overrides]]
-module = [
-  "importlib.metadata",
-]
-ignore_missing_imports = true
+html.show_contexts = true

@@ -11,7 +11,6 @@ import logging
 from typing import Any
 
 from rdflib import Dataset, Graph, Literal, URIRef
-from rdflib.plugins.sparql import prepareQuery
 from rdflib.term import Node
 
 log = logging.getLogger(__name__)
@@ -71,8 +70,10 @@ class RdflibBackend:
     # ── SPARQL ────────────────────────────────────────────────
 
     def query(self, sparql: str, **bindings: Any) -> list[dict[str, Any]]:
-        init = {k: URIRef(v) if isinstance(v, str) and v.startswith("urn:") else v
-                for k, v in bindings.items()}
+        init = {
+            k: URIRef(v) if isinstance(v, str) and v.startswith("urn:") else v
+            for k, v in bindings.items()
+        }
         result = self.ds.query(sparql, initBindings=init)
         rows = []
         for row in result:
@@ -85,14 +86,18 @@ class RdflibBackend:
         return rows
 
     def construct(self, sparql: str, **bindings: Any) -> Graph:
-        init = {k: URIRef(v) if isinstance(v, str) and v.startswith("urn:") else v
-                for k, v in bindings.items()}
+        init = {
+            k: URIRef(v) if isinstance(v, str) and v.startswith("urn:") else v
+            for k, v in bindings.items()
+        }
         result = self.ds.query(sparql, initBindings=init)
         return result.graph
 
     def ask(self, sparql: str, **bindings: Any) -> bool:
-        init = {k: URIRef(v) if isinstance(v, str) and v.startswith("urn:") else v
-                for k, v in bindings.items()}
+        init = {
+            k: URIRef(v) if isinstance(v, str) and v.startswith("urn:") else v
+            for k, v in bindings.items()
+        }
         result = self.ds.query(sparql, initBindings=init)
         return bool(result.askAnswer)
 

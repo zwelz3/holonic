@@ -22,12 +22,13 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 from rdflib import BNode, Graph, Literal, Namespace, URIRef
 from rdflib.collection import Collection
-from rdflib.namespace import RDF, RDFS, OWL, XSD, SKOS
+from rdflib.namespace import RDF, RDFS, SKOS
 
 log = logging.getLogger(__name__)
 
@@ -179,7 +180,7 @@ class ProjectedEdge:
 
     def __repr__(self):
         p = self.predicate.rsplit("/", 1)[-1].rsplit("#", 1)[-1]
-        return f"Edge({self.source.rsplit(':',1)[-1]} —{p}→ {self.target.rsplit(':',1)[-1]})"
+        return f"Edge({self.source.rsplit(':', 1)[-1]} —{p}→ {self.target.rsplit(':', 1)[-1]})"
 
 
 @dataclass
@@ -193,9 +194,6 @@ class ProjectedGraph:
 
     nodes: dict[str, ProjectedNode] = field(default_factory=dict)
     edges: list[ProjectedEdge] = field(default_factory=list)
-
-    def __repr__(self):
-        return f"ProjectedGraph({len(self.nodes)} nodes, {len(self.edges)} edges)"
 
     def to_dict(self) -> dict:
         """Serialize to a plain dict (JSON-serializable)."""
@@ -219,6 +217,37 @@ class ProjectedGraph:
                 for e in self.edges
             ],
         }
+
+    def __repr__(self):
+        return f"ProjectedGraph({len(self.nodes)} nodes, {len(self.edges)} edges)"
+
+
+def _resolve_blank_node(
+    graph: Graph,
+    bnode: BNode,
+    resolve_lists: bool = True,
+) -> dict[str, Any]:
+    """Recursively resolve a blank node into a nested dict."""
+    result: dict[str, Any] = {}
+    for p, o in graph.predicate_objects(bnode):
+        p_str = str(p)
+        if isinstance(o, Literal):
+            result[p_str] = o.toPython()
+        elif isinstance(o, BNode):
+            # Check for list
+            if resolve_lists and (o, RDF.first, None) in graph:
+                try:
+                    items = list(Collection(graph, o))
+                    result[p_str] = [
+                        i.toPython() if isinstance(i, Literal) else str(i) for i in items
+                    ]
+                except Exception:
+                    result[p_str] = _resolve_blank_node(graph, o, resolve_lists)
+            else:
+                result[p_str] = _resolve_blank_node(graph, o, resolve_lists)
+        elif isinstance(o, URIRef):
+            result[p_str] = str(o)
+    return result
 
 
 def project_to_lpg(
@@ -340,8 +369,7 @@ def project_to_lpg(
                     items = list(Collection(graph, o))
                     if s_str in projected.nodes:
                         projected.nodes[s_str].attributes[p_str] = [
-                            i.toPython() if isinstance(i, Literal) else str(i)
-                            for i in items
+                            i.toPython() if isinstance(i, Literal) else str(i) for i in items
                         ]
                 except Exception:
                     pass
@@ -366,40 +394,9 @@ def project_to_lpg(
             # Ensure target node exists
             if o_str not in projected.nodes:
                 projected.nodes[o_str] = ProjectedNode(iri=o_str)
-            projected.edges.append(ProjectedEdge(
-                source=s_str, predicate=p_str, target=o_str
-            ))
+            projected.edges.append(ProjectedEdge(source=s_str, predicate=p_str, target=o_str))
 
     return projected
-
-
-def _resolve_blank_node(
-    graph: Graph,
-    bnode: BNode,
-    resolve_lists: bool = True,
-) -> dict[str, Any]:
-    """Recursively resolve a blank node into a nested dict."""
-    result: dict[str, Any] = {}
-    for p, o in graph.predicate_objects(bnode):
-        p_str = str(p)
-        if isinstance(o, Literal):
-            result[p_str] = o.toPython()
-        elif isinstance(o, BNode):
-            # Check for list
-            if resolve_lists and (o, RDF.first, None) in graph:
-                try:
-                    items = list(Collection(graph, o))
-                    result[p_str] = [
-                        i.toPython() if isinstance(i, Literal) else str(i)
-                        for i in items
-                    ]
-                except Exception:
-                    result[p_str] = _resolve_blank_node(graph, o, resolve_lists)
-            else:
-                result[p_str] = _resolve_blank_node(graph, o, resolve_lists)
-        elif isinstance(o, URIRef):
-            result[p_str] = str(o)
-    return result
 
 
 def collapse_reification(
@@ -489,7 +486,7 @@ class ProjectionPipeline:
     The final output can optionally be converted to a ProjectedGraph
     via project_to_lpg().
 
-    Example
+    Example:
     -------
     ```python
     pipeline = ProjectionPipeline("visualization")

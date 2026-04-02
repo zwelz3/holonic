@@ -6,6 +6,7 @@ backed by rdflib, Apache Jena Fuseki, or any SPARQL-compliant store.
 
 __version__ = "0.2.1"
 
+from holonic.backends import GraphBackend, RdflibBackend
 from holonic.client import HolonicDataset
 from holonic.model import (
     HolonInfo,
@@ -14,8 +15,13 @@ from holonic.model import (
     MembraneResult,
     PortalInfo,
 )
-from holonic.backends import GraphBackend, RdflibBackend
 from holonic.projections import (
+    CONSTRUCT_COLLAPSE_REIFICATION,
+    CONSTRUCT_DATA_PROPERTIES_ONLY,
+    CONSTRUCT_LABELS_ONLY,
+    CONSTRUCT_OBJECT_PROPERTIES_ONLY,
+    CONSTRUCT_STRIP_TYPES,
+    CONSTRUCT_SUBCLASS_TREE,
     ProjectedEdge,
     ProjectedGraph,
     ProjectedNode,
@@ -28,12 +34,6 @@ from holonic.projections import (
     localize_predicates,
     project_to_lpg,
     strip_blank_nodes,
-    CONSTRUCT_COLLAPSE_REIFICATION,
-    CONSTRUCT_DATA_PROPERTIES_ONLY,
-    CONSTRUCT_LABELS_ONLY,
-    CONSTRUCT_OBJECT_PROPERTIES_ONLY,
-    CONSTRUCT_STRIP_TYPES,
-    CONSTRUCT_SUBCLASS_TREE,
 )
 
 __all__ = [

@@ -12,50 +12,50 @@ Colour palette follows the cell-membrane metaphor:
 # ── Layer colours ──
 
 LAYER_COLORS = {
-    "interior":   "#3b82f6",
-    "boundary":   "#a855f7",
+    "interior": "#3b82f6",
+    "boundary": "#a855f7",
     "projection": "#22c55e",
-    "context":    "#f59e0b",
-    "portal":     "#ef4444",
-    "holon":      "#6b7280",
-    "alignment":  "#06b6d4",
-    "literal":    "#94a3b8",
-    "default":    "#64748b",
+    "context": "#f59e0b",
+    "portal": "#ef4444",
+    "holon": "#6b7280",
+    "alignment": "#06b6d4",
+    "literal": "#94a3b8",
+    "default": "#64748b",
 }
 
 LAYER_COLORS_LIGHT = {
-    "interior":   "#dbeafe",
-    "boundary":   "#f3e8ff",
+    "interior": "#dbeafe",
+    "boundary": "#f3e8ff",
     "projection": "#dcfce7",
-    "context":    "#fef3c7",
-    "portal":     "#fee2e2",
-    "holon":      "#f3f4f6",
-    "alignment":  "#cffafe",
+    "context": "#fef3c7",
+    "portal": "#fee2e2",
+    "holon": "#f3f4f6",
+    "alignment": "#cffafe",
 }
 
 # ── Node shapes ──
 
 LAYER_SHAPES = {
-    "interior":    "round-rectangle",
-    "boundary":    "hexagon",
-    "projection":  "pill",
-    "context":     "octagon",
-    "portal":      "diamond",
-    "holon":       "round-rectangle",
-    "shape":       "hexagon",
-    "literal":     "ellipse",
-    "default":     "rectangle",
+    "interior": "round-rectangle",
+    "boundary": "hexagon",
+    "projection": "pill",
+    "context": "octagon",
+    "portal": "diamond",
+    "holon": "round-rectangle",
+    "shape": "hexagon",
+    "literal": "ellipse",
+    "default": "rectangle",
 }
 
 # ── Edge colours by semantic role ──
 
 EDGE_COLORS = {
-    "portal":         "#ef4444",
-    "membership":     "#f59e0b",
+    "portal": "#ef4444",
+    "membership": "#f59e0b",
     "type_hierarchy": "#7c3aed",
-    "provenance":     "#06b6d4",
-    "realization":    "#22c55e",
-    "default":        "#94a3b8",
+    "provenance": "#06b6d4",
+    "realization": "#22c55e",
+    "default": "#94a3b8",
 }
 
 
@@ -76,7 +76,7 @@ def shorten_uri(uri: str, max_len: int = 40) -> str:
     for sep in ("#", "/", ":"):
         idx = uri.rfind(sep)
         if idx >= 0:
-            local = uri[idx + 1:]
+            local = uri[idx + 1 :]
             if local:
                 return local[:max_len]
     return uri[:max_len]

@@ -1,6 +1,7 @@
 """Shared pytest fixtures for holonic tests."""
 
 import pytest
+
 from holonic import HolonicDataset, RdflibBackend
 
 
@@ -13,9 +14,10 @@ def ds():
 @pytest.fixture
 def ds_with_holons(ds):
     """A dataset pre-populated with source/target holons and a portal."""
-
     ds.add_holon("urn:holon:source", "Source Holon")
-    ds.add_interior("urn:holon:source", """
+    ds.add_interior(
+        "urn:holon:source",
+        """
         @prefix src: <urn:src:> .
         <urn:data:001> a src:Record ;
             src:name "Alpha" ;
@@ -23,8 +25,11 @@ def ds_with_holons(ds):
         <urn:data:002> a src:Record ;
             src:name "Beta" ;
             src:value 99 .
-    """)
-    ds.add_boundary("urn:holon:source", """
+    """,
+    )
+    ds.add_boundary(
+        "urn:holon:source",
+        """
         @prefix src: <urn:src:> .
         <urn:shapes:RecordShape> a sh:NodeShape ;
             sh:targetClass src:Record ;
@@ -34,10 +39,13 @@ def ds_with_holons(ds):
                 sh:datatype xsd:string ;
                 sh:severity sh:Violation
             ] .
-    """)
+    """,
+    )
 
     ds.add_holon("urn:holon:target", "Target Holon")
-    ds.add_boundary("urn:holon:target", """
+    ds.add_boundary(
+        "urn:holon:target",
+        """
         @prefix tgt: <urn:tgt:> .
         <urn:shapes:ItemShape> a sh:NodeShape ;
             sh:targetClass tgt:Item ;
@@ -53,7 +61,8 @@ def ds_with_holons(ds):
                 sh:datatype xsd:integer ;
                 sh:severity sh:Violation
             ] .
-    """)
+    """,
+    )
 
     construct = """
         PREFIX src: <urn:src:>

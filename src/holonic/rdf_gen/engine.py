@@ -1,5 +1,4 @@
-"""
-engine.py — The RenderEngine: generate documents and code from RDF.
+"""engine.py — The RenderEngine: generate documents and code from RDF.
 
 Architecture
 ------------
@@ -32,26 +31,31 @@ from __future__ import annotations
 import os
 from io import StringIO
 from pathlib import Path
-from typing import Any, Optional, Union
-from collections import OrderedDict
+from typing import Any
 
-from rdflib import Graph, URIRef, Literal, RDF, RDFS, XSD
+from rdflib import RDFS, XSD, Graph, URIRef
 
-from .namespaces import GEN, TTL_PREFIXES, SPARQL_PREFIXES
-from .queries import execute_select, execute_construct
+from .namespaces import GEN, SPARQL_PREFIXES, TTL_PREFIXES
+from .queries import execute_construct, execute_select
 
 
 class RenderEngine:
-    """
-    Generate documents and code from RDF data using graph-described specs.
+    """Generate documents and code from RDF data using graph-described specs.
 
     The engine maintains a single merged RDF graph containing both domain
     data and generation specifications (RenderSpecs, Templates, DataBindings).
     """
 
-    def __init__(self, template_dirs: Optional[list[str]] = None):
-        """
-        Parameters
+    def _bind_prefixes(self):
+        from rdflib.namespace import SH
+
+        self.graph.bind("gen", GEN)
+        self.graph.bind("rdfs", RDFS)
+        self.graph.bind("sh", SH)
+        self.graph.bind("xsd", XSD)
+
+    def __init__(self, template_dirs: list[str] | None = None):
+        """Parameters
         ----------
         template_dirs : list[str], optional
             Directories to search for template files referenced by
@@ -63,13 +67,6 @@ class RenderEngine:
         if template_dirs:
             self._template_dirs.extend(template_dirs)
         self._jinja_env = None
-
-    def _bind_prefixes(self):
-        from rdflib.namespace import SH, DCTERMS
-        self.graph.bind("gen", GEN)
-        self.graph.bind("rdfs", RDFS)
-        self.graph.bind("sh", SH)
-        self.graph.bind("xsd", XSD)
 
     # ------------------------------------------------------------------
     # Data loading
@@ -85,8 +82,7 @@ class RenderEngine:
         self.graph.parse(path, format=fmt)
 
     def load_spec(self, ttl: str) -> None:
-        """
-        Parse a RenderSpec (with templates and bindings) into the graph.
+        """Parse a RenderSpec (with templates and bindings) into the graph.
         This is the same graph as the data — specs and data coexist.
         """
         self.load_data(ttl)
@@ -102,7 +98,9 @@ class RenderEngine:
 
     def list_specs(self) -> list[dict]:
         """Return all RenderSpecs in the graph."""
-        query = SPARQL_PREFIXES + """
+        query = (
+            SPARQL_PREFIXES
+            + """
             SELECT ?spec ?title ?description ?format ?outPath
             WHERE {
                 ?spec a gen:RenderSpec .
@@ -116,14 +114,22 @@ class RenderEngine:
             }
             ORDER BY ?spec
         """
+        )
         return execute_select(self.graph, query, result_type="list")
+
+    def _scalar(self, subject: str, predicate) -> str | None:
+        for _, _, o in self.graph.triples((URIRef(subject), predicate, None)):
+            return str(o)
+        return None
 
     def _read_spec(self, spec_iri: str) -> dict:
         """Read a complete RenderSpec from the graph."""
         spec_uri = URIRef(spec_iri)
 
         # Template
-        tmpl_query = SPARQL_PREFIXES + f"""
+        tmpl_query = (
+            SPARQL_PREFIXES
+            + f"""
             SELECT ?tmpl ?body ?path ?format ?ext
             WHERE {{
                 <{spec_iri}> gen:usesTemplate ?tmpl .
@@ -133,6 +139,7 @@ class RenderEngine:
                 OPTIONAL {{ ?tmpl gen:outputExtension ?ext }}
             }}
         """
+        )
         tmpl_rows = execute_select(self.graph, tmpl_query)
         if not tmpl_rows:
             raise ValueError(f"RenderSpec {spec_iri} has no template.")
@@ -140,7 +147,9 @@ class RenderEngine:
         tmpl = tmpl_rows[0]
 
         # Bindings
-        bind_query = SPARQL_PREFIXES + f"""
+        bind_query = (
+            SPARQL_PREFIXES
+            + f"""
             SELECT ?binding ?varName ?query ?constructQuery ?resultType ?default
             WHERE {{
                 <{spec_iri}> gen:hasBinding ?binding .
@@ -152,10 +161,13 @@ class RenderEngine:
             }}
             ORDER BY ?varName
         """
+        )
         bindings = execute_select(self.graph, bind_query)
 
         # Sections (ordered)
-        section_query = SPARQL_PREFIXES + f"""
+        section_query = (
+            SPARQL_PREFIXES
+            + f"""
             SELECT ?section ?order ?sTitle ?varName ?query ?resultType
             WHERE {{
                 <{spec_iri}> gen:hasSection ?section .
@@ -170,6 +182,7 @@ class RenderEngine:
             }}
             ORDER BY ?order
         """
+        )
         sections = execute_select(self.graph, section_query)
 
         # Metadata
@@ -187,11 +200,6 @@ class RenderEngine:
             "sections": sections,
         }
 
-    def _scalar(self, subject: str, predicate) -> Optional[str]:
-        for _, _, o in self.graph.triples((URIRef(subject), predicate, None)):
-            return str(o)
-        return None
-
     # ------------------------------------------------------------------
     # Template resolution
     # ------------------------------------------------------------------
@@ -199,7 +207,8 @@ class RenderEngine:
     def _get_jinja_env(self):
         """Lazy-init the Jinja2 environment."""
         if self._jinja_env is None:
-            from jinja2 import Environment, FileSystemLoader, BaseLoader
+            from jinja2 import BaseLoader, Environment, FileSystemLoader
+
             if any(os.path.isdir(d) for d in self._template_dirs):
                 loader = FileSystemLoader(self._template_dirs)
             else:
@@ -213,12 +222,13 @@ class RenderEngine:
             # Custom filters
             self._jinja_env.filters["shorten"] = lambda s: (
                 s.rsplit("/", 1)[-1].rsplit(":", 1)[-1].rsplit("#", 1)[-1]
-                if isinstance(s, str) else str(s)
+                if isinstance(s, str)
+                else str(s)
             )
             self._jinja_env.filters["uri_local"] = self._jinja_env.filters["shorten"]
         return self._jinja_env
 
-    def _resolve_template(self, tmpl_info: dict) -> "jinja2.Template":
+    def _resolve_template(self, tmpl_info: dict) -> jinja2.Template:
         """Resolve a template from inline body or file path."""
         env = self._get_jinja_env()
 
@@ -250,7 +260,8 @@ class RenderEngine:
 
             if select_q:
                 result = execute_select(
-                    self.graph, select_q,
+                    self.graph,
+                    select_q,
                     result_type=result_type,
                     shorten_uris=True,
                 )
@@ -268,17 +279,53 @@ class RenderEngine:
         return context
 
     # ------------------------------------------------------------------
+    # Binary format helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _render_docx(markdown_content: str, output_path: str):
+        """Convert markdown to docx using python-docx (best-effort)."""
+        try:
+            from docx import Document
+
+            doc = Document()
+            for line in markdown_content.split("\n"):
+                stripped = line.strip()
+                if stripped.startswith("# "):
+                    doc.add_heading(stripped[2:], level=1)
+                elif stripped.startswith("## "):
+                    doc.add_heading(stripped[3:], level=2)
+                elif stripped.startswith("### "):
+                    doc.add_heading(stripped[4:], level=3)
+                elif stripped.startswith("- "):
+                    doc.add_paragraph(stripped[2:], style="List Bullet")
+                elif stripped.startswith("| "):
+                    doc.add_paragraph(stripped)  # simplified table
+                elif stripped:
+                    doc.add_paragraph(stripped)
+            docx_path = (
+                output_path.replace(".md", ".docx") if output_path.endswith(".md") else output_path
+            )
+            doc.save(docx_path)
+        except ImportError:
+            pass  # python-docx not installed
+
+    @staticmethod
+    def _render_pdf(markdown_content: str, output_path: str):
+        """Placeholder for PDF rendering."""
+        pass  # Would use weasyprint, reportlab, or pandoc
+
+    # ------------------------------------------------------------------
     # Rendering
     # ------------------------------------------------------------------
 
     def render(
         self,
         spec_iri: str,
-        output_path: Optional[str] = None,
-        extra_context: Optional[dict] = None,
+        output_path: str | None = None,
+        extra_context: dict | None = None,
     ) -> str:
-        """
-        Execute a single RenderSpec and return the generated content.
+        """Execute a single RenderSpec and return the generated content.
 
         Parameters
         ----------
@@ -290,7 +337,7 @@ class RenderEngine:
         extra_context : dict, optional
             Additional variables to pass to the template.
 
-        Returns
+        Returns:
         -------
         str
             The rendered content.
@@ -315,8 +362,10 @@ class RenderEngine:
                 if s.get("query"):
                     rt = s.get("resultType") or "list"
                     sec["data"] = execute_select(
-                        self.graph, s["query"],
-                        result_type=rt, shorten_uris=True,
+                        self.graph,
+                        s["query"],
+                        result_type=rt,
+                        shorten_uris=True,
                     )
                 else:
                     sec["data"] = []
@@ -347,10 +396,9 @@ class RenderEngine:
 
     def render_all(
         self,
-        output_dir: Optional[str] = None,
+        output_dir: str | None = None,
     ) -> dict[str, str]:
-        """
-        Execute all RenderSpecs in the graph.
+        """Execute all RenderSpecs in the graph.
 
         Returns a dict mapping spec IRI → rendered content.
         """
@@ -372,11 +420,10 @@ class RenderEngine:
         self,
         template_str: str,
         queries: dict[str, str],
-        result_types: Optional[dict[str, str]] = None,
-        extra_context: Optional[dict] = None,
+        result_types: dict[str, str] | None = None,
+        extra_context: dict | None = None,
     ) -> str:
-        """
-        Quick render: provide a template string and a dict of
+        """Quick render: provide a template string and a dict of
         {variable_name: sparql_query} directly, without defining
         a RenderSpec in the graph.
 
@@ -391,7 +438,7 @@ class RenderEngine:
         extra_context : dict, optional
             Additional template variables.
 
-        Returns
+        Returns:
         -------
         str
             Rendered content.
@@ -405,7 +452,8 @@ class RenderEngine:
         for var_name, query in queries.items():
             rtype = rt.get(var_name, "list")
             context[var_name] = execute_select(
-                self.graph, query,
+                self.graph,
+                query,
                 result_type=rtype,
                 shorten_uris=True,
             )
@@ -415,44 +463,11 @@ class RenderEngine:
 
         return template.render(**context)
 
-    # ------------------------------------------------------------------
-    # Binary format helpers
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _render_docx(markdown_content: str, output_path: str):
-        """Convert markdown to docx using python-docx (best-effort)."""
-        try:
-            from docx import Document
-            doc = Document()
-            for line in markdown_content.split("\n"):
-                stripped = line.strip()
-                if stripped.startswith("# "):
-                    doc.add_heading(stripped[2:], level=1)
-                elif stripped.startswith("## "):
-                    doc.add_heading(stripped[3:], level=2)
-                elif stripped.startswith("### "):
-                    doc.add_heading(stripped[4:], level=3)
-                elif stripped.startswith("- "):
-                    doc.add_paragraph(stripped[2:], style="List Bullet")
-                elif stripped.startswith("| "):
-                    doc.add_paragraph(stripped)  # simplified table
-                elif stripped:
-                    doc.add_paragraph(stripped)
-            docx_path = output_path.replace(".md", ".docx") if output_path.endswith(".md") else output_path
-            doc.save(docx_path)
-        except ImportError:
-            pass  # python-docx not installed
-
-    @staticmethod
-    def _render_pdf(markdown_content: str, output_path: str):
-        """Placeholder for PDF rendering."""
-        pass  # Would use weasyprint, reportlab, or pandoc
-
 
 # ------------------------------------------------------------------
 # Convenience function
 # ------------------------------------------------------------------
+
 
 def load_ttl(ttl: str) -> Graph:
     """Parse a TTL string (with auto-prefixed header) into a Graph."""

@@ -1,18 +1,22 @@
 """Tests for SHACL membrane validation."""
 
-import pytest
-from holonic import HolonicDataset, MembraneHealth
+from holonic import MembraneHealth
 
 
 class TestMembraneValidation:
     def test_intact_membrane(self, ds):
         ds.add_holon("urn:holon:valid", "Valid")
-        ds.add_interior("urn:holon:valid", """
+        ds.add_interior(
+            "urn:holon:valid",
+            """
             @prefix ex: <urn:ex:> .
             <urn:item:1> a ex:Item ;
                 ex:name "Widget" .
-        """)
-        ds.add_boundary("urn:holon:valid", """
+        """,
+        )
+        ds.add_boundary(
+            "urn:holon:valid",
+            """
             @prefix ex: <urn:ex:> .
             <urn:shapes:ItemShape> a sh:NodeShape ;
                 sh:targetClass ex:Item ;
@@ -22,18 +26,24 @@ class TestMembraneValidation:
                     sh:datatype xsd:string ;
                     sh:severity sh:Violation
                 ] .
-        """)
+        """,
+        )
         result = ds.validate_membrane("urn:holon:valid")
         assert result.conforms
         assert result.health == MembraneHealth.INTACT
 
     def test_compromised_membrane(self, ds):
         ds.add_holon("urn:holon:bad", "Bad")
-        ds.add_interior("urn:holon:bad", """
+        ds.add_interior(
+            "urn:holon:bad",
+            """
             @prefix ex: <urn:ex:> .
             <urn:item:1> a ex:Item .
-        """)
-        ds.add_boundary("urn:holon:bad", """
+        """,
+        )
+        ds.add_boundary(
+            "urn:holon:bad",
+            """
             @prefix ex: <urn:ex:> .
             <urn:shapes:ItemShape> a sh:NodeShape ;
                 sh:targetClass ex:Item ;
@@ -44,16 +54,20 @@ class TestMembraneValidation:
                     sh:severity sh:Violation ;
                     sh:message "Item must have a name."
                 ] .
-        """)
+        """,
+        )
         result = ds.validate_membrane("urn:holon:bad")
         assert not result.conforms
         assert result.health == MembraneHealth.COMPROMISED
 
     def test_no_boundary_returns_intact(self, ds):
         ds.add_holon("urn:holon:naked", "Naked")
-        ds.add_interior("urn:holon:naked", """
+        ds.add_interior(
+            "urn:holon:naked",
+            """
             <urn:x> a <urn:T> .
-        """)
+        """,
+        )
         result = ds.validate_membrane("urn:holon:naked")
         assert result.conforms
         assert result.health == MembraneHealth.INTACT
@@ -61,15 +75,25 @@ class TestMembraneValidation:
     def test_multi_interior_validation(self, ds):
         """Boundary should validate the union of all interior graphs."""
         ds.add_holon("urn:holon:multi", "Multi")
-        ds.add_interior("urn:holon:multi", """
+        ds.add_interior(
+            "urn:holon:multi",
+            """
             @prefix ex: <urn:ex:> .
             <urn:item:1> a ex:Item ; ex:name "Alpha" .
-        """, graph_iri="urn:holon:multi/interior/a")
-        ds.add_interior("urn:holon:multi", """
+        """,
+            graph_iri="urn:holon:multi/interior/a",
+        )
+        ds.add_interior(
+            "urn:holon:multi",
+            """
             @prefix ex: <urn:ex:> .
             <urn:item:2> a ex:Item ; ex:name "Beta" .
-        """, graph_iri="urn:holon:multi/interior/b")
-        ds.add_boundary("urn:holon:multi", """
+        """,
+            graph_iri="urn:holon:multi/interior/b",
+        )
+        ds.add_boundary(
+            "urn:holon:multi",
+            """
             @prefix ex: <urn:ex:> .
             <urn:shapes:ItemShape> a sh:NodeShape ;
                 sh:targetClass ex:Item ;
@@ -78,7 +102,8 @@ class TestMembraneValidation:
                     sh:minCount 1 ;
                     sh:severity sh:Violation
                 ] .
-        """)
+        """,
+        )
         result = ds.validate_membrane("urn:holon:multi")
         assert result.conforms
         assert result.health == MembraneHealth.INTACT

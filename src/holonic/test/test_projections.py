@@ -1,10 +1,13 @@
 """Tests for projection utilities."""
 
-from rdflib import Graph, Literal, Namespace, URIRef, BNode
-from rdflib.namespace import RDF, RDFS, XSD, SKOS
+from rdflib import BNode, Graph, Literal, Namespace, URIRef
 from rdflib.collection import Collection
+from rdflib.namespace import RDF, RDFS, XSD
 
 from holonic.projections import (
+    CONSTRUCT_LABELS_ONLY,
+    CONSTRUCT_OBJECT_PROPERTIES_ONLY,
+    CONSTRUCT_STRIP_TYPES,
     ProjectedGraph,
     ProjectionPipeline,
     build_construct,
@@ -15,11 +18,7 @@ from holonic.projections import (
     merge_graphs,
     project_to_lpg,
     strip_blank_nodes,
-    CONSTRUCT_STRIP_TYPES,
-    CONSTRUCT_OBJECT_PROPERTIES_ONLY,
-    CONSTRUCT_LABELS_ONLY,
 )
-
 
 EX = Namespace("urn:ex:")
 
@@ -164,6 +163,7 @@ class TestProjectToLPG:
         assert isinstance(d["edges"], list)
         # Should be JSON-serializable
         import json
+
         json.dumps(d)  # should not raise
 
 
