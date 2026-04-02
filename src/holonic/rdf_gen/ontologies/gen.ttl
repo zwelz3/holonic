@@ -1,0 +1,180 @@
+@prefix gen:   <urn:gen:> .
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix dct:   <http://purl.org/dc/terms/> .
+
+# =============================================================================
+# RDF Generation Ontology (gen:)
+#
+# Describes the machinery for generating documents and code from RDF data.
+# The ontology itself lives in RDF, making the generation process queryable,
+# traceable, and self-describing.
+#
+# Core pattern:
+#   1. A RenderSpec binds a Template to DataBindings.
+#   2. Each DataBinding maps a SPARQL query to a template variable.
+#   3. The Engine executes the queries, feeds results to the template,
+#      and produces output in the specified format.
+#
+# This keeps the generation logic declarative and inside the graph:
+# "to produce document X, query the graph for Y and Z, and render
+# through template T" is itself an RDF statement.
+# =============================================================================
+
+gen: a owl:Ontology ;
+    rdfs:label "RDF Generation Ontology" ;
+    rdfs:comment """Describes templates, data bindings, and render specifications
+    for generating documents and code from RDF data sources.""" .
+
+# ---------------------------------------------------------------------------
+# Templates
+# ---------------------------------------------------------------------------
+
+gen:Template a owl:Class ;
+    rdfs:label "Template" ;
+    rdfs:comment """A Jinja2 template that produces formatted output.
+    The template content can be inline (gen:templateBody) or loaded
+    from a file (gen:templatePath).""" .
+
+gen:templateBody a owl:DatatypeProperty ;
+    rdfs:domain gen:Template ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Inline Jinja2 template content." .
+
+gen:templatePath a owl:DatatypeProperty ;
+    rdfs:domain gen:Template ;
+    rdfs:range xsd:string ;
+    rdfs:comment "File path to a Jinja2 template." .
+
+gen:outputFormat a owl:DatatypeProperty ;
+    rdfs:domain gen:Template ;
+    rdfs:range xsd:string ;
+    rdfs:comment "The output format: markdown, docx, pdf, python, matlab, etc." .
+
+gen:outputExtension a owl:DatatypeProperty ;
+    rdfs:domain gen:Template ;
+    rdfs:range xsd:string ;
+    rdfs:comment "File extension for the output (e.g., .md, .py, .docx)." .
+
+# ---------------------------------------------------------------------------
+# Data Bindings — SPARQL queries that produce template variables
+# ---------------------------------------------------------------------------
+
+gen:DataBinding a owl:Class ;
+    rdfs:label "Data Binding" ;
+    rdfs:comment """Maps a SPARQL query to a template variable name.
+    The query is executed against the data graph; the results are
+    bound to the variable name and passed to the template engine.""" .
+
+gen:variableName a owl:DatatypeProperty ;
+    rdfs:domain gen:DataBinding ;
+    rdfs:range xsd:string ;
+    rdfs:comment "The Jinja2 variable name this binding populates." .
+
+gen:sparqlQuery a owl:DatatypeProperty ;
+    rdfs:domain gen:DataBinding ;
+    rdfs:range xsd:string ;
+    rdfs:comment "SPARQL SELECT query whose results populate the variable." .
+
+gen:sparqlConstructQuery a owl:DatatypeProperty ;
+    rdfs:domain gen:DataBinding ;
+    rdfs:range xsd:string ;
+    rdfs:comment "SPARQL CONSTRUCT query (results passed as a sub-graph)." .
+
+gen:resultType a owl:DatatypeProperty ;
+    rdfs:domain gen:DataBinding ;
+    rdfs:range xsd:string ;
+    rdfs:comment """How to interpret the query results:
+    'scalar'  — single value (first result, first column)
+    'list'    — list of dicts (one per result row)
+    'graph'   — rdflib Graph (for CONSTRUCT results)
+    'grouped' — dict of lists keyed by first column""" .
+
+gen:defaultValue a owl:DatatypeProperty ;
+    rdfs:domain gen:DataBinding ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Default value if the query returns no results." .
+
+# ---------------------------------------------------------------------------
+# Render Specifications — tie templates to bindings
+# ---------------------------------------------------------------------------
+
+gen:RenderSpec a owl:Class ;
+    rdfs:label "Render Specification" ;
+    rdfs:comment """A complete generation job: which template, which bindings,
+    which output file. Executing a RenderSpec produces a document or code file.""" .
+
+gen:usesTemplate a owl:ObjectProperty ;
+    rdfs:domain gen:RenderSpec ;
+    rdfs:range gen:Template ;
+    rdfs:comment "The template this spec uses." .
+
+gen:hasBinding a owl:ObjectProperty ;
+    rdfs:domain gen:RenderSpec ;
+    rdfs:range gen:DataBinding ;
+    rdfs:comment "A data binding in this render specification." .
+
+gen:outputPath a owl:DatatypeProperty ;
+    rdfs:domain gen:RenderSpec ;
+    rdfs:range xsd:string ;
+    rdfs:comment "File path for the generated output." .
+
+gen:title a owl:DatatypeProperty ;
+    rdfs:domain gen:RenderSpec ;
+    rdfs:range xsd:string .
+
+gen:description a owl:DatatypeProperty ;
+    rdfs:domain gen:RenderSpec ;
+    rdfs:range xsd:string .
+
+# ---------------------------------------------------------------------------
+# Data Sources — provenance for multi-source integration
+# ---------------------------------------------------------------------------
+
+gen:DataSource a owl:Class ;
+    rdfs:label "Data Source" ;
+    rdfs:comment "A named data source contributing to the generation graph." .
+
+gen:sourceFormat a owl:DatatypeProperty ;
+    rdfs:domain gen:DataSource ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Original format of the source: SysML, JSON, CSV, API, etc." .
+
+gen:sourceLocation a owl:DatatypeProperty ;
+    rdfs:domain gen:DataSource ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Where the source data was loaded from." .
+
+gen:loadedAt a owl:DatatypeProperty ;
+    rdfs:domain gen:DataSource ;
+    rdfs:range xsd:dateTime .
+
+gen:contributesTo a owl:ObjectProperty ;
+    rdfs:domain gen:DataSource ;
+    rdfs:range gen:RenderSpec .
+
+# ---------------------------------------------------------------------------
+# Section Ordering (for structured documents)
+# ---------------------------------------------------------------------------
+
+gen:Section a owl:Class ;
+    rdfs:label "Section" ;
+    rdfs:comment "A section within a structured document template." .
+
+gen:sectionOrder a owl:DatatypeProperty ;
+    rdfs:domain gen:Section ;
+    rdfs:range xsd:integer .
+
+gen:sectionTitle a owl:DatatypeProperty ;
+    rdfs:domain gen:Section ;
+    rdfs:range xsd:string .
+
+gen:sectionBinding a owl:ObjectProperty ;
+    rdfs:domain gen:Section ;
+    rdfs:range gen:DataBinding .
+
+gen:hasSection a owl:ObjectProperty ;
+    rdfs:domain gen:RenderSpec ;
+    rdfs:range gen:Section .

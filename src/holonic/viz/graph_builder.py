@@ -1,282 +1,365 @@
-"""
-graph_builder.py — Convert holonic RDF structures to yFiles node/edge lists.
+"""Projection-driven graph builder for yFiles visualization.
 
-Handles:
-  - Single holon → nodes grouped by layer (interior/boundary/projection/context)
-  - Holarchy → holons as parent groups, layers as child groups, triples as leaf nodes
-  - Arbitrary SPARQL CONSTRUCT/SELECT results → flat node/edge graph
-  - Portal edges between holon groups
+Converts holonic structures to yFiles node/edge lists by FIRST projecting
+RDF through the projections module (type collapse, literal collapse,
+blank-node resolution, SHACL flattening) and THEN building yFiles data
+from the simplified ProjectedGraph.
+
+This eliminates the edge clutter and flat-label problems of the old
+graph_builder by ensuring that:
+  - rdf:type triples become node type annotations, not edges
+  - Literal-valued triples become node attributes, not edges to literal nodes
+  - Blank nodes are inlined as nested attributes, not separate nodes
+  - SHACL shapes are rendered as compartmented tables, not blank-node trees
 """
 
 from __future__ import annotations
 
-from typing import Optional
-from rdflib import Graph, URIRef, Literal, BNode, RDF, RDFS
-from rdflib.term import Node as RDFNode
+from typing import Any, Callable
 
-from ..holon import Holon
-from ..holarchy import Holarchy
-from ..namespaces import CGA
-from . import styles
+from rdflib import Graph
 
-
-def _node_id(term: RDFNode, layer: str = "", holon_iri: str = "") -> str:
-    """Generate a unique node ID for an RDF term within a layer context."""
-    if isinstance(term, Literal):
-        # Literals get unique IDs scoped to their layer to avoid collisions
-        val = str(term)[:30].replace(" ", "_")
-        return f"lit:{layer}:{holon_iri}:{val}:{hash(term) % 10000}"
-    if isinstance(term, BNode):
-        return f"bnode:{layer}:{holon_iri}:{str(term)}"
-    return str(term)
-
-
-def _node_label(term: RDFNode) -> str:
-    """Generate a human-readable label for an RDF term."""
-    if isinstance(term, Literal):
-        val = str(term)
-        return val[:50] + ("..." if len(val) > 50 else "")
-    if isinstance(term, BNode):
-        return f"_:{str(term)[:8]}"
-    return styles.shorten_uri(str(term))
+from holonic.projections import (
+    ProjectedEdge,
+    ProjectedGraph,
+    ProjectedNode,
+    project_to_lpg,
+    collapse_reification,
+)
+from holonic.viz import styles
+from holonic.viz.formatters import (
+    format_compartmented,
+    format_shacl_shape,
+    format_simple,
+    format_typed,
+)
 
 
-def _classify_node(term: RDFNode, layer: str) -> str:
-    """Return the node type for styling purposes."""
-    if isinstance(term, Literal):
-        return "literal"
-    return layer or "default"
+# ── Label formatter type ──
+
+LabelFormatter = Callable[[ProjectedNode], str]
 
 
-# ------------------------------------------------------------------
-# Single Holon → nodes and edges
-# ------------------------------------------------------------------
+# ══════════════════════════════════════════════════════════════
+# ProjectedGraph → yFiles data
+# ══════════════════════════════════════════════════════════════
 
-def holon_to_graph_data(
-    holon: Holon,
-    layers: Optional[list[str]] = None,
-    show_group_nodes: bool = True,
+
+def projected_to_yfiles(
+    lpg: ProjectedGraph,
+    *,
+    layer: str = "default",
+    label_fn: LabelFormatter = format_compartmented,
+    parent_id: str | None = None,
 ) -> tuple[list[dict], list[dict]]:
-    """
-    Convert a single Holon's named graphs into yFiles node/edge lists.
+    """Convert a ProjectedGraph into yFiles node/edge lists.
 
     Parameters
     ----------
-    holon : Holon
-        The holon to visualise.
-    layers : list[str], optional
-        Which layers to include.  Default: all four.
-    show_group_nodes : bool
-        If True, create group nodes for each layer and parent
-        resource nodes to them.
-
-    Returns
-    -------
-    (nodes, edges)
-        Lists of dicts suitable for ``GraphWidget.nodes`` and ``.edges``.
+    lpg :
+        The projected graph (output of project_to_lpg or similar).
+    layer :
+        Layer name for styling (interior, boundary, etc.).
+    label_fn :
+        Function to format node labels.  Default: compartmented.
+    parent_id :
+        If set, all nodes are parented to this group node.
     """
-    if layers is None:
-        layers = ["interior", "boundary", "projection", "context"]
-
-    nodes: dict[str, dict] = {}
+    nodes: list[dict] = []
     edges: list[dict] = []
-    edge_counter = 0
+
+    for iri, node in lpg.nodes.items():
+        # Detect SHACL shapes for special formatting
+        is_shape = any("NodeShape" in t for t in node.types)
+        fn = format_shacl_shape if is_shape else label_fn
+
+        node_layer = _infer_layer(node, layer)
+
+        n = {
+            "id": iri,
+            "properties": {
+                "label": fn(node),
+                "layer": node_layer,
+                "type": _primary_type(node),
+                "types": node.types,
+                "attr_count": len(node.attributes),
+                "is_group": False,
+            },
+        }
+        if parent_id:
+            n["properties"]["parent"] = parent_id
+        nodes.append(n)
+
+    for i, edge in enumerate(lpg.edges):
+        e = {
+            "id": f"e_{i}",
+            "start": edge.source,
+            "end": edge.target,
+            "properties": {
+                "label": styles.shorten_uri(edge.predicate),
+                "predicate": edge.predicate,
+                "layer": layer,
+            },
+        }
+        if edge.attributes:
+            e["properties"]["edge_attrs"] = edge.attributes
+        edges.append(e)
+
+    return nodes, edges
+
+
+def _infer_layer(node: ProjectedNode, default: str) -> str:
+    """Infer the visual layer from the node's types."""
+    for t in node.types:
+        t_lower = t.lower()
+        if "nodeshape" in t_lower or "shape" in t_lower:
+            return "boundary"
+        if "holon" in t_lower:
+            return "holon"
+        if "portal" in t_lower:
+            return "portal"
+        if "activity" in t_lower:
+            return "context"
+    return default
+
+
+def _primary_type(node: ProjectedNode) -> str:
+    """Return a short primary type name for shape mapping."""
+    if node.types:
+        return styles.shorten_uri(node.types[0])
+    return "default"
+
+
+# ══════════════════════════════════════════════════════════════
+# Holon → yFiles (via HolonicDataset)
+# ══════════════════════════════════════════════════════════════
+
+
+def holon_to_yfiles(
+    ds,
+    holon_iri: str,
+    *,
+    layers: list[str] | None = None,
+    show_group: bool = True,
+    label_fn: LabelFormatter = format_compartmented,
+) -> tuple[list[dict], list[dict]]:
+    """Build yFiles data for a single holon from a HolonicDataset.
+
+    Queries the dataset for the holon's layer graphs, projects each
+    through project_to_lpg(), and builds the yFiles representation.
+
+    Parameters
+    ----------
+    ds :
+        A HolonicDataset instance.
+    holon_iri :
+        The holon to visualize.
+    layers :
+        Which layer roles to include.  Default: all registered.
+    show_group :
+        If True, create a group node for the holon and layer groups.
+    label_fn :
+        Node label formatter.  Default: compartmented.
+    """
+    from holonic.sparql import (
+        GET_HOLON_INTERIORS,
+        GET_HOLON_BOUNDARIES,
+    )
+
+    all_nodes: list[dict] = []
+    all_edges: list[dict] = []
+
+    # Get holon metadata
+    info = ds.get_holon(holon_iri)
+    holon_label = info.label if info else styles.shorten_uri(holon_iri)
 
     # Create holon group node
-    if show_group_nodes:
-        nodes[holon.iri] = {
-            "id": holon.iri,
+    if show_group:
+        all_nodes.append({
+            "id": holon_iri,
             "properties": {
-                "label": holon.label,
+                "label": holon_label,
                 "layer": "holon",
                 "type": "holon",
                 "is_group": True,
             },
-        }
+        })
 
-    for layer_name in layers:
-        graph: Graph = getattr(holon, layer_name, None)
-        if graph is None:
+    # Map layer role → (query_template, layer_name)
+    layer_specs = {
+        "interior": (GET_HOLON_INTERIORS, "interior"),
+        "boundary": (GET_HOLON_BOUNDARIES, "boundary"),
+    }
+
+    # Also check projection and context
+    PROJ_Q = 'PREFIX cga: <urn:holonic:ontology:> SELECT ?graph WHERE { <HOLON> cga:hasProjection ?graph }'
+    CTX_Q = 'PREFIX cga: <urn:holonic:ontology:> SELECT ?graph WHERE { <HOLON> cga:hasContext ?graph }'
+    layer_specs["projection"] = (PROJ_Q, "projection")
+    layer_specs["context"] = (CTX_Q, "context")
+
+    include = set(layers or layer_specs.keys())
+
+    for role, (query_tmpl, layer_name) in layer_specs.items():
+        if role not in include:
             continue
 
-        # Create layer group node (child of holon group)
-        layer_group_id = f"{holon.iri}/{layer_name}"
-        if show_group_nodes:
-            nodes[layer_group_id] = {
+        q = query_tmpl.replace("?holon", f"<{holon_iri}>").replace("<HOLON>", f"<{holon_iri}>")
+        rows = ds.backend.query(q)
+        if not rows:
+            continue
+
+        # Create layer group
+        layer_group_id = f"{holon_iri}/{role}"
+        if show_group:
+            all_nodes.append({
                 "id": layer_group_id,
                 "properties": {
-                    "label": f"{holon.label} / {layer_name}",
+                    "label": f"{holon_label} / {role}",
                     "layer": layer_name,
                     "type": "layer_group",
                     "is_group": True,
-                    "parent": holon.iri,
-                },
-            }
-
-        for s, p, o in graph:
-            s_id = _node_id(s, layer_name, holon.iri)
-            o_id = _node_id(o, layer_name, holon.iri)
-
-            # Subject node
-            if s_id not in nodes:
-                nodes[s_id] = {
-                    "id": s_id,
-                    "properties": {
-                        "label": _node_label(s),
-                        "layer": layer_name,
-                        "type": _classify_node(s, layer_name),
-                        "uri": str(s),
-                        "is_group": False,
-                        **({"parent": layer_group_id} if show_group_nodes else {}),
-                    },
-                }
-
-            # Object node
-            if o_id not in nodes:
-                nodes[o_id] = {
-                    "id": o_id,
-                    "properties": {
-                        "label": _node_label(o),
-                        "layer": layer_name,
-                        "type": _classify_node(o, layer_name),
-                        "uri": str(o),
-                        "is_group": False,
-                        **({"parent": layer_group_id} if show_group_nodes else {}),
-                    },
-                }
-
-            # Edge
-            edge_counter += 1
-            edges.append({
-                "id": edge_counter,
-                "start": s_id,
-                "end": o_id,
-                "properties": {
-                    "label": _node_label(p),
-                    "predicate": str(p),
-                    "layer": layer_name,
+                    "parent": holon_iri,
                 },
             })
 
-    return list(nodes.values()), edges
+        # Merge all graphs for this layer role
+        merged = Graph()
+        for row in rows:
+            g = ds.backend.get_graph(row["graph"])
+            for t in g:
+                merged.add(t)
+
+        # Project through LPG
+        lpg = project_to_lpg(
+            merged,
+            collapse_types=True,
+            collapse_literals=True,
+            resolve_blanks=True,
+            resolve_lists=True,
+        )
+
+        # Convert to yFiles
+        parent = layer_group_id if show_group else None
+        nodes, edges = projected_to_yfiles(
+            lpg,
+            layer=layer_name,
+            label_fn=label_fn,
+            parent_id=parent,
+        )
+        all_nodes.extend(nodes)
+        all_edges.extend(edges)
+
+    return all_nodes, all_edges
 
 
-# ------------------------------------------------------------------
-# Holarchy → nodes and edges
-# ------------------------------------------------------------------
+# ══════════════════════════════════════════════════════════════
+# Holarchy topology → yFiles
+# ══════════════════════════════════════════════════════════════
 
-def holarchy_to_graph_data(
-    holarchy: Holarchy,
-    layers: Optional[list[str]] = None,
-    show_internals: bool = True,
-    show_portals: bool = True,
+
+def holarchy_to_yfiles(
+    ds,
+    *,
+    show_internals: bool = False,
+    layers: list[str] | None = None,
+    label_fn: LabelFormatter = format_typed,
 ) -> tuple[list[dict], list[dict]]:
-    """
-    Convert a full Holarchy into yFiles node/edge lists.
+    """Build yFiles data for the holarchy topology.
 
-    Each holon becomes a group node.  If ``show_internals`` is True,
-    each layer becomes a child group with its triples as leaf nodes.
-    If False, holons are shown as atomic nodes connected by portals.
-
-    Portals become edges between holon groups.
+    Parameters
+    ----------
+    ds :
+        A HolonicDataset instance.
+    show_internals :
+        If True, expand each holon to show its layer contents.
+        If False, show holons as single nodes with portal edges.
+    layers :
+        When show_internals=True, which layers to display.
+    label_fn :
+        Node label formatter for topology mode.
     """
-    all_nodes: dict[str, dict] = {}
+    if show_internals:
+        return _holarchy_expanded(ds, layers=layers, label_fn=label_fn)
+    else:
+        return _holarchy_collapsed(ds, label_fn=label_fn)
+
+
+def _holarchy_collapsed(
+    ds,
+    label_fn: LabelFormatter = format_typed,
+) -> tuple[list[dict], list[dict]]:
+    """Holarchy as single holon nodes connected by portals/membership."""
+    # Use project_holarchy which does a CONSTRUCT against the dataset
+    lpg = ds.project_holarchy(collapse_types=True, collapse_literals=True)
+
+    nodes, edges = projected_to_yfiles(
+        lpg,
+        layer="holon",
+        label_fn=label_fn,
+    )
+    return nodes, edges
+
+
+def _holarchy_expanded(
+    ds,
+    layers: list[str] | None = None,
+    label_fn: LabelFormatter = format_compartmented,
+) -> tuple[list[dict], list[dict]]:
+    """Holarchy with each holon expanded to show its layers."""
+    all_nodes: list[dict] = []
     all_edges: list[dict] = []
-    edge_counter = 0
 
-    for holon in holarchy.holons:
-        if show_internals:
-            h_nodes, h_edges = holon_to_graph_data(holon, layers=layers)
-            for n in h_nodes:
-                all_nodes[n["id"]] = n
-            # Offset edge IDs
-            for e in h_edges:
-                edge_counter += 1
-                e["id"] = edge_counter
-                all_edges.append(e)
-        else:
-            # Atomic holon node
-            all_nodes[holon.iri] = {
-                "id": holon.iri,
-                "properties": {
-                    "label": holon.label,
-                    "layer": "holon",
-                    "type": "holon",
-                    "depth": holon.depth,
-                    "is_group": False,
-                    "interior_count": len(holon.interior),
-                    "boundary_count": len(holon.boundary),
-                },
-            }
+    holons = ds.list_holons()
+    for holon_info in holons:
+        h_nodes, h_edges = holon_to_yfiles(
+            ds,
+            holon_info.iri,
+            layers=layers,
+            show_group=True,
+            label_fn=label_fn,
+        )
+        all_nodes.extend(h_nodes)
+        all_edges.extend(h_edges)
 
-    if show_portals:
-        for portal in holarchy.portals:
-            edge_counter += 1
-            all_edges.append({
-                "id": edge_counter,
-                "start": portal.source.iri,
-                "end": portal.target.iri,
-                "properties": {
-                    "label": portal.label or styles.shorten_uri(portal.iri),
-                    "predicate": "cga:portal",
-                    "layer": "portal",
-                    "traversable": portal.traversable,
-                    "type": type(portal).__name__,
-                },
-            })
-
-    return list(all_nodes.values()), all_edges
-
-
-# ------------------------------------------------------------------
-# SPARQL results → nodes and edges
-# ------------------------------------------------------------------
-
-def sparql_construct_to_graph_data(
-    result_graph: Graph,
-    layer: str = "default",
-) -> tuple[list[dict], list[dict]]:
-    """Convert a SPARQL CONSTRUCT result graph to yfiles format."""
-    nodes: dict[str, dict] = {}
-    edges: list[dict] = []
-    edge_counter = 0
-
-    for s, p, o in result_graph:
-        s_id = _node_id(s, layer)
-        o_id = _node_id(o, layer)
-
-        if s_id not in nodes:
-            nodes[s_id] = {
-                "id": s_id,
-                "properties": {
-                    "label": _node_label(s),
-                    "layer": layer,
-                    "type": _classify_node(s, layer),
-                    "uri": str(s),
-                },
-            }
-
-        if o_id not in nodes:
-            nodes[o_id] = {
-                "id": o_id,
-                "properties": {
-                    "label": _node_label(o),
-                    "layer": layer,
-                    "type": _classify_node(o, layer),
-                    "uri": str(o) if not isinstance(o, Literal) else str(o),
-                },
-            }
-
-        edge_counter += 1
-        edges.append({
-            "id": edge_counter,
-            "start": s_id,
-            "end": o_id,
+    # Add portal edges between holon groups
+    from holonic.sparql import ALL_PORTALS
+    portal_rows = ds.backend.query(ALL_PORTALS)
+    for i, r in enumerate(portal_rows):
+        all_edges.append({
+            "id": f"portal_e_{i}",
+            "start": r["source"],
+            "end": r["target"],
             "properties": {
-                "label": _node_label(p),
-                "predicate": str(p),
-                "layer": layer,
+                "label": r.get("label", "portal"),
+                "predicate": "cga:portal",
+                "layer": "portal",
             },
         })
 
-    return list(nodes.values()), edges
+    return all_nodes, all_edges
+
+
+# ══════════════════════════════════════════════════════════════
+# SPARQL result → yFiles (for SPARQLExplorer)
+# ══════════════════════════════════════════════════════════════
+
+
+def sparql_result_to_yfiles(
+    result_graph: Graph,
+    *,
+    layer: str = "default",
+    label_fn: LabelFormatter = format_compartmented,
+) -> tuple[list[dict], list[dict]]:
+    """Convert a SPARQL CONSTRUCT result graph to yFiles data.
+
+    Projects the result through project_to_lpg first, eliminating
+    type edges, literal nodes, and blank-node clutter.
+    """
+    lpg = project_to_lpg(
+        result_graph,
+        collapse_types=True,
+        collapse_literals=True,
+        resolve_blanks=True,
+        resolve_lists=True,
+    )
+    return projected_to_yfiles(lpg, layer=layer, label_fn=label_fn)

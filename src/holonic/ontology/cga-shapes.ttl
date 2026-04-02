@@ -1,0 +1,93 @@
+@prefix cga:    <urn:holonic:ontology:> .
+@prefix sh:     <http://www.w3.org/ns/shacl#> .
+@prefix rdfs:   <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
+
+# ══════════════════════════════════════════════════════════════
+# SHACL Shapes for the CGA Ontology
+# Validates holarchy registry graphs.
+# ══════════════════════════════════════════════════════════════
+
+cga:HolonShape a sh:NodeShape ;
+    sh:targetClass cga:Holon ;
+    sh:property [
+        sh:path rdfs:label ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:severity sh:Violation ;
+        sh:message "Holon must have exactly one rdfs:label."
+    ] ;
+    sh:property [
+        sh:path cga:hasInterior ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "Holon should have at least one interior graph."
+    ] .
+
+cga:PortalShape a sh:NodeShape ;
+    sh:targetClass cga:Portal ;
+    sh:property [
+        sh:path cga:sourceHolon ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:severity sh:Violation ;
+        sh:message "Portal must have exactly one sourceHolon (IRI)."
+    ] ;
+    sh:property [
+        sh:path cga:targetHolon ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:severity sh:Violation ;
+        sh:message "Portal must have exactly one targetHolon (IRI)."
+    ] ;
+    sh:property [
+        sh:path rdfs:label ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "Portal should have a label."
+    ] .
+
+cga:TransformPortalShape a sh:NodeShape ;
+    sh:targetClass cga:TransformPortal ;
+    sh:property [
+        sh:path cga:constructQuery ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:severity sh:Violation ;
+        sh:message "TransformPortal must have exactly one constructQuery."
+    ] .
+
+# Cross-holon constraint: portal target must exist in the registry.
+# This uses a SPARQL constraint because it reaches outside the portal node.
+cga:PortalTargetExistsShape a sh:NodeShape ;
+    sh:targetClass cga:Portal ;
+    sh:sparql [
+        sh:message "Portal target holon does not exist in the holarchy." ;
+        sh:prefixes cga: ;
+        sh:select """
+            SELECT $this
+            WHERE {
+                $this cga:targetHolon ?target .
+                FILTER NOT EXISTS { ?target a cga:Holon }
+            }
+        """
+    ] .
+
+# Cross-holon constraint: portal source must exist in the registry.
+cga:PortalSourceExistsShape a sh:NodeShape ;
+    sh:targetClass cga:Portal ;
+    sh:sparql [
+        sh:message "Portal source holon does not exist in the holarchy." ;
+        sh:prefixes cga: ;
+        sh:select """
+            SELECT $this
+            WHERE {
+                $this cga:sourceHolon ?source .
+                FILTER NOT EXISTS { ?source a cga:Holon }
+            }
+        """
+    ] .

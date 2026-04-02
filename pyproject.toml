@@ -6,16 +6,14 @@ requires = [
 
 [project]
 name = "holonic"
-version = "0.1.0"
-description = "Tbd..."
+version = "0.2.1"
+description = "Graph-native holonic RDF systems"
 readme = "README.md"
-keywords = [
-]
+requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [
   { name = "Zach Welz", email = "welz.zach@gmail.com" },
 ]
-requires-python = ">=3.11"
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
@@ -32,28 +30,52 @@ classifiers = [
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
+    "rdflib>=7.0",
+    "pyshacl>=0.25",
+    "pydantic>=2.0",
 ]
-optional-dependencies.docs = [
-  "myst-parser",
-  "pydata-sphinx-theme",
-  "sphinx>=7",
+
+[project.optional-dependencies]
+fuseki = [
+    "aiohttp>=3.9",
 ]
-optional-dependencies.lint = [
+entailment = [
+    "owlrl>=6.0",
+]
+viz = [
+    "yfiles-jupyter-graphs>=1.7",
+    "ipywidgets>=8.0",
+]
+docs = [
+    "sphinx>=7.0",
+    "sphinx-autodoc-typehints",
+    "sphinx-rtd-theme",
+    "myst-parser",
+]
+notebooks = [
+    "jupytext>=1.16",
+    "jupyter",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov",
+    "ruff",
+    "holonic[fuseki,entailment,viz,docs,notebooks]",
+]
+lint = [
   "mypy",
   "pyproject-fmt>=2.5",
   "ruff>=0.6",
   "ssort>=0.12",
 ]
-optional-dependencies.test = [
+test = [
   "pytest",
   "pytest-cov",
   "pytest-html",
   "pytest-json-report",
   "pytest-xdist",
 ]
-urls."Bug Tracker" = "tbd"
-urls.Documentation = "tbd"
-urls."Source" = "tbd"
+
 
 [tool.flit.sdist]
 exclude = [

@@ -1,0 +1,261 @@
+@prefix cga:   <urn:holonic:ontology:> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos:  <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix prov:  <http://www.w3.org/ns/prov#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+
+# ══════════════════════════════════════════════════════════════
+# Context-Graph Architecture (CGA) Ontology
+# A lightweight OWL 2 RL vocabulary for holonic RDF systems.
+# ══════════════════════════════════════════════════════════════
+
+cga: a owl:Ontology ;
+    rdfs:label "Context-Graph Architecture Ontology" ;
+    dcterms:description """Defines the structural vocabulary for holonic RDF
+        systems: holons (entities with four-layer named-graph structure),
+        portals (governed traversal mechanisms between holons), and
+        holarchies (nested holon systems).""" ;
+    owl:versionInfo "0.2.1" ;
+    dcterms:created "2026-04-01"^^xsd:date .
+
+# ──────────────────────────────────────────────────────────────
+# CLASSES
+# ──────────────────────────────────────────────────────────────
+
+cga:Holon a owl:Class ;
+    rdfs:label "Holon" ;
+    skos:definition """A knowledge-graph entity with genuine inside/outside
+        distinction, comprising one or more named graphs per layer
+        (interior, boundary, projection, context) and an IRI that
+        anchors all layers as a coherent identity.""" .
+
+cga:Portal a owl:Class ;
+    rdfs:label "Portal" ;
+    skos:definition """A boundary-membrane object belonging to a source holon
+        that governs traversal to a target holon. Portals are first-class
+        RDF entities with their own IRI.""" .
+
+cga:TransformPortal a owl:Class ;
+    rdfs:subClassOf cga:Portal ;
+    rdfs:label "Transform Portal" ;
+    skos:definition """A portal that carries a SPARQL CONSTRUCT query to
+        reshape data from source vocabulary into target vocabulary
+        during traversal.""" .
+
+cga:IconPortal a owl:Class ;
+    rdfs:subClassOf cga:Portal ;
+    rdfs:label "Icon Portal" ;
+    skos:definition """A portal with visual representation metadata for
+        rendering in navigation interfaces.""" .
+
+cga:SealedPortal a owl:Class ;
+    rdfs:subClassOf cga:Portal ;
+    rdfs:label "Sealed Portal" ;
+    skos:definition """A portal whose target exists but is currently
+        unreachable. The IRI persists; traversal is blocked.""" .
+
+cga:LayerGraph a owl:Class ;
+    rdfs:label "Layer Graph" ;
+    skos:definition """A named graph that serves as one layer (or sub-layer)
+        of a holon. A holon may have multiple LayerGraphs per role.""" .
+
+# ── Layer role individuals ──
+
+cga:LayerRole a owl:Class ;
+    rdfs:label "Layer Role" ;
+    skos:definition "Enumeration of the four holon layer roles." .
+
+cga:InteriorRole a cga:LayerRole ;
+    rdfs:label "Interior" ;
+    skos:definition "The holon's private world — epistemically grounded assertions." .
+
+cga:BoundaryRole a cga:LayerRole ;
+    rdfs:label "Boundary" ;
+    skos:definition "The membrane — SHACL shapes and portal definitions." .
+
+cga:ProjectionRole a cga:LayerRole ;
+    rdfs:label "Projection" ;
+    skos:definition "The curated outward face — external bindings and vocabulary translations." .
+
+cga:ContextRole a cga:LayerRole ;
+    rdfs:label "Context" ;
+    skos:definition "Structural membership and temporal annotations." .
+
+# ── Portal directionality ──
+
+cga:PortalType a owl:Class ;
+    rdfs:label "Portal Type" .
+
+cga:UnidirectionalPortal a cga:PortalType ;
+    rdfs:label "Unidirectional Portal" .
+
+cga:BidirectionalPortal a cga:PortalType ;
+    rdfs:label "Bidirectional Portal" .
+
+# ── Membrane health ──
+
+cga:MembraneHealth a owl:Class ;
+    rdfs:label "Membrane Health" .
+
+cga:Intact a cga:MembraneHealth ;
+    rdfs:label "Intact" ;
+    skos:definition "No violations or warnings." .
+
+cga:Weakened a cga:MembraneHealth ;
+    rdfs:label "Weakened" ;
+    skos:definition "Warnings present but no violations." .
+
+cga:Compromised a cga:MembraneHealth ;
+    rdfs:label "Compromised" ;
+    skos:definition "Violations present — membrane is breached." .
+
+# ──────────────────────────────────────────────────────────────
+# OBJECT PROPERTIES
+# ──────────────────────────────────────────────────────────────
+
+# ── Holon ↔ Layer graph bindings ──
+
+cga:hasLayer a owl:ObjectProperty ;
+    rdfs:label "has layer" ;
+    rdfs:domain cga:Holon ;
+    rdfs:range cga:LayerGraph ;
+    skos:definition "Associates a holon with one of its layer graphs." .
+
+cga:hasInterior a owl:ObjectProperty ;
+    rdfs:subPropertyOf cga:hasLayer ;
+    rdfs:label "has interior" ;
+    rdfs:domain cga:Holon ;
+    skos:definition "Associates a holon with an interior named graph." .
+
+cga:hasBoundary a owl:ObjectProperty ;
+    rdfs:subPropertyOf cga:hasLayer ;
+    rdfs:label "has boundary" ;
+    rdfs:domain cga:Holon ;
+    skos:definition "Associates a holon with a boundary (shapes) named graph." .
+
+cga:hasProjection a owl:ObjectProperty ;
+    rdfs:subPropertyOf cga:hasLayer ;
+    rdfs:label "has projection" ;
+    rdfs:domain cga:Holon ;
+    skos:definition "Associates a holon with a projection named graph." .
+
+cga:hasContext a owl:ObjectProperty ;
+    rdfs:subPropertyOf cga:hasLayer ;
+    rdfs:label "has context" ;
+    rdfs:domain cga:Holon ;
+    skos:definition "Associates a holon with a context named graph." .
+
+# ── Layer graph metadata ──
+
+cga:layerRole a owl:ObjectProperty ;
+    rdfs:label "layer role" ;
+    rdfs:domain cga:LayerGraph ;
+    rdfs:range cga:LayerRole ;
+    skos:definition "Declares which role this named graph plays for its holon." .
+
+cga:graphIRI a owl:ObjectProperty ;
+    rdfs:label "graph IRI" ;
+    rdfs:domain cga:LayerGraph ;
+    skos:definition "The named graph identifier in the RDF dataset." .
+
+# ── Portal properties ──
+
+cga:sourceHolon a owl:ObjectProperty ;
+    rdfs:label "source holon" ;
+    rdfs:domain cga:Portal ;
+    rdfs:range cga:Holon ;
+    skos:definition "The holon from which traversal originates." .
+
+cga:targetHolon a owl:ObjectProperty ;
+    rdfs:label "target holon" ;
+    rdfs:domain cga:Portal ;
+    rdfs:range cga:Holon ;
+    skos:definition "The holon to which traversal resolves." .
+
+cga:portalType a owl:ObjectProperty ;
+    rdfs:label "portal type" ;
+    rdfs:domain cga:Portal ;
+    rdfs:range cga:PortalType .
+
+cga:usesAlignment a owl:ObjectProperty ;
+    rdfs:label "uses alignment" ;
+    rdfs:domain cga:Portal ;
+    rdfs:range cga:Holon ;
+    skos:definition "The alignment holon whose axioms this portal depends on." .
+
+cga:sourceRealizes a owl:ObjectProperty ;
+    rdfs:label "source realizes" ;
+    rdfs:domain cga:Portal ;
+    skos:definition "The UDDL logical entity that the source platform type realizes." .
+
+cga:targetRealizes a owl:ObjectProperty ;
+    rdfs:label "target realizes" ;
+    rdfs:domain cga:Portal ;
+    skos:definition "The UDDL logical entity that the target platform type realizes." .
+
+# ── Holarchy structure ──
+
+cga:memberOf a owl:ObjectProperty ;
+    rdfs:label "member of" ;
+    rdfs:domain cga:Holon ;
+    rdfs:range cga:Holon ;
+    skos:definition "Declares that this holon is contained within a larger holon." .
+
+cga:adjacentTo a owl:ObjectProperty ;
+    rdfs:label "adjacent to" ;
+    rdfs:domain cga:Holon ;
+    rdfs:range cga:Holon ;
+    owl:symmetricProperty true ;
+    skos:definition "Peer-level adjacency between holons." .
+
+cga:bindsTo a owl:ObjectProperty ;
+    rdfs:label "binds to" ;
+    rdfs:domain cga:Holon ;
+    skos:definition """Directional binding to an external resource without
+        asserting full owl:sameAs identity.""" .
+
+cga:exposesPortal a owl:ObjectProperty ;
+    rdfs:label "exposes portal" ;
+    rdfs:domain cga:Holon ;
+    rdfs:range cga:Portal ;
+    skos:definition """References a portal that this holon surfaces without
+        owning. The portal is defined in another holon's boundary.""" .
+
+# ──────────────────────────────────────────────────────────────
+# DATATYPE PROPERTIES
+# ──────────────────────────────────────────────────────────────
+
+cga:holonDepth a owl:DatatypeProperty ;
+    rdfs:label "holon depth" ;
+    rdfs:domain cga:Holon ;
+    rdfs:range xsd:integer ;
+    skos:definition """Optional annotation recording nesting depth in the
+        holarchy (0 = root).  This value is DERIVABLE from the
+        cga:memberOf chain and should not be relied upon as
+        authoritative.  Prefer computing depth via SPARQL property
+        paths over the memberOf structure.""" ;
+    skos:note """Depth can be computed dynamically:
+        SELECT ?holon (COUNT(?ancestor) AS ?depth)
+        WHERE { ?holon cga:memberOf+ ?ancestor }
+        GROUP BY ?holon""" .
+
+cga:constructQuery a owl:DatatypeProperty ;
+    rdfs:label "CONSTRUCT query" ;
+    rdfs:domain cga:TransformPortal ;
+    rdfs:range xsd:string ;
+    skos:definition "The SPARQL CONSTRUCT query that performs the translation." .
+
+cga:isTraversable a owl:DatatypeProperty ;
+    rdfs:label "is traversable" ;
+    rdfs:domain cga:Portal ;
+    rdfs:range xsd:boolean ;
+    skos:definition "Whether the portal currently permits traversal." .
+
+cga:activationEvent a owl:DatatypeProperty ;
+    rdfs:label "activation event" ;
+    rdfs:domain cga:Portal ;
+    rdfs:range xsd:string ;
+    skos:definition "The event type that triggers portal traversal." .
