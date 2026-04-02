@@ -1,70 +1,52 @@
-# Configuration file for the Sphinx documentation builder.
-#
-# For the full list of built-in configuration values, see the documentation:
-# https://www.sphinx-doc.org/en/master/usage/configuration.html
+"""Sphinx configuration for holonic documentation."""
+
 import os
 import sys
 
-from datetime import datetime
-
-import holonic
-
-sys.path.insert(0, os.path.abspath("../../src"))
-
-# -- Project information -----------------------------------------------------
-# https://www.sphinx-doc.org/en/mast er/usage/configuration.html#project-information
+sys.path.insert(0, os.path.abspath(".."))
 
 project = "holonic"
-copyright = f"{datetime.now().year}, {holonic.__authors__}"
-author = holonic.__authors__
-release = holonic.__version__
-
-# -- General configuration ---------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
+copyright = "2026, Zachary Welz"
+author = "Zachary Welz"
+release = "0.2.0"
 
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
-    "sphinx.ext.coverage",
-    "sphinx.ext.githubpages",
+    "sphinx.ext.viewcode",
+    "sphinx.ext.intersphinx",
+    "sphinx_autodoc_typehints",
     "myst_parser",
 ]
+
+# MyST for markdown support
+source_suffix = {
+    ".rst": "restructuredtext",
+    ".md": "markdown",
+}
+
 templates_path = ["_templates"]
-nbsphinx_allow_errors = True
-add_module_names = False
+exclude_patterns = ["_build"]
 
-autodoc_default_options = {
-    "ignore-module-all": True,
-}
-
-# ---- MYST options -----------
-myst_enable_extensions = ["colon_fence", "substitution"]
-myst_heading_anchors = 2
-myst_substitutions = {
-    "rtd": "[Read the Docs](https://readthedocs.org/)",
-}
-
-
-# -- Options for HTML output -------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
-
-html_theme = "pydata_sphinx_theme"
+html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
-html_logo = "logo.png"
-html_show_sourcelink = False
-html_theme_options = {
-  "show_nav_level": 2,
-  "navbar_center": ["navbar-nav"],
-  "logo": {
-        "text": "holonic",
-    },
-  "show_toc_level": 1,
-    "icon_links": [
-        {
-            "name": "GitHub",
-            "url": "todo",
-            "icon": "fa-brands fa-square-github",
-            "type": "fontawesome",
-        },
-    ]
+
+# Autodoc settings
+autodoc_member_order = "bysource"
+autodoc_typehints = "description"
+autodoc_default_options = {
+    "members": True,
+    "undoc-members": True,
+    "show-inheritance": True,
 }
+
+# Intersphinx mapping
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+    "rdflib": ("https://rdflib.readthedocs.io/en/stable/", None),
+}
+
+# Napoleon settings (Google-style docstrings)
+napoleon_google_docstrings = True
+napoleon_numpy_docstrings = True
+napoleon_include_init_with_doc = True

@@ -1,0 +1,65 @@
+@prefix sh:    <http://www.w3.org/ns/shacl#> .
+@prefix gen:   <urn:gen:> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+
+# =============================================================================
+# SHACL shapes for generation specifications.
+# Validates that render specs, templates, and bindings are well-formed
+# BEFORE attempting generation.
+# =============================================================================
+
+gen:RenderSpecShape a sh:NodeShape ;
+    sh:targetClass gen:RenderSpec ;
+    sh:property [
+        sh:path gen:usesTemplate ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class gen:Template ;
+        sh:severity sh:Violation ;
+        sh:message "RenderSpec must reference exactly one Template."
+    ] ;
+    sh:property [
+        sh:path gen:hasBinding ;
+        sh:minCount 1 ;
+        sh:severity sh:Violation ;
+        sh:message "RenderSpec must have at least one DataBinding."
+    ] ;
+    sh:property [
+        sh:path gen:title ;
+        sh:minCount 1 ;
+        sh:datatype xsd:string ;
+        sh:severity sh:Warning ;
+        sh:message "RenderSpec should have a title."
+    ] .
+
+gen:TemplateShape a sh:NodeShape ;
+    sh:targetClass gen:Template ;
+    sh:property [
+        sh:path gen:outputFormat ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:in ( "markdown" "docx" "pdf" "python" "matlab" "html" "latex" "json" ) ;
+        sh:severity sh:Violation ;
+        sh:message "Template must declare an output format."
+    ] .
+
+gen:DataBindingShape a sh:NodeShape ;
+    sh:targetClass gen:DataBinding ;
+    sh:property [
+        sh:path gen:variableName ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:severity sh:Violation ;
+        sh:message "DataBinding must have a variable name."
+    ] ;
+    sh:property [
+        sh:path gen:resultType ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:in ( "scalar" "list" "graph" "grouped" ) ;
+        sh:severity sh:Warning ;
+        sh:message "resultType should be scalar, list, graph, or grouped."
+    ] .

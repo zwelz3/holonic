@@ -1,68 +1,54 @@
-# holonic
-
-Todo...
-
-```{note}
-This project is under active development.
-```
-
-## Demo
-
-Try one of these demos in your browser with JupyterLite.
+# holonic — Graph-Native Holonic RDF Systems
 
 ```{toctree}
-:caption: holonic Demos
-:maxdepth: 1
-
-demo.md
-```
-
-## Installation
-
-In a suitable Python environment (3.11+):
-
-```console
-(venv) $ pip install holonic
-```
-
-### Installation from source
-
-Alternatively, you can download holonic and install it manually. Clone, or download the archive and extract it. From the extraction location (and within a suitable Python environment):
-
-```console
-(venv) $ python -m pip install .
-```
-
-(or just `pip install .`)
-
-## User Guide
-
-```{toctree}
-:caption: Guide
-:maxdepth: 3
-
-user_guide/index
-```
-
-## Contributing
-
-To contribute to holonic, or to learn the steps for building documentation, running tests, etc. 
-see [CONTRIBUTING.MD](TODO)
-
-## License and Attribution
-
-This software is licensed under the BSD 3-Clause. Please see the `LICENSE` file in the repository for details.
-
-## Reference
-
-This section contains information-oriented reference materials for developers
-looking to understand the ontology, its software components, and its API.
-
-The API documentation is auto-generated.
-
-```{toctree}
-:caption: API
 :maxdepth: 2
+:caption: Contents
 
-auto/modules.rst
+api
+projections
+backends
+ontology
+```
+
+## Overview
+
+`holonic` is a lightweight Python client for building holonic knowledge graphs.
+A holon is an IRI whose associated named graphs exist in an RDF dataset.
+The dataset IS the holarchy — no separate registry object.
+
+## Quick Start
+
+```python
+from holonic import HolonicDataset
+
+ds = HolonicDataset()  # rdflib backend, in-memory
+
+ds.add_holon("urn:holon:source", "Source Data")
+ds.add_interior("urn:holon:source", '''
+    <urn:item:1> a <urn:type:Widget> ;
+        <urn:prop:name> "Alpha" .
+''')
+
+print(ds.summary())
+```
+
+## Backends
+
+- **RdflibBackend** — Default. Zero infrastructure, pure Python.
+- **FusekiBackend** — Apache Jena Fuseki via SPARQL over HTTP.
+- **Custom** — Implement the `GraphBackend` protocol for any quad store.
+
+## Generating Documentation
+
+```bash
+pip install holonic[docs]
+cd docs
+sphinx-build -b html . _build/html
+```
+
+## Generating Notebooks
+
+```bash
+pip install holonic[notebooks]
+jupytext --to notebook examples/01_holon_basics.py
 ```

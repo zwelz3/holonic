@@ -1,45 +1,176 @@
-"""
-widgets.py — yFiles Jupyter graph widgets for holonic visualisation.
+"""yFiles Jupyter graph widgets for holonic visualization.
+
+All widgets query the HolonicDataset via SPARQL and project through
+the projections module before rendering.  No direct Python object
+traversal — the dataset is the source of truth.
 
 Classes
 -------
 HolonViz
-    Visualise a single holon's four named graphs with layer grouping,
-    colour coding, and selectable layer visibility.
+    Visualize a single holon's layers with compartmented node labels,
+    SHACL shape tables, and edge-reduced topology.
 
 HolarchyViz
-    Visualise a full holarchy with nested holon groups, portal edges,
-    and optional interior expansion.
+    Visualize the holarchy topology — collapsed (holons as nodes) or
+    expanded (layers visible per holon).
 
 SPARQLExplorer
-    Interactive SPARQL query widget linked to a graph visualisation.
-    Includes a namespace manager, built-in projection presets, and
-    live CONSTRUCT execution against a local rdflib graph.
+    Interactive SPARQL CONSTRUCT explorer with projection presets,
+    namespace management, and live graph rendering.
 """
 
 from __future__ import annotations
 
-from typing import Optional, Union
-
 from rdflib import Graph
 
-from ..holon import Holon
-from ..holarchy import Holarchy
-from . import styles
-from .graph_builder import (
-    holon_to_graph_data,
-    holarchy_to_graph_data,
-    sparql_construct_to_graph_data,
+from holonic.viz import styles
+from holonic.viz.formatters import (
+    format_compartmented,
+    format_simple,
+    format_typed,
 )
-from .projections import PROJECTIONS, get_projection_names
+from holonic.viz.graph_builder import (
+    LabelFormatter,
+    holarchy_to_yfiles,
+    holon_to_yfiles,
+    sparql_result_to_yfiles,
+)
+
+# ── Built-in SPARQL projections for the explorer ──
+
+PROJECTIONS: dict[str, dict] = {
+    "Holarchy Structure": {
+        "description": "Holons and their nesting/portal relationships.",
+        "query": """
+            PREFIX cga:  <urn:holonic:ontology:>
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            CONSTRUCT {
+                ?holon a cga:Holon ;
+                    rdfs:label ?label ;
+                    cga:memberOf ?parent .
+                ?portal a cga:TransformPortal ;
+                    cga:sourceHolon ?src ;
+                    cga:targetHolon ?tgt ;
+                    rdfs:label ?plabel .
+            }
+            WHERE {
+                { ?holon a cga:Holon .
+                  OPTIONAL { ?holon rdfs:label ?label }
+                  OPTIONAL { ?holon cga:memberOf ?parent } }
+                UNION
+                { ?portal a cga:TransformPortal ;
+                      cga:sourceHolon ?src ; cga:targetHolon ?tgt .
+                  OPTIONAL { ?portal rdfs:label ?plabel } }
+            }
+        """,
+    },
+    "SHACL Shapes": {
+        "description": "Boundary membrane: all SHACL shapes with property constraints.",
+        "query": """
+            PREFIX sh: <http://www.w3.org/ns/shacl#>
+            CONSTRUCT {
+                ?shape a sh:NodeShape ;
+                    sh:targetClass ?cls ;
+                    sh:property ?prop .
+                ?prop sh:path ?path ;
+                    sh:datatype ?dt ;
+                    sh:minCount ?min ;
+                    sh:maxCount ?max ;
+                    sh:severity ?sev ;
+                    sh:message ?msg .
+            }
+            WHERE {
+                ?shape a sh:NodeShape .
+                OPTIONAL { ?shape sh:targetClass ?cls }
+                OPTIONAL {
+                    ?shape sh:property ?prop .
+                    ?prop sh:path ?path .
+                    OPTIONAL { ?prop sh:datatype ?dt }
+                    OPTIONAL { ?prop sh:minCount ?min }
+                    OPTIONAL { ?prop sh:maxCount ?max }
+                    OPTIONAL { ?prop sh:severity ?sev }
+                    OPTIONAL { ?prop sh:message ?msg }
+                }
+            }
+        """,
+    },
+    "Portal Network": {
+        "description": "All portals with source and target holons.",
+        "query": """
+            PREFIX cga:  <urn:holonic:ontology:>
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            CONSTRUCT {
+                ?portal a cga:TransformPortal ;
+                    rdfs:label ?label ;
+                    cga:sourceHolon ?src ;
+                    cga:targetHolon ?tgt .
+            }
+            WHERE {
+                ?portal a cga:TransformPortal ;
+                    cga:sourceHolon ?src ;
+                    cga:targetHolon ?tgt .
+                OPTIONAL { ?portal rdfs:label ?label }
+            }
+        """,
+    },
+    "Provenance Trail": {
+        "description": "PROV-O activities: traversals, validations, agents.",
+        "query": """
+            PREFIX prov: <http://www.w3.org/ns/prov#>
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            CONSTRUCT {
+                ?activity a prov:Activity ;
+                    rdfs:label ?label ;
+                    prov:wasAssociatedWith ?agent ;
+                    prov:used ?input ;
+                    prov:generated ?output .
+                ?output prov:wasDerivedFrom ?source .
+            }
+            WHERE {
+                ?activity a prov:Activity .
+                OPTIONAL { ?activity rdfs:label ?label }
+                OPTIONAL { ?activity prov:wasAssociatedWith ?agent }
+                OPTIONAL { ?activity prov:used ?input }
+                OPTIONAL { ?activity prov:generated ?output .
+                           OPTIONAL { ?output prov:wasDerivedFrom ?source } }
+            }
+        """,
+    },
+    "Object Properties Only": {
+        "description": "Topology: only IRI-to-IRI edges, no literals or types.",
+        "query": """
+            PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+            CONSTRUCT { ?s ?p ?o }
+            WHERE {
+                ?s ?p ?o .
+                FILTER(isIRI(?o))
+                FILTER(?p != rdf:type)
+            }
+        """,
+    },
+    "External Bindings": {
+        "description": "Projection layer: bindsTo and exactMatch links.",
+        "query": """
+            PREFIX cga:  <urn:holonic:ontology:>
+            PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+            CONSTRUCT {
+                ?holon cga:bindsTo ?ext .
+                ?holon skos:exactMatch ?match .
+            }
+            WHERE {
+                { ?holon cga:bindsTo ?ext }
+                UNION
+                { ?holon skos:exactMatch ?match }
+            }
+        """,
+    },
+}
 
 
-# ------------------------------------------------------------------
-# Mapping functions for yFiles GraphWidget
-# ------------------------------------------------------------------
+# ── yFiles mapping functions ──
+
 
 def _color_mapping(node: dict) -> str:
-    """Map node to colour based on its layer property."""
     props = node.get("properties", {})
     layer = props.get("layer", "default")
     if props.get("is_group"):
@@ -48,67 +179,52 @@ def _color_mapping(node: dict) -> str:
 
 
 def _shape_mapping(node: dict) -> str:
-    """Map node to shape based on its layer property."""
     props = node.get("properties", {})
     if props.get("is_group"):
         return "round-rectangle"
-    return styles.shape_for_layer(props.get("type", "default"))
+    return styles.shape_for_layer(props.get("layer", "default"))
 
 
 def _scale_mapping(node: dict) -> float:
-    """Map node to scale based on its layer property."""
     props = node.get("properties", {})
     if props.get("is_group"):
         return 1.0
-    return styles.scale_for_layer(props.get("type", "default"))
+    # Scale up nodes with many attributes
+    attr_count = props.get("attr_count", 0)
+    base = 0.8
+    if attr_count > 5:
+        base = 1.2
+    elif attr_count > 2:
+        base = 1.0
+    return base
 
 
 def _label_mapping(node: dict) -> str:
-    """Map node to its label string."""
     return node.get("properties", {}).get("label", node.get("id", "?"))
 
 
-def _parent_mapping(node: dict) -> Optional[str]:
-    """Map node to its parent group node ID."""
+def _parent_mapping(node: dict) -> str | None:
     return node.get("properties", {}).get("parent", None)
 
 
 def _edge_color_mapping(edge: dict) -> str:
-    """Map edge to colour based on predicate."""
     props = edge.get("properties", {})
-    layer = props.get("layer", "default")
-    if layer == "portal":
-        return styles.EDGE_COLORS.get("cga:hasPortal", "#ef4444")
     pred = props.get("predicate", "")
-    for key, color in styles.EDGE_COLORS.items():
-        if key in pred:
-            return color
-    return styles.EDGE_COLORS["default"]
+    return styles.edge_color(pred)
 
 
 def _edge_label_mapping(edge: dict) -> str:
-    """Map edge to its label."""
     return edge.get("properties", {}).get("label", "")
 
 
-# ------------------------------------------------------------------
-# Widget factory
-# ------------------------------------------------------------------
-
-def _make_widget(nodes, edges, layout="hierarchic", title=""):
-    """
-    Create and configure a yFiles GraphWidget.
-
-    Returns the widget instance.  The caller should call ``.show()``
-    or display it in a notebook cell.
-    """
+def _make_widget(nodes, edges, layout="hierarchic"):
+    """Create and configure a yFiles GraphWidget."""
     from yfiles_jupyter_graphs import GraphWidget
 
     w = GraphWidget()
     w.nodes = nodes
     w.edges = edges
 
-    # Apply holonic styling
     w.set_node_color_mapping(_color_mapping)
     w.set_node_type_mapping(_shape_mapping)
     w.set_node_scale_factor_mapping(_scale_mapping)
@@ -117,7 +233,6 @@ def _make_widget(nodes, edges, layout="hierarchic", title=""):
     w.set_edge_color_mapping(_edge_color_mapping)
     w.set_edge_label_mapping(_edge_label_mapping)
 
-    # Layout
     if layout == "hierarchic":
         w.hierarchic_layout()
     elif layout == "organic":
@@ -130,68 +245,73 @@ def _make_widget(nodes, edges, layout="hierarchic", title=""):
     return w
 
 
-# ==================================================================
-# HolonViz — single holon visualisation
-# ==================================================================
+# ══════════════════════════════════════════════════════════════
+# HolonViz
+# ══════════════════════════════════════════════════════════════
+
 
 class HolonViz:
-    """
-    Visualise a single holon's four named graphs.
+    """Visualize a single holon's layers from a HolonicDataset.
+
+    Projects each layer through project_to_lpg before rendering,
+    collapsing types, literals, and blank nodes into compartmented
+    node labels.  SHACL shapes get special tabular formatting.
 
     Parameters
     ----------
-    holon : Holon
-        The holon to visualise.
-    layers : list[str], optional
-        Which layers to show.  Default: all four.
-    layout : str
-        yFiles layout algorithm.  "hierarchic", "organic", "circular", "tree".
-    show_groups : bool
-        If True, group nodes by layer (nested rectangles).
+    ds :
+        A HolonicDataset instance.
+    holon_iri :
+        IRI of the holon to visualize.
+    layers :
+        Which layers to show.  Default: all registered.
+    layout :
+        yFiles layout algorithm.
+    label_fn :
+        Node label formatter.  Default: compartmented.
 
     Usage::
 
-        viz = HolonViz(my_holon, layers=["interior", "boundary"])
+        viz = HolonViz(ds, "urn:holon:my-data")
         viz.show()
-
-        # Or with ipywidgets controls:
-        viz.show_with_controls()
     """
 
     def __init__(
         self,
-        holon: Holon,
-        layers: Optional[list[str]] = None,
+        ds,
+        holon_iri: str,
+        *,
+        layers: list[str] | None = None,
         layout: str = "hierarchic",
-        show_groups: bool = True,
+        label_fn: LabelFormatter = format_compartmented,
     ):
-        self.holon = holon
-        self.layers = layers or ["interior", "boundary", "projection", "context"]
+        self.ds = ds
+        self.holon_iri = holon_iri
+        self.layers = layers
         self.layout = layout
-        self.show_groups = show_groups
+        self.label_fn = label_fn
 
-    def _build(self, layers=None):
-        layers = layers or self.layers
-        nodes, edges = holon_to_graph_data(
-            self.holon,
-            layers=layers,
-            show_group_nodes=self.show_groups,
+    def _build(self, layers=None, layout=None):
+        nodes, edges = holon_to_yfiles(
+            self.ds,
+            self.holon_iri,
+            layers=layers or self.layers,
+            label_fn=self.label_fn,
         )
-        return _make_widget(nodes, edges, layout=self.layout)
+        return _make_widget(nodes, edges, layout=layout or self.layout)
 
-    def show(self, layers=None):
+    def show(self, **kwargs):
         """Display the holon graph in the notebook."""
-        w = self._build(layers)
-        return w
+        return self._build(**kwargs)
 
     def show_with_controls(self):
-        """Display the holon graph with ipywidgets layer toggle controls."""
+        """Display with interactive layer/layout controls."""
         import ipywidgets as widgets
         from IPython.display import display
 
         layer_checks = widgets.SelectMultiple(
             options=["interior", "boundary", "projection", "context"],
-            value=self.layers,
+            value=list(self.layers or ["interior", "boundary"]),
             description="Layers:",
             rows=4,
         )
@@ -202,19 +322,39 @@ class HolonViz:
             description="Layout:",
         )
 
+        label_dropdown = widgets.Dropdown(
+            options=[
+                ("Compartmented", "compartmented"),
+                ("Typed", "typed"),
+                ("Simple", "simple"),
+            ],
+            value="compartmented",
+            description="Labels:",
+        )
+
         output = widgets.Output()
+
+        label_fns = {
+            "compartmented": format_compartmented,
+            "typed": format_typed,
+            "simple": format_simple,
+        }
 
         def on_change(_):
             with output:
                 output.clear_output(wait=True)
-                self.layout = layout_dropdown.value
-                w = self._build(layers=list(layer_checks.value))
+                self.label_fn = label_fns[label_dropdown.value]
+                w = self._build(
+                    layers=list(layer_checks.value),
+                    layout=layout_dropdown.value,
+                )
                 display(w)
 
         layer_checks.observe(on_change, names="value")
         layout_dropdown.observe(on_change, names="value")
+        label_dropdown.observe(on_change, names="value")
 
-        controls = widgets.HBox([layer_checks, layout_dropdown])
+        controls = widgets.HBox([layer_checks, layout_dropdown, label_dropdown])
         display(controls)
 
         with output:
@@ -223,71 +363,75 @@ class HolonViz:
         display(output)
 
 
-# ==================================================================
-# HolarchyViz — full holarchy visualisation
-# ==================================================================
+# ══════════════════════════════════════════════════════════════
+# HolarchyViz
+# ══════════════════════════════════════════════════════════════
+
 
 class HolarchyViz:
-    """
-    Visualise a holarchy: nested holons with portals as edges.
+    """Visualize a holarchy: holons as nodes connected by portals.
+
+    Two modes:
+      - **Collapsed:** Holons are single nodes, portals are edges.
+        Uses project_holarchy() for clean topology view.
+      - **Expanded:** Each holon opens to show its layer groups
+        with projected, edge-reduced content.
 
     Parameters
     ----------
-    holarchy : Holarchy
-        The holarchy to visualise.
-    show_internals : bool
-        If True, expand each holon to show its interior triples.
-        If False, show holons as single nodes connected by portals.
-    layers : list[str], optional
-        When ``show_internals=True``, which layers to display per holon.
-    layout : str
+    ds :
+        A HolonicDataset instance.
+    show_internals :
+        If True, expand holons to show layers.  Default: False.
+    layers :
+        When expanded, which layers to show.
+    layout :
         yFiles layout algorithm.
 
     Usage::
 
-        viz = HolarchyViz(my_holarchy, show_internals=False)
-        viz.show()
+        viz = HolarchyViz(ds)
+        viz.show()  # collapsed
+        viz.show(show_internals=True)  # expanded
     """
 
     def __init__(
         self,
-        holarchy: Holarchy,
+        ds,
+        *,
         show_internals: bool = False,
-        layers: Optional[list[str]] = None,
+        layers: list[str] | None = None,
         layout: str = "hierarchic",
     ):
-        self.holarchy = holarchy
+        self.ds = ds
         self.show_internals = show_internals
         self.layers = layers
         self.layout = layout
 
     def _build(self, show_internals=None, layers=None, layout=None):
-        show_int = show_internals if show_internals is not None else self.show_internals
-        nodes, edges = holarchy_to_graph_data(
-            self.holarchy,
+        si = show_internals if show_internals is not None else self.show_internals
+        nodes, edges = holarchy_to_yfiles(
+            self.ds,
+            show_internals=si,
             layers=layers or self.layers,
-            show_internals=show_int,
-            show_portals=True,
         )
         return _make_widget(nodes, edges, layout=layout or self.layout)
 
     def show(self, **kwargs):
-        """Display the holarchy graph in the notebook."""
         return self._build(**kwargs)
 
     def show_with_controls(self):
-        """Display with interactive controls for layers and expansion."""
         import ipywidgets as widgets
         from IPython.display import display
 
         internals_toggle = widgets.ToggleButton(
             value=self.show_internals,
-            description="Show Internals",
+            description="Expand Holons",
         )
 
         layer_checks = widgets.SelectMultiple(
             options=["interior", "boundary", "projection", "context"],
-            value=["interior", "boundary"],
+            value=list(self.layers or ["interior", "boundary"]),
             description="Layers:",
             rows=4,
         )
@@ -323,86 +467,86 @@ class HolarchyViz:
         display(output)
 
 
-# ==================================================================
-# SPARQLExplorer — SPARQL query widget linked to graph viz
-# ==================================================================
+# ══════════════════════════════════════════════════════════════
+# SPARQLExplorer
+# ══════════════════════════════════════════════════════════════
+
 
 class SPARQLExplorer:
-    """
-    Interactive SPARQL CONSTRUCT explorer linked to a yFiles graph widget.
+    """Interactive SPARQL CONSTRUCT explorer linked to graph visualization.
 
-    Executes SPARQL CONSTRUCT queries against a local rdflib Graph and
-    visualises the results.  Includes:
+    Executes CONSTRUCT queries against the HolonicDataset and renders
+    results through the projections module — types collapsed, literals
+    inlined, blank nodes resolved — before visualization.
+
+    Includes:
       - Namespace manager (auto-generates PREFIX declarations)
       - Built-in projection presets (dropdown)
       - Editable query textarea
       - Live graph update on execution
+      - Label format selector
 
     Parameters
     ----------
-    graph : rdflib.Graph
-        The graph to query against.
-    namespaces : dict[str, str], optional
-        Namespace prefix → IRI mapping for auto-PREFIX generation.
-    layout : str
+    ds :
+        A HolonicDataset instance.
+    namespaces :
+        Additional namespace prefix → IRI mappings.
+    layout :
         Default layout algorithm.
 
     Usage::
 
-        explorer = SPARQLExplorer(
-            graph=my_holarchy.merged_all(),
-            namespaces={"cga": "urn:cga:", "eng": "urn:eng:"},
-        )
+        explorer = SPARQLExplorer(ds, namespaces={"eng": "urn:eng:"})
         explorer.show()
     """
 
     DEFAULT_NAMESPACES = {
-        "rdf":  "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+        "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
         "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
-        "xsd":  "http://www.w3.org/2001/XMLSchema#",
-        "owl":  "http://www.w3.org/2002/07/owl#",
-        "sh":   "http://www.w3.org/ns/shacl#",
-        "cga":  "urn:cga:",
+        "xsd": "http://www.w3.org/2001/XMLSchema#",
+        "owl": "http://www.w3.org/2002/07/owl#",
+        "sh": "http://www.w3.org/ns/shacl#",
+        "cga": "urn:holonic:ontology:",
         "prov": "http://www.w3.org/ns/prov#",
         "skos": "http://www.w3.org/2004/02/skos/core#",
-        "dct":  "http://purl.org/dc/terms/",
+        "dct": "http://purl.org/dc/terms/",
     }
 
     def __init__(
         self,
-        graph: Graph,
-        namespaces: Optional[dict[str, str]] = None,
+        ds,
+        namespaces: dict[str, str] | None = None,
         layout: str = "hierarchic",
     ):
-        self.graph = graph
+        self.ds = ds
         self.namespaces = {**self.DEFAULT_NAMESPACES}
         if namespaces:
             self.namespaces.update(namespaces)
         self.layout = layout
-        self._last_result: Optional[Graph] = None
+        self._last_result: Graph | None = None
 
     def _prefix_block(self) -> str:
-        """Generate PREFIX declarations from the namespace manager."""
-        return "\n".join(
-            f"PREFIX {pfx}: <{iri}>"
-            for pfx, iri in sorted(self.namespaces.items())
-        )
+        return "\n".join(f"PREFIX {pfx}: <{iri}>" for pfx, iri in sorted(self.namespaces.items()))
 
     def execute(self, query: str) -> Graph:
-        """Execute a SPARQL CONSTRUCT and return the result graph."""
-        result = Graph()
-        for t in self.graph.query(query):
-            result.add(t)
+        """Execute a SPARQL CONSTRUCT against the dataset."""
+        result = self.ds.construct(query)
         self._last_result = result
         return result
 
-    def visualise_result(self, result: Graph, layout: Optional[str] = None):
-        """Convert a CONSTRUCT result to a yFiles widget."""
-        nodes, edges = sparql_construct_to_graph_data(result)
+    def visualize_result(
+        self,
+        result: Graph,
+        layout: str | None = None,
+        label_fn: LabelFormatter = format_compartmented,
+    ):
+        """Convert CONSTRUCT result to a yFiles widget via projections."""
+        nodes, edges = sparql_result_to_yfiles(result, label_fn=label_fn)
         return _make_widget(nodes, edges, layout=layout or self.layout)
 
     def show(self):
-        """Display the full interactive SPARQL explorer."""
+        """Display the interactive explorer."""
         import ipywidgets as widgets
         from IPython.display import display
 
@@ -412,13 +556,15 @@ class SPARQLExplorer:
             for pfx, iri in sorted(self.namespaces.items())
         )
         ns_widget = widgets.HTML(
-            value=f"<details><summary><b>Namespaces</b></summary>"
-                  f"<div style='font-size:12px; padding:4px'>{ns_html}</div>"
-                  f"</details>",
+            value=(
+                f"<details><summary><b>Namespaces</b></summary>"
+                f"<div style='font-size:12px; padding:4px'>{ns_html}</div>"
+                f"</details>"
+            ),
         )
 
-        # Projection preset dropdown
-        preset_names = ["(custom query)"] + get_projection_names()
+        # Preset dropdown
+        preset_names = ["(custom query)"] + list(PROJECTIONS.keys())
         preset_dropdown = widgets.Dropdown(
             options=preset_names,
             value="(custom query)",
@@ -427,18 +573,14 @@ class SPARQLExplorer:
             layout=widgets.Layout(width="300px"),
         )
 
-        # Description label
         desc_label = widgets.HTML(value="<i>Write a SPARQL CONSTRUCT query below.</i>")
 
         # Query textarea
-        default_query = self._prefix_block() + "\n\n" + PROJECTIONS["All Triples"]["query"]
+        default_query = self._prefix_block() + "\n\n" + PROJECTIONS["Holarchy Structure"]["query"]
         query_area = widgets.Textarea(
             value=default_query,
-            description="",
             layout=widgets.Layout(width="100%", height="260px"),
-            style={"font_family": "monospace"},
         )
-        # Add monospace styling
         query_area.add_class("monospace-textarea")
 
         # Layout dropdown
@@ -450,18 +592,33 @@ class SPARQLExplorer:
             layout=widgets.Layout(width="200px"),
         )
 
-        # Execute button
+        # Label format
+        label_dropdown = widgets.Dropdown(
+            options=[
+                ("Compartmented", "compartmented"),
+                ("Typed", "typed"),
+                ("Simple", "simple"),
+            ],
+            value="compartmented",
+            description="Labels:",
+            style={"description_width": "60px"},
+            layout=widgets.Layout(width="200px"),
+        )
+
         exec_button = widgets.Button(
             description="Execute CONSTRUCT",
             button_style="primary",
             icon="play",
         )
 
-        # Status label
         status = widgets.HTML(value="")
-
-        # Graph output
         graph_output = widgets.Output()
+
+        label_fns = {
+            "compartmented": format_compartmented,
+            "typed": format_typed,
+            "simple": format_simple,
+        }
 
         def on_preset_change(change):
             name = change["new"]
@@ -477,45 +634,48 @@ class SPARQLExplorer:
             try:
                 result = self.execute(query_area.value)
                 count = len(result)
-                status.value = (
-                    f"<span style='color:green'>✓ {count} triples returned</span>"
-                )
+                status.value = f"<span style='color:green'>✓ {count} triples</span>"
                 with graph_output:
                     graph_output.clear_output(wait=True)
                     if count > 0:
-                        w = self.visualise_result(result, layout=layout_dropdown.value)
+                        fn = label_fns[label_dropdown.value]
+                        w = self.visualize_result(
+                            result,
+                            layout=layout_dropdown.value,
+                            label_fn=fn,
+                        )
                         display(w)
                     else:
-                        display(widgets.HTML(
-                            "<div style='padding:20px; color:#888'>"
-                            "No results. Check your query or try a different preset."
-                            "</div>"
-                        ))
+                        display(
+                            widgets.HTML("<div style='padding:20px; color:#888'>No results.</div>")
+                        )
             except Exception as e:
-                status.value = f"<span style='color:red'>✗ Error: {e}</span>"
+                status.value = f"<span style='color:red'>✗ {e}</span>"
 
         preset_dropdown.observe(on_preset_change, names="value")
         exec_button.on_click(on_execute)
 
-        # Layout the UI
-        header = widgets.HBox([preset_dropdown, layout_dropdown, exec_button])
-        display(widgets.VBox([
-            ns_widget,
-            header,
-            desc_label,
-            query_area,
-            status,
-            graph_output,
-        ]))
-
-        # Inject CSS for monospace textarea
-        display(widgets.HTML("""
+        header = widgets.HBox([preset_dropdown, layout_dropdown, label_dropdown, exec_button])
+        display(
+            widgets.VBox(
+                [
+                    ns_widget,
+                    header,
+                    desc_label,
+                    query_area,
+                    status,
+                    graph_output,
+                ]
+            )
+        )
+        display(
+            widgets.HTML("""
             <style>
                 .monospace-textarea textarea {
-                    font-family: 'Fira Code', 'Source Code Pro', 'Consolas', monospace !important;
+                    font-family: 'Fira Code', 'Consolas', monospace !important;
                     font-size: 13px !important;
                     line-height: 1.4 !important;
-                    tab-size: 4;
                 }
             </style>
-        """))
+        """)
+        )

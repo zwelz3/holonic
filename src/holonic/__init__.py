@@ -1,18 +1,74 @@
-"""
-holonic — A Python library for Cagel's four-graph holonic RDF model.
+"""holonic — Graph-native holonic RDF systems.
 
-Each holon has four named graphs:
-  - Interior:   what the holon knows about itself (A-Box)
-  - Boundary:   SHACL shapes + portal definitions (membrane)
-  - Projection:  curated outward face for external consumers
-  - Context:    holarchy membership + temporal annotations
+A lightweight Python client for building holonic knowledge graphs
+backed by rdflib, Apache Jena Fuseki, or any SPARQL-compliant store.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.1"
 
-from .holon import Holon
-from .portal import Portal, TransformPortal
-from .membrane import validate_membrane, MembraneHealth, MembraneResult
-from .holarchy import Holarchy
-from .provenance import ProvenanceTracker
-from .surface import discover_target_shape, generate_construct_query, describe_surface
+from holonic.backends import GraphBackend, RdflibBackend
+from holonic.client import HolonicDataset
+from holonic.model import (
+    AuditTrail,
+    HolonInfo,
+    MembraneBreachError,
+    MembraneHealth,
+    MembraneResult,
+    PortalInfo,
+    SurfaceReport,
+    TraversalRecord,
+    ValidationRecord,
+)
+from holonic.projections import (
+    CONSTRUCT_COLLAPSE_REIFICATION,
+    CONSTRUCT_DATA_PROPERTIES_ONLY,
+    CONSTRUCT_LABELS_ONLY,
+    CONSTRUCT_OBJECT_PROPERTIES_ONLY,
+    CONSTRUCT_STRIP_TYPES,
+    CONSTRUCT_SUBCLASS_TREE,
+    ProjectedEdge,
+    ProjectedGraph,
+    ProjectedNode,
+    ProjectionPipeline,
+    ProjectionStep,
+    build_construct,
+    collapse_reification,
+    extract_types,
+    filter_by_class,
+    localize_predicates,
+    project_to_lpg,
+    strip_blank_nodes,
+)
+
+__all__ = [
+    # Client
+    "HolonicDataset",
+    # Models
+    "HolonInfo",
+    "MembraneBreachError",
+    "MembraneHealth",
+    "MembraneResult",
+    "PortalInfo",
+    # Backends
+    "GraphBackend",
+    "RdflibBackend",
+    # Projections
+    "ProjectedEdge",
+    "ProjectedGraph",
+    "ProjectedNode",
+    "ProjectionPipeline",
+    "ProjectionStep",
+    "build_construct",
+    "collapse_reification",
+    "extract_types",
+    "filter_by_class",
+    "localize_predicates",
+    "project_to_lpg",
+    "strip_blank_nodes",
+    "CONSTRUCT_COLLAPSE_REIFICATION",
+    "CONSTRUCT_DATA_PROPERTIES_ONLY",
+    "CONSTRUCT_LABELS_ONLY",
+    "CONSTRUCT_OBJECT_PROPERTIES_ONLY",
+    "CONSTRUCT_STRIP_TYPES",
+    "CONSTRUCT_SUBCLASS_TREE",
+]

@@ -1,15 +1,50 @@
-"""
-holonic.viz — Visualisation for holonic RDF graphs.
+"""Visualization module for holonic RDF systems.
+
+Provides yFiles Jupyter Graphs widgets for visualizing holons,
+holarchies, and SPARQL query results.  All rendering is projection-
+driven: RDF is simplified via project_to_lpg() before building
+yFiles node/edge data.
 
 Requires: yfiles-jupyter-graphs, ipywidgets
-
-    pip install yfiles-jupyter-graphs ipywidgets
 """
 
-from .widgets import HolonViz, HolarchyViz, SPARQLExplorer
-from .projections import PROJECTIONS, get_projection_names, get_projection
-from .graph_builder import (
-    holon_to_graph_data,
-    holarchy_to_graph_data,
-    sparql_construct_to_graph_data,
+from holonic.viz.formatters import (
+    format_compartmented,
+    format_shacl_shape,
+    format_simple,
+    format_typed,
 )
+from holonic.viz.graph_builder import (
+    holarchy_to_yfiles,
+    holon_to_yfiles,
+    projected_to_yfiles,
+    sparql_result_to_yfiles,
+)
+from holonic.viz.provenance import (
+    ProvenanceViz,
+    audit_trail_to_yfiles,
+)
+from holonic.viz.widgets import (
+    HolarchyViz,
+    HolonViz,
+    SPARQLExplorer,
+)
+
+__all__ = [
+    # Widgets
+    "HolonViz",
+    "HolarchyViz",
+    "SPARQLExplorer",
+    "ProvenanceViz",
+    # Graph builders
+    "holon_to_yfiles",
+    "holarchy_to_yfiles",
+    "projected_to_yfiles",
+    "sparql_result_to_yfiles",
+    "audit_trail_to_yfiles",
+    # Formatters
+    "format_compartmented",
+    "format_shacl_shape",
+    "format_simple",
+    "format_typed",
+]
