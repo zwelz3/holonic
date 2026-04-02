@@ -78,19 +78,15 @@ jobs:
           retention-days: 14
 
   # ════════════════════════════════════════════════════════════
-  # Docs — build Sphinx + deploy to GitHub Pages
+  # Docs — build Sphinx (always) + deploy to Pages (if green)
   # ════════════════════════════════════════════════════════════
   docs:
     name: Docs
     runs-on: ubuntu-latest
-    needs: test
+    # Build docs in parallel with tests — don't wait for them
+    if: always()
     permissions:
       contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
 
     steps:
       - uses: actions/checkout@v4
@@ -109,19 +105,37 @@ jobs:
           path: build/docs/
           retention-days: 14
 
-      # Only deploy to Pages on push to main (not PRs)
+  # ════════════════════════════════════════════════════════════
+  # Deploy docs — only after tests pass on main
+  # ════════════════════════════════════════════════════════════
+  deploy-docs:
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    needs: [test, docs]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - name: Download docs artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docs
+          path: build/docs/
+
       - name: Configure GitHub Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/configure-pages@v5
 
       - name: Upload to GitHub Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
         with:
           path: build/docs/
 
       - name: Deploy to GitHub Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         id: deploy
         uses: actions/deploy-pages@v4
 
@@ -163,7 +177,7 @@ jobs:
   publish:
     name: Publish to PyPI
     runs-on: ubuntu-latest
-    needs: [build, docs]
+    needs: [build]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     permissions:
       id-token: write  # trusted publishing
