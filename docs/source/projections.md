@@ -188,7 +188,6 @@ result_graph = ds.apply_pipeline(
 | `extract_types()` | `Graph → dict[str, list[str]]` | IRI → type list mapping |
 | `filter_by_class()` | `Graph, class_iri → Graph` | Keep only instances of a class |
 | `strip_blank_nodes()` | `Graph → Graph` | Remove all blank-node triples |
-| `merge_graphs()` | `*Graph → Graph` | Union multiple graphs |
 | `localize_predicates()` | `Graph → Graph` | Replace full IRIs with local names |
 
 ## API Reference

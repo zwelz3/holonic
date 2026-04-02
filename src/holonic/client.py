@@ -65,16 +65,10 @@ class HolonicDataset:
             with open(cga_path, encoding="utf-8") as f:
                 self.backend.parse_into("urn:holonic:ontology:cga", f.read(), "turtle")
 
-        log.setLevel(logging.INFO)
-        log.info("loaded ontology")
-
         shapes_path = ontology_dir / "cga-shapes.ttl"
         if shapes_path.exists():
             with open(shapes_path, encoding="utf-8") as f:
                 self.backend.parse_into("urn:holonic:ontology:cga-shapes", f.read(), "turtle")
-
-        log.info("loaded shapes")
-        log.setLevel(logging.WARNING)
 
     def __init__(
         self,
@@ -130,14 +124,13 @@ class HolonicDataset:
         self.backend.parse_into(self.registry_graph, ttl, "turtle")
         return iri
 
+    # TODO move predicate to arg[1] position
     def _register_layer(self, holon_iri: str, graph_iri: str, predicate: str) -> None:
         ttl = f"""
             @prefix cga: <urn:holonic:ontology:> .
             <{holon_iri}> cga:{predicate} <{graph_iri}> .
         """
         self.backend.parse_into(self.registry_graph, ttl, "turtle")
-
-    # TODO for all add_ methods, register the graph as a "subgraph" of the holon w/in the registry
 
     def add_interior(
         self,
@@ -253,7 +246,7 @@ class HolonicDataset:
         lbl = label or f"{source_iri} → {target_iri}"
         ttl = f"""
             @prefix cga:  <urn:holonic:ontology:> .
-            @prefix rdfs: <{RDFS}> .
+            @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 
             <{portal_iri}> a cga:TransformPortal ;
                 cga:sourceHolon <{source_iri}> ;
@@ -582,6 +575,123 @@ class HolonicDataset:
         self._register_layer(holon_iri, context_graph, "hasContext")
         return activity_iri
 
+    def _build_surface_report(self, holon_iri: str) -> SurfaceReport | None:
+        """Build a surface report from a holon's boundary shapes."""
+        from holonic.model import SurfaceReport
+
+        boundary_rows = self.backend.query(
+            Q.GET_HOLON_BOUNDARIES.replace("?holon", f"<{holon_iri}>")
+        )
+        if not boundary_rows:
+            return None
+
+        # Query the shapes for required/optional fields
+        report = SurfaceReport(holon_iri=holon_iri)
+        for row in boundary_rows:
+            shape_rows = self.backend.query(f"""
+                PREFIX sh: <http://www.w3.org/ns/shacl#>
+                SELECT ?shape ?target_class ?path ?min_count ?severity
+                WHERE {{
+                    GRAPH <{row["graph"]}> {{
+                        ?shape a sh:NodeShape .
+                        OPTIONAL {{ ?shape sh:targetClass ?target_class }}
+                        OPTIONAL {{
+                            ?shape sh:property ?prop .
+                            ?prop sh:path ?path .
+                            OPTIONAL {{ ?prop sh:minCount ?min_count }}
+                            OPTIONAL {{ ?prop sh:severity ?severity }}
+                        }}
+                    }}
+                }}
+            """)
+            for sr in shape_rows:
+                if sr.get("target_class"):
+                    tc = sr["target_class"]
+                    if tc not in report.target_classes:
+                        report.target_classes.append(tc)
+                if sr.get("path"):
+                    path = sr["path"]
+                    path_short = path.rsplit(":", 1)[-1] if ":" in path else path
+                    min_c = sr.get("min_count")
+                    sev = str(sr.get("severity", ""))
+                    if min_c and int(min_c) > 0:
+                        report.required_fields.append(path_short)
+                    else:
+                        report.optional_fields.append(path_short)
+                    if "Violation" in sev:
+                        report.violations += 0  # counted at validation time
+        return report
+
+    def collect_audit_trail(self) -> AuditTrail:
+        """Collect the full provenance audit trail from context graphs.
+
+        Queries all PROV-O activities across every context graph in the
+        dataset, correlates traversals with validations, and builds
+        surface reports from boundary shapes.
+
+        Returns:
+        -------
+        AuditTrail
+            Complete structured audit of traversals, validations,
+            derivation chains, and surface reports.
+        """
+        from holonic.model import (
+            AuditTrail,
+            SurfaceReport,
+            TraversalRecord,
+            ValidationRecord,
+        )
+
+        # Collect traversals
+        traversal_rows = self.backend.query(Q.COLLECT_TRAVERSALS)
+        traversals = [
+            TraversalRecord(
+                activity_iri=r["activity"],
+                source_iri=r["source"],
+                target_iri=r["target"],
+                agent_iri=r.get("agent"),
+                portal_label=r.get("label"),
+                timestamp=r.get("timestamp"),
+            )
+            for r in traversal_rows
+        ]
+
+        # Collect validations
+        validation_rows = self.backend.query(Q.COLLECT_VALIDATIONS)
+        validations = [
+            ValidationRecord(
+                activity_iri=r["activity"],
+                holon_iri=r["holon"],
+                health=r["health"],
+                agent_iri=r.get("agent"),
+                timestamp=r.get("timestamp"),
+            )
+            for r in validation_rows
+        ]
+
+        # Collect derivation chain
+        derivation_rows = self.backend.query(Q.COLLECT_DERIVATION_CHAIN)
+        derivations = [(r["derived"], r["source"]) for r in derivation_rows]
+
+        # Build surface reports for participating holons
+        participating = set()
+        for t in traversals:
+            participating.add(t.source_iri)
+            participating.add(t.target_iri)
+
+        surfaces: dict[str, SurfaceReport] = {}
+        for holon_iri in participating:
+            report = self._build_surface_report(holon_iri)
+            if report:
+                surfaces[holon_iri] = report
+
+        return AuditTrail(
+            traversals=traversals,
+            validations=validations,
+            derivation_chain=derivations,
+            surfaces=surfaces,
+        )
+
     # ══════════════════════════════════════════════════════════
     # RDFS entailment (proposed extension)
     # ══════════════════════════════════════════════════════════
@@ -702,8 +812,7 @@ class HolonicDataset:
 
             return ProjectedGraph()
 
-        merged = sum(graphs, Graph())
-        lpg = project_to_lpg(merged, **lpg_kwargs)
+        lpg = project_to_lpg(sum(graphs, Graph()), **lpg_kwargs)
 
         if store_as:
             # Serialize back to triples for storage
@@ -846,13 +955,16 @@ class HolonicDataset:
 
         return "\n".join(lines)
 
-    def compute_depth(self, holon_iri: str | None = None) -> dict[str, int]:
+    def compute_depth(self, holon_iri: str | None = None):
         """Compute nesting depth from the cga:memberOf chain.
 
         Depth is not stored — it is derived from structure.  A root
         holon (no memberOf) has depth 0.  Each memberOf hop adds 1.
 
-        > Note: limitations of dataset merging may result in limited cross-graph depth computation
+        Uses a simple SPARQL query to fetch direct memberOf pairs from
+        the registry graph, then walks the parent chain in Python.
+        This avoids SPARQL property path limitations in named-graph
+        contexts across different engines.
 
         Parameters
         ----------
@@ -860,33 +972,71 @@ class HolonicDataset:
             If provided, compute depth for a single holon.
             If None, compute for all holons.
 
-        Returns:
+        Returns
         -------
-        dict mapping holon IRI → depth (int).
+        HolarchyTree
+            Dict-like object (``tree[iri]`` → depth) that also carries
+            parent/child relationships and labels.  ``print(tree)``
+            renders the holarchy as an indented tree.
         """
-        if holon_iri:
-            rows = self.backend.query(f"""
-                PREFIX cga: <urn:holonic:ontology:>
-                SELECT (COUNT(?ancestor) AS ?depth)
-                WHERE {{
-                    graph ?g {{
-                        OPTIONAL {{ <{holon_iri}> cga:memberOf+ ?ancestor }}           
-                    }}
-                }}
-            """)
-            d = rows[0]["depth"] if rows else 0
-            return {holon_iri: int(d)}
+        from holonic.model import HolarchyTree
+        from collections import defaultdict
 
-        # All holons
-        rows = self.backend.query("""
-            PREFIX cga: <urn:holonic:ontology:>
-            SELECT ?holon (COUNT(?ancestor) AS ?depth)
-            WHERE {
-                graph ?g {        
+        # Fetch all holons with labels and direct parents from the registry
+        rows = self.backend.query(f"""
+            PREFIX cga:  <urn:holonic:ontology:>
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            SELECT ?holon ?label ?parent
+            WHERE {{
+                GRAPH <{self.registry_graph}> {{
                     ?holon a cga:Holon .
-                    OPTIONAL { ?holon cga:memberOf+ ?ancestor }
-                }
-            }
-            GROUP BY ?holon
+                    OPTIONAL {{ ?holon rdfs:label ?label }}
+                    OPTIONAL {{ ?holon cga:memberOf ?parent }}
+                }}
+            }}
         """)
-        return {r["holon"]: int(r["depth"]) for r in rows}
+
+        # Build parent map and labels
+        parents: dict[str, str] = {}
+        labels: dict[str, str] = {}
+        all_holons: set[str] = set()
+        for r in rows:
+            iri = r["holon"]
+            all_holons.add(iri)
+            if r.get("label"):
+                labels[iri] = r["label"]
+            if r.get("parent"):
+                parents[iri] = r["parent"]
+
+        # Build children map (inverse of parents)
+        children: dict[str, list[str]] = defaultdict(list)
+        for child, parent in parents.items():
+            children[parent].append(child)
+
+        # Walk parent chains to compute depth
+        def _depth_of(iri: str) -> int:
+            depth = 0
+            current = iri
+            visited: set[str] = set()
+            while current in parents and current not in visited:
+                visited.add(current)
+                current = parents[current]
+                depth += 1
+            return depth
+
+        depths = {h: _depth_of(h) for h in all_holons}
+
+        tree = HolarchyTree(
+            depths=depths,
+            parents=parents,
+            children=dict(children),
+            labels=labels,
+        )
+
+        if holon_iri:
+            # Still return the full tree, but ensure the requested holon is present
+            if holon_iri not in tree.depths:
+                tree.depths[holon_iri] = 0
+            return tree
+
+        return tree

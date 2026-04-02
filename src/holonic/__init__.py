@@ -9,11 +9,15 @@ __version__ = "0.2.1"
 from holonic.backends import GraphBackend, RdflibBackend
 from holonic.client import HolonicDataset
 from holonic.model import (
+    AuditTrail,
     HolonInfo,
     MembraneBreachError,
     MembraneHealth,
     MembraneResult,
     PortalInfo,
+    SurfaceReport,
+    TraversalRecord,
+    ValidationRecord,
 )
 from holonic.projections import (
     CONSTRUCT_COLLAPSE_REIFICATION,
@@ -59,7 +63,6 @@ __all__ = [
     "extract_types",
     "filter_by_class",
     "localize_predicates",
-    "merge_graphs",
     "project_to_lpg",
     "strip_blank_nodes",
     "CONSTRUCT_COLLAPSE_REIFICATION",

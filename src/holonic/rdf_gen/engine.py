@@ -33,6 +33,7 @@ from io import StringIO
 from pathlib import Path
 from typing import Any
 
+import jinja2
 from rdflib import RDFS, XSD, Graph, URIRef
 
 from .namespaces import GEN, SPARQL_PREFIXES, TTL_PREFIXES

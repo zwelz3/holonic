@@ -1,7 +1,6 @@
 """Tests for holon creation, discovery, and layer management."""
 
 
-
 class TestHolonCreation:
     def test_add_holon_registers_in_registry(self, ds):
         ds.add_holon("urn:holon:test", "Test Holon")

@@ -20,6 +20,10 @@ from holonic.viz.graph_builder import (
     projected_to_yfiles,
     sparql_result_to_yfiles,
 )
+from holonic.viz.provenance import (
+    ProvenanceViz,
+    audit_trail_to_yfiles,
+)
 from holonic.viz.widgets import (
     HolarchyViz,
     HolonViz,
@@ -31,11 +35,13 @@ __all__ = [
     "HolonViz",
     "HolarchyViz",
     "SPARQLExplorer",
+    "ProvenanceViz",
     # Graph builders
     "holon_to_yfiles",
     "holarchy_to_yfiles",
     "projected_to_yfiles",
     "sparql_result_to_yfiles",
+    "audit_trail_to_yfiles",
     # Formatters
     "format_compartmented",
     "format_shacl_shape",

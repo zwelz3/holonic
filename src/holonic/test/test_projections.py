@@ -15,7 +15,6 @@ from holonic.projections import (
     extract_types,
     filter_by_class,
     localize_predicates,
-    merge_graphs,
     project_to_lpg,
     strip_blank_nodes,
 )
@@ -214,14 +213,6 @@ class TestUtilityFunctions:
         types = extract_types(g)
         assert str(EX.Person) in types[str(EX.alice)]
         assert str(EX.Person) in types[str(EX.bob)]
-
-    def test_merge_graphs(self):
-        g1 = Graph()
-        g1.add((EX.a, EX.p, Literal("x")))
-        g2 = Graph()
-        g2.add((EX.b, EX.q, Literal("y")))
-        merged = merge_graphs(g1, g2)
-        assert len(merged) == 2
 
     def test_filter_by_class(self):
         g = _make_typed_graph()

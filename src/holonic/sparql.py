@@ -210,3 +210,58 @@ INSERT DATA {{
     }}
 }}
 """
+
+# ──────────────────────────────────────────────────────────────
+# Provenance collection (SPARQL SELECT)
+# ──────────────────────────────────────────────────────────────
+
+COLLECT_TRAVERSALS = """
+PREFIX cga:  <urn:holonic:ontology:>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?activity ?label ?agent ?source ?target ?timestamp
+WHERE {
+    GRAPH ?g {
+        ?activity a prov:Activity ;
+            prov:used      ?source ;
+            prov:generated ?target .
+        OPTIONAL { ?activity rdfs:label             ?label }
+        OPTIONAL { ?activity prov:wasAssociatedWith ?agent }
+        OPTIONAL { ?activity prov:startedAtTime     ?timestamp }
+    }
+    FILTER EXISTS {
+        GRAPH ?g { ?target prov:wasDerivedFrom ?source }
+    }
+}
+ORDER BY ?timestamp
+"""
+
+COLLECT_VALIDATIONS = """
+PREFIX cga:  <urn:holonic:ontology:>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?activity ?holon ?health ?agent ?timestamp
+WHERE {
+    GRAPH ?g {
+        ?activity a prov:Activity ;
+            prov:used          ?holon ;
+            cga:membraneHealth ?health .
+        OPTIONAL { ?activity prov:wasAssociatedWith ?agent }
+        OPTIONAL { ?activity prov:endedAtTime       ?timestamp }
+    }
+}
+ORDER BY ?timestamp
+"""
+
+COLLECT_DERIVATION_CHAIN = """
+PREFIX prov: <http://www.w3.org/ns/prov#>
+
+SELECT ?derived ?source
+WHERE {
+    GRAPH ?g {
+        ?derived prov:wasDerivedFrom ?source .
+    }
+}
+"""

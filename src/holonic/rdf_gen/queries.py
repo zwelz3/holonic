@@ -98,8 +98,7 @@ def execute_select(
 
 
 def execute_construct(graph: Graph, query: str) -> Graph:
-    """Execute a SPARQL CONSTRUCT query and return the result graph.
-    """
+    """Execute a SPARQL CONSTRUCT query and return the result graph."""
     result = Graph()
     for triple in graph.query(query):
         result.add(triple)
