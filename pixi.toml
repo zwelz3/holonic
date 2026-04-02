@@ -6,6 +6,8 @@ platforms = ["win-64"]
 [pypi-dependencies]
 holonic = { path=".", editable=true}
 yfiles-jupyter-graphs = ">=1.7.0"
+sphinx_autodoc_typehints = "*"
+sphinx_rtd_theme = "*"
 
 [dependencies]
 python = ">=3.11"
