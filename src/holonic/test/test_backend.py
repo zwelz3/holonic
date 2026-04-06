@@ -184,9 +184,7 @@ class TestRdflibBackendDatasetAccess:
         from rdflib import Dataset
 
         ds = Dataset()
-        ds.graph(URIRef("urn:g:pre")).add(
-            (URIRef("urn:a"), URIRef("urn:b"), URIRef("urn:c"))
-        )
+        ds.graph(URIRef("urn:g:pre")).add((URIRef("urn:a"), URIRef("urn:b"), URIRef("urn:c")))
         b = RdflibBackend(dataset=ds)
         assert b.graph_exists("urn:g:pre")
         assert b.dataset is ds

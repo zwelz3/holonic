@@ -418,9 +418,11 @@ class HolarchyViz:
         return _make_widget(nodes, edges, layout=layout or self.layout)
 
     def show(self, **kwargs):
+        """Helper to build and render the viz."""
         return self._build(**kwargs)
 
     def show_with_controls(self):
+        """Render Holarchy with view controls."""
         import ipywidgets as widgets
         from IPython.display import display
 

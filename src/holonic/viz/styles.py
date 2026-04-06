@@ -60,14 +60,17 @@ EDGE_COLORS = {
 
 
 def color_for_layer(layer: str) -> str:
+    """Return colors for the layer (default theme)."""
     return LAYER_COLORS.get(layer, LAYER_COLORS["default"])
 
 
 def color_for_layer_light(layer: str) -> str:
+    """Return colors for the layer (light theme)."""
     return LAYER_COLORS_LIGHT.get(layer, "#f8fafc")
 
 
 def shape_for_layer(layer: str) -> str:
+    """Return shapes for layer."""
     return LAYER_SHAPES.get(layer, LAYER_SHAPES["default"])
 
 

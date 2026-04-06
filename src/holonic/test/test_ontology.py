@@ -11,7 +11,6 @@ from rdflib import Graph
 
 from holonic import HolonicDataset, RdflibBackend
 
-
 CGA_GRAPH = "urn:holonic:ontology:cga"
 CGA_SHAPES_GRAPH = "urn:holonic:ontology:cga-shapes"
 

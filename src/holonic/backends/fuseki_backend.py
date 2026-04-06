@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 def _get_or_create_loop():
     """Get the running event loop or create one."""
     try:
-        loop = asyncio.get_running_loop()
+        _loop = asyncio.get_running_loop()
         # We're inside an async context — can't use asyncio.run()
         raise RuntimeError(
             "FusekiBackend sync methods cannot be called from within "
@@ -81,23 +81,28 @@ class FusekiBackend:
         return self._run(self._with_client(fn))
 
     # ── Named-graph CRUD ──────────────────────────────────────
-
     def graph_exists(self, graph_iri: str) -> bool:
+        """Check if named graph exists in the dataset."""
         return self._call(lambda c: c.graph_exists(graph_iri))
 
     def get_graph(self, graph_iri: str) -> Graph:
+        """Return named graph in dataset."""
         return self._call(lambda c: c.get_graph(graph_iri))
 
     def put_graph(self, graph_iri: str, g: Graph) -> None:
+        """Replace graph data from named graph to dataset."""
         self._call(lambda c: c.put_graph(graph_iri, g))
 
     def post_graph(self, graph_iri: str, g: Graph) -> None:
+        """Add graph data from named graph to dataset."""
         self._call(lambda c: c.post_graph(graph_iri, g))
 
     def delete_graph(self, graph_iri: str) -> None:
+        """Remove graph from dataset."""
         self._call(lambda c: c.delete_graph(graph_iri))
 
     def parse_into(self, graph_iri: str, data: str, format: str = "turtle") -> None:
+        """Add data to graph and post to the dataset."""
         g = Graph()
         g.parse(data=data, format=format)
         self.post_graph(graph_iri, g)
@@ -105,6 +110,8 @@ class FusekiBackend:
     # ── SPARQL ────────────────────────────────────────────────
 
     def query(self, sparql: str, **bindings: Any) -> list[dict[str, Any]]:
+        """Execute a query against the dataset."""
+
         async def _q(c):
             result = await c.query_sparql(sparql)
             rows = []
@@ -115,6 +122,8 @@ class FusekiBackend:
         return self._call(_q)
 
     def construct(self, sparql: str, **bindings: Any) -> Graph:
+        """Execute a CONSTRUCT query against the dataset."""
+
         async def _q(c):
             result = await c.query_sparql(sparql, accept="text/turtle")
             g = Graph()
@@ -126,6 +135,8 @@ class FusekiBackend:
         return self._call(_q)
 
     def ask(self, sparql: str, **bindings: Any) -> bool:
+        """Execute an ASK query against the dataset."""
+
         async def _q(c):
             result = await c.query_sparql(sparql)
             return result.get("boolean", False)
@@ -133,11 +144,14 @@ class FusekiBackend:
         return self._call(_q)
 
     def update(self, sparql: str) -> None:
+        """Update dataset with SPARQL string."""
         self._call(lambda c: c.update_sparql(sparql))
 
     # ── Utility ───────────────────────────────────────────────
 
     def list_named_graphs(self) -> list[str]:
+        """List all named graphs in the dataset."""
+
         async def _q(c):
             return await c.list_named_graphs()
 

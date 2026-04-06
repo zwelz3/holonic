@@ -45,35 +45,42 @@ class RdflibBackend:
     # ── Named-graph CRUD ──────────────────────────────────────
 
     def graph_exists(self, graph_iri: str) -> bool:
+        """Check if graph exists in the dataset."""
         g = self.ds.graph(URIRef(graph_iri))
         return len(g) > 0
 
     def get_graph(self, graph_iri: str) -> Graph:
+        """Get named graph from the dataset."""
         return self.ds.graph(URIRef(graph_iri))
 
     def put_graph(self, graph_iri: str, g: Graph) -> None:
+        """Replace graph data in the dataset named graph."""
         target = self.ds.graph(URIRef(graph_iri))
         target.remove((None, None, None))
         for triple in g:
             target.add(triple)
 
     def post_graph(self, graph_iri: str, g: Graph) -> None:
+        """Add graph data to the dataset named graph."""
         target = self.ds.graph(URIRef(graph_iri))
         for triple in g:
             target.add(triple)
 
     def delete_graph(self, graph_iri: str) -> None:
+        """Remove named graph from the dataset."""
         g = self.ds.graph(URIRef(graph_iri))
         g.remove((None, None, None))
         self.ds.remove_graph(g)
 
     def parse_into(self, graph_iri: str, data: str, format: str = "turtle") -> None:
+        """Parse data into dataset named graph."""
         g = self.ds.graph(URIRef(graph_iri))
         g.parse(data=data, format=format)
 
     # ── SPARQL ────────────────────────────────────────────────
 
     def query(self, sparql: str, **bindings: Any) -> list[dict[str, Any]]:
+        """Execute query against the dataset."""
         init = {
             k: URIRef(v) if isinstance(v, str) and v.startswith("urn:") else v
             for k, v in bindings.items()
@@ -90,6 +97,7 @@ class RdflibBackend:
         return rows
 
     def construct(self, sparql: str, **bindings: Any) -> Graph:
+        """Execute CONSTRUCT query on the dataset."""
         init = {
             k: URIRef(v) if isinstance(v, str) and v.startswith("urn:") else v
             for k, v in bindings.items()
@@ -98,6 +106,7 @@ class RdflibBackend:
         return result.graph
 
     def ask(self, sparql: str, **bindings: Any) -> bool:
+        """Execute ASK query on the dataset."""
         init = {
             k: URIRef(v) if isinstance(v, str) and v.startswith("urn:") else v
             for k, v in bindings.items()
@@ -106,16 +115,20 @@ class RdflibBackend:
         return bool(result.askAnswer)
 
     def update(self, sparql: str) -> None:
+        """Update the dataset using SPARQL string."""
         self.ds.update(sparql)
 
     # ── Utility ───────────────────────────────────────────────
 
     def list_named_graphs(self) -> list[str]:
+        """Return each graph idendifier in the dataset."""
         q = "SELECT DISTINCT ?g WHERE { GRAPH ?g { ?s ?p ?o } }"
         return [row["g"] for row in self.query(q)]
 
     # ── Dataset access (rdflib-specific, not in protocol) ─────
 
+    # TODO __getattr__ to avoid superfluous docstring?
     @property
     def dataset(self) -> Dataset:
+        """Returns dataset."""
         return self.ds

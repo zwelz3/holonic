@@ -67,7 +67,7 @@ class FusekiClient:
 
     @property
     def _admin_datasets_endpoint(self) -> str:
-        """Fuseki admin datasets endpoint: /$/datasets"""
+        """Fuseki admin datasets endpoint: /$/datasets."""
         return f"{self.base_url}/$/datasets"
 
     # ------------------------------------------------------------------
@@ -458,7 +458,9 @@ class FusekiClient:
         return g
 
     async def graph_exists(self, graph_uri: str) -> bool:
-        """Check existence of a named graph. Uses a lightweight ASK SPARQL query to avoid heavy graph transfers."""
+        """Check existence of a named graph.
+        Uses a lightweight ASK SPARQL query to avoid heavy graph transfers.
+        """
         ask = f"ASK {{ GRAPH <{graph_uri}> {{ ?s ?p ?o }} }}"
         result = await self.query_sparql(ask, accept="application/sparql-results+json")
         # expect JSON with boolean field "boolean"
@@ -524,7 +526,8 @@ class FusekiClient:
         self, query: str, *, accept: str = "application/sparql-results+json"
     ) -> dict:
         """Run a SPARQL SELECT/ASK/CONSTRUCT/DESCRIBE query against the query endpoint.
-        Returns parsed JSON for SELECT/ASK when accept is json. For other forms, returns a dict with 'raw' key.
+        Returns parsed JSON for SELECT/ASK when accept is json.
+        For other forms, returns a dict with 'raw' key.
         """
         headers = {"Accept": accept}
         data = {"query": query}
@@ -575,7 +578,9 @@ class FusekiClient:
         tmp_graph_uri: str | None = None,
         content_type: str | None = None,
     ):
-        """Replace a graph atomically using SPARQL Update:
+        """Replace a graph atomically using SPARQL Update.
+
+        Steps:
          1) DELETE WHERE { GRAPH <g> { ?s ?p ?o } } ; (or DROP GRAPH)
          2) INSERT DATA { GRAPH <g> { ... } }
 
@@ -592,7 +597,8 @@ class FusekiClient:
             else g.serialize(format="nt")
         )
         # Build an INSERT DATA snippet
-        # Note: for very large graphs this approach may be inefficient; for very large data, prefer GSP PUT.
+        # NOTE: for very large graphs this approach may be inefficient;
+        # for very large data, prefer GSP PUT.
         insert_snippets = []
         for line in nt.splitlines():
             if not line.strip():

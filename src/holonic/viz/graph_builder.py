@@ -190,7 +190,8 @@ def holon_to_yfiles(
     }
 
     # Also check projection and context
-    PROJ_Q = "PREFIX cga: <urn:holonic:ontology:> SELECT ?graph WHERE { <HOLON> cga:hasProjection ?graph }"
+    PROJ_Q = """PREFIX cga: <urn:holonic:ontology:> 
+    SELECT ?graph WHERE { <HOLON> cga:hasProjection ?graph }"""
     CTX_Q = (
         "PREFIX cga: <urn:holonic:ontology:> SELECT ?graph WHERE { <HOLON> cga:hasContext ?graph }"
     )

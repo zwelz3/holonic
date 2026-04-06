@@ -7,6 +7,8 @@ from enum import Enum
 
 
 class MembraneHealth(Enum):
+    """Classes of health for a Holon Membrane."""
+
     INTACT = "intact"
     WEAKENED = "weakened"
     COMPROMISED = "compromised"
@@ -24,6 +26,7 @@ class MembraneResult:
     warnings: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
+        """Return a summary of the Holon's Membrane."""
         label = self.holon_iri.rsplit(":", 1)[-1] if ":" in self.holon_iri else self.holon_iri
         lines = [f"Membrane [{label}]: {self.health.value.upper()}"]
         lines.append(f"  conforms: {self.conforms}")
@@ -86,36 +89,13 @@ class HolarchyTree:
             key=lambda iri: self.labels.get(iri, iri),
         )
 
-    # ── Dict-like access for backward compat ──
-
-    def __getitem__(self, iri: str) -> int:
-        return self.depths[iri]
-
-    def __contains__(self, iri: str) -> bool:
-        return iri in self.depths
-
-    def __iter__(self):
-        return iter(self.depths)
-
-    def __len__(self) -> int:
-        return len(self.depths)
-
     def items(self):
+        """Helper to get items from depths."""
         return self.depths.items()
 
     def get(self, iri: str, default: int | None = None) -> int | None:
+        """Return depth for the IRI."""
         return self.depths.get(iri, default)
-
-    # ── Tree rendering ──
-
-    def __str__(self) -> str:
-        lines: list[str] = []
-        for root in self.roots:
-            self._render(root, "", True, lines)
-        return "\n".join(lines)
-
-    def __repr__(self) -> str:
-        return f"HolarchyTree({len(self.depths)} holons, {len(self.roots)} roots)"
 
     def _render(
         self,
@@ -137,6 +117,31 @@ class HolarchyTree:
         child_prefix = prefix + ("    " if is_last else "│   ")
         for i, child in enumerate(kids_sorted):
             self._render(child, child_prefix, i == len(kids_sorted) - 1, lines)
+
+    # ── Dict-like access for backward compat ──
+
+    def __getitem__(self, iri: str) -> int:
+        return self.depths[iri]
+
+    def __iter__(self):
+        return iter(self.depths)
+
+    def __contains__(self, iri: str) -> bool:
+        return iri in self.depths
+
+    def __len__(self) -> int:
+        return len(self.depths)
+
+    def __repr__(self) -> str:
+        return f"HolarchyTree({len(self.depths)} holons, {len(self.roots)} roots)"
+
+    # ── Tree rendering ──
+
+    def __str__(self) -> str:
+        lines: list[str] = []
+        for root in self.roots:
+            self._render(root, "", True, lines)
+        return "\n".join(lines)
 
 
 class MembraneBreachError(Exception):
@@ -167,10 +172,12 @@ class TraversalRecord:
 
     @property
     def source_label(self) -> str:
+        """Opinionated iri-derived source label."""
         return self.source_iri.rsplit(":", 1)[-1]
 
     @property
     def target_label(self) -> str:
+        """Opinionated iri-derived target label."""
         return self.target_iri.rsplit(":", 1)[-1]
 
 
@@ -186,11 +193,13 @@ class ValidationRecord:
 
     @property
     def health_label(self) -> str:
+        """Return holon health label."""
         h = self.health.rsplit(":", 1)[-1] if ":" in self.health else self.health
         return h.upper()
 
     @property
     def holon_label(self) -> str:
+        """Return opinionated label based on holon iri."""
         return self.holon_iri.rsplit(":", 1)[-1]
 
 
@@ -232,6 +241,7 @@ class AuditTrail:
         return matches[-1] if matches else None
 
     def summary(self) -> str:
+        """Return a summary report for the AuditTrail."""
         lines = [
             "AuditTrail",
             f"  Traversals:  {len(self.traversals)}",
@@ -251,7 +261,11 @@ class AuditTrail:
                 if t.timestamp:
                     # Timestamp may be a datetime (from rdflib xsd:dateTime
                     # Literal.toPython()) or a str (when constructed directly).
-                    ts = t.timestamp.isoformat() if hasattr(t.timestamp, "isoformat") else str(t.timestamp)
+                    ts = (
+                        t.timestamp.isoformat()
+                        if hasattr(t.timestamp, "isoformat")
+                        else str(t.timestamp)
+                    )
                     lines.append(f"       time:   {ts[:19]}")
         if self.surfaces:
             lines.append("\n  Surfaces:")

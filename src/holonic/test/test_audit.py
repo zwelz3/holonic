@@ -1,7 +1,5 @@
 """Tests for provenance audit trail collection and the AuditTrail model."""
 
-import pytest
-
 from holonic import MembraneHealth
 from holonic.model import (
     AuditTrail,
@@ -9,7 +7,6 @@ from holonic.model import (
     TraversalRecord,
     ValidationRecord,
 )
-
 
 # ══════════════════════════════════════════════════════════════
 # AuditTrail dataclass — pure unit tests, no client

@@ -19,7 +19,6 @@ from holonic import (
     strip_blank_nodes,
 )
 
-
 # ══════════════════════════════════════════════════════════════
 # project_holon
 # ══════════════════════════════════════════════════════════════
@@ -136,13 +135,10 @@ class TestProjectHolarchy:
         ds.add_holon("urn:holon:org", "Org")
         ds.add_holon("urn:holon:eng", "Eng", member_of="urn:holon:org")
         lpg = ds.project_holarchy()
-        member_edges = [
-            e for e in lpg.edges if e.predicate == "urn:holonic:ontology:memberOf"
-        ]
+        member_edges = [e for e in lpg.edges if e.predicate == "urn:holonic:ontology:memberOf"]
         assert len(member_edges) >= 1
         assert any(
-            e.source == "urn:holon:eng" and e.target == "urn:holon:org"
-            for e in member_edges
+            e.source == "urn:holon:eng" and e.target == "urn:holon:org" for e in member_edges
         )
 
 

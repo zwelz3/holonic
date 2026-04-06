@@ -498,7 +498,8 @@ class ProjectionPipeline:
     The final output can optionally be converted to a ProjectedGraph
     via project_to_lpg().
 
-    > TODO: write metadata about the Pipeline (self-describing) w/n holon boundary (new opaque portal type?)
+    > TODO: write metadata about the Pipeline (self-describing)
+    w/n holon boundary (new opaque portal type?)
 
     Example:
     -------

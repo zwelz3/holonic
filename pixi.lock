@@ -2912,7 +2912,7 @@ packages:
 - pypi: ./
   name: holonic
   version: 0.2.1
-  sha256: c97f0fc1363156351cdc28b693b2dff636050cf9149e4431bc74607c134ea174
+  sha256: 32b5ab3b78fc67bfedfd6ed08059d2229bda38008e40deffb3b8c69626a30ddb
   requires_dist:
   - pydantic>=2
   - pyshacl>=0.25

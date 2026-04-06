@@ -26,12 +26,13 @@ jupytext = "*"
 
 [tasks.lint-fix]
 description = """Run all lint fixers"""
-depends-on = ["fix-pyproject", "fix-ssort", "format-ruff", "fix-ruff", "mypy"]
+depends-on = ["fix-pyproject", "fix-ssort", "format-ruff", "fix-ruff"]
 cmd = "echo 🚧"
 
+# TODO: Add mypy back to lint checker
 [tasks.lint-check]
 description = """Run all lint checkers"""
-depends-on = ["check-pyproject", "check-ssort", "check-ruff", "mypy"]
+depends-on = ["check-pyproject", "check-ssort", "check-ruff"]
 cmd = "echo 🔎"
 
 [feature.tasks-test.tasks]

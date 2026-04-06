@@ -44,6 +44,10 @@ __all__ = [
     # Client
     "HolonicDataset",
     # Models
+    "AuditTrail",
+    "SurfaceReport",
+    "TraversalRecord",
+    "ValidationRecord",
     "HolonInfo",
     "MembraneBreachError",
     "MembraneHealth",

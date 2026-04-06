@@ -14,6 +14,7 @@ from collections import deque
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from rdflib import Graph, Namespace
 from rdflib.namespace import RDF, RDFS, XSD
@@ -22,19 +23,29 @@ from holonic import sparql as Q
 from holonic.backends.protocol import GraphBackend
 from holonic.backends.rdflib_backend import RdflibBackend
 from holonic.model import (
+    AuditTrail,
     HolonInfo,
     MembraneHealth,
     MembraneResult,
     PortalInfo,
+    SurfaceReport,
+    TraversalRecord,
+    ValidationRecord,
 )
 
 log = logging.getLogger(__name__)
 
 CGA = Namespace("urn:holonic:ontology:")
+PROJ = Namespace("urn:holonic:projection:")
 REGISTRY_GRAPH = "urn:holarchy:registry"
 SH = Namespace("http://www.w3.org/ns/shacl#")
 
-_KNOWN_PREFIX_STR = f"@prefix rdf: <{RDF}> .\n@prefix sh: <{SH}> .\n@prefix rdfs: <{RDFS}> .\n@prefix xsd: <{XSD}> .\n"
+# TODO replace with namespace manager?
+_KNOWN_PREFIX_STR = f"""@prefix rdf: <{RDF}> .
+@prefix sh: <{SH}> .
+@prefix rdfs: <{RDFS}> .
+@prefix xsd: <{XSD}> .
+"""
 
 
 class HolonicDataset:
@@ -587,8 +598,6 @@ class HolonicDataset:
 
     def _build_surface_report(self, holon_iri: str) -> SurfaceReport | None:
         """Build a surface report from a holon's boundary shapes."""
-        from holonic.model import SurfaceReport
-
         boundary_rows = self.backend.query(
             Q.GET_HOLON_BOUNDARIES.replace("?holon", f"<{holon_iri}>")
         )
@@ -645,13 +654,6 @@ class HolonicDataset:
             Complete structured audit of traversals, validations,
             derivation chains, and surface reports.
         """
-        from holonic.model import (
-            AuditTrail,
-            SurfaceReport,
-            TraversalRecord,
-            ValidationRecord,
-        )
-
         # Collect traversals
         traversal_rows = self.backend.query(Q.COLLECT_TRAVERSALS)
         traversals = [
@@ -826,13 +828,12 @@ class HolonicDataset:
 
         if store_as:
             # Serialize back to triples for storage
-            result_graph = Graph()
+            result_graph = Graph(identifier=PROJ + str(uuid4()))
             from rdflib import Literal as Lit
             from rdflib import URIRef as URef
             from rdflib.namespace import RDF as _RDF
             from rdflib.namespace import RDFS as _RDFS
 
-            PROJ = Namespace("urn:holonic:projection:")
             for iri, node in lpg.nodes.items():
                 subj = URef(iri)
                 for t in node.types:
@@ -982,15 +983,16 @@ class HolonicDataset:
             If provided, compute depth for a single holon.
             If None, compute for all holons.
 
-        Returns
+        Returns:
         -------
         HolarchyTree
             Dict-like object (``tree[iri]`` → depth) that also carries
             parent/child relationships and labels.  ``print(tree)``
             renders the holarchy as an indented tree.
         """
-        from holonic.model import HolarchyTree
         from collections import defaultdict
+
+        from holonic.model import HolarchyTree
 
         # Fetch all holons with labels and direct parents from the registry
         rows = self.backend.query(f"""

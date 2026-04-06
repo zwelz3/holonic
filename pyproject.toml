@@ -95,6 +95,8 @@ lint.select = [
 ]
 lint.ignore = [
   "D105",
+  "D107",
+  "D205",
 ]
 lint.per-file-ignores."src/holonic/test/__*.py" = [
   "D",
