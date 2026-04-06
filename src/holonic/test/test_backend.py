@@ -114,3 +114,79 @@ class TestRdflibBackend:
             }
         """)
         assert len(rows) == 1
+
+
+class TestRdflibBackendBindings:
+    """The **bindings kwarg auto-coerces urn: strings to URIRef."""
+
+    @pytest.fixture
+    def backend(self):
+        b = RdflibBackend()
+        b.parse_into(
+            "urn:g:bind",
+            """
+            @prefix ex: <urn:ex:> .
+            ex:alice ex:knows ex:bob .
+            ex:bob ex:knows ex:carol .
+        """,
+        )
+        return b
+
+    def test_query_with_urn_binding_coerces_to_uriref(self, backend):
+        rows = backend.query(
+            """
+            SELECT ?o WHERE {
+                GRAPH <urn:g:bind> { ?s <urn:ex:knows> ?o }
+            }
+            """,
+            s="urn:ex:alice",
+        )
+        assert len(rows) == 1
+        assert rows[0]["o"] == "urn:ex:bob"
+
+    def test_construct_with_binding(self, backend):
+        g = backend.construct(
+            """
+            CONSTRUCT { ?s <urn:label> "found" }
+            WHERE {
+                GRAPH <urn:g:bind> { ?s <urn:ex:knows> ?o }
+            }
+            """,
+            s="urn:ex:alice",
+        )
+        assert len(g) == 1
+
+    def test_ask_with_binding(self, backend):
+        assert backend.ask(
+            """
+            ASK { GRAPH <urn:g:bind> { ?s <urn:ex:knows> <urn:ex:bob> } }
+            """,
+            s="urn:ex:alice",
+        )
+        assert not backend.ask(
+            """
+            ASK { GRAPH <urn:g:bind> { ?s <urn:ex:knows> <urn:ex:bob> } }
+            """,
+            s="urn:ex:carol",
+        )
+
+
+class TestRdflibBackendDatasetAccess:
+    """The .dataset property exposes the underlying rdflib.Dataset."""
+
+    def test_dataset_property_is_rdflib_dataset(self):
+        from rdflib import Dataset
+
+        b = RdflibBackend()
+        assert isinstance(b.dataset, Dataset)
+
+    def test_constructor_accepts_existing_dataset(self):
+        from rdflib import Dataset
+
+        ds = Dataset()
+        ds.graph(URIRef("urn:g:pre")).add(
+            (URIRef("urn:a"), URIRef("urn:b"), URIRef("urn:c"))
+        )
+        b = RdflibBackend(dataset=ds)
+        assert b.graph_exists("urn:g:pre")
+        assert b.dataset is ds

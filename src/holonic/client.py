@@ -211,6 +211,16 @@ class HolonicDataset:
                 Q.GET_HOLON_BOUNDARIES.replace("?holon", f"<{info.iri}>")
             )
             info.boundary_graphs = [r["graph"] for r in boundary_rows]
+
+            projection_rows = self.backend.query(
+                Q.GET_HOLON_PROJECTIONS.replace("?holon", f"<{info.iri}>")
+            )
+            info.projection_graphs = [r["graph"] for r in projection_rows]
+
+            context_rows = self.backend.query(
+                Q.GET_HOLON_CONTEXTS.replace("?holon", f"<{info.iri}>")
+            )
+            info.context_graphs = [r["graph"] for r in context_rows]
             holons.append(info)
         return holons
 

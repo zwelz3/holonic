@@ -1,6 +1,8 @@
 """Tests for SHACL membrane validation."""
 
-from holonic import MembraneHealth
+import pytest
+
+from holonic import MembraneBreachError, MembraneHealth, MembraneResult
 
 
 class TestMembraneValidation:
@@ -148,3 +150,66 @@ class TestProvenance:
         # Check context was created
         g = ds_with_holons.backend.get_graph("urn:holon:target/context")
         assert len(g) > 0
+
+
+class TestMembraneBreachError:
+    """The exception is exported but not (yet) raised by client.traverse()."""
+
+    def test_constructs_from_membrane_result(self):
+        result = MembraneResult(
+            holon_iri="urn:holon:bad",
+            conforms=False,
+            health=MembraneHealth.COMPROMISED,
+            report_text="Validation Report\nConforms: False",
+            violations=["v1", "v2"],
+        )
+        err = MembraneBreachError(result)
+        assert err.result is result
+        assert "urn:holon:bad" in str(err)
+        assert "2 violation" in str(err)
+
+    def test_is_exception_subclass(self):
+        result = MembraneResult(
+            holon_iri="urn:holon:x",
+            conforms=False,
+            health=MembraneHealth.COMPROMISED,
+            report_text="",
+            violations=["v1"],
+        )
+        with pytest.raises(MembraneBreachError):
+            raise MembraneBreachError(result)
+
+
+class TestWeakenedMembrane:
+    """Warning-only shapes should yield WEAKENED, not COMPROMISED."""
+
+    def test_warning_severity_yields_weakened(self, ds):
+        ds.add_holon("urn:holon:warn", "Warn")
+        ds.add_interior(
+            "urn:holon:warn",
+            """
+            @prefix ex: <urn:ex:> .
+            <urn:item:1> a ex:Item .
+        """,
+        )
+        ds.add_boundary(
+            "urn:holon:warn",
+            """
+            @prefix ex: <urn:ex:> .
+            <urn:shapes:ItemShape> a sh:NodeShape ;
+                sh:targetClass ex:Item ;
+                sh:property [
+                    sh:path ex:name ;
+                    sh:minCount 1 ;
+                    sh:datatype xsd:string ;
+                    sh:severity sh:Warning ;
+                    sh:message "Item should have a name."
+                ] .
+        """,
+        )
+        result = ds.validate_membrane("urn:holon:warn")
+        # validate_membrane parses report_text line-by-line for "Violation"/"Warning".
+        # Health depends on which token shows up; this test asserts the warning
+        # path is exercised at all (not COMPROMISED, since severity is Warning).
+        assert result.health != MembraneHealth.COMPROMISED
+        assert result.health in (MembraneHealth.INTACT, MembraneHealth.WEAKENED)

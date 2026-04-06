@@ -145,7 +145,19 @@ def build_construct(
     template: str,
     graph_iri: str | None = None,
 ) -> str:
-    """Instantiate a CONSTRUCT template with optional GRAPH scoping."""
+    """Instantiate a CONSTRUCT template with optional GRAPH scoping.
+
+    If ``template`` contains the ``{graph_clause}`` placeholder, it is
+    treated as a format string (escaped braces ``{{`` / ``}}`` get
+    un-escaped) and the placeholder is substituted with either a
+    ``GRAPH <iri>`` clause or an empty string.
+
+    If the placeholder is absent, the template is returned as-is —
+    letting callers pass raw CONSTRUCT queries through ``add_construct``
+    without having to escape every brace for ``str.format``.
+    """
+    if "{graph_clause}" not in template:
+        return template
     clause = _wrap_graph_clause(graph_iri)
     return template.format(graph_clause=clause)
 

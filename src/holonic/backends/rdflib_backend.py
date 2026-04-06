@@ -36,7 +36,11 @@ class RdflibBackend:
     """
 
     def __init__(self, dataset: Dataset | None = None):
-        self.ds: Dataset = dataset or Dataset()
+        # default_union=True so CONSTRUCT/SELECT queries without an explicit
+        # GRAPH clause operate over the union of all named graphs. Portal
+        # traversal stores user-supplied CONSTRUCTs that don't scope to a
+        # graph, and pyshacl-style reports expect whole-dataset semantics.
+        self.ds: Dataset = dataset if dataset is not None else Dataset(default_union=True)
 
     # ── Named-graph CRUD ──────────────────────────────────────
 

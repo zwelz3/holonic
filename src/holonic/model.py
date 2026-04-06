@@ -249,7 +249,10 @@ class AuditTrail:
                 if t.portal_label:
                     lines.append(f"       portal: {t.portal_label}")
                 if t.timestamp:
-                    lines.append(f"       time:   {t.timestamp[:19]}")
+                    # Timestamp may be a datetime (from rdflib xsd:dateTime
+                    # Literal.toPython()) or a str (when constructed directly).
+                    ts = t.timestamp.isoformat() if hasattr(t.timestamp, "isoformat") else str(t.timestamp)
+                    lines.append(f"       time:   {ts[:19]}")
         if self.surfaces:
             lines.append("\n  Surfaces:")
             for iri, s in self.surfaces.items():

@@ -57,6 +57,28 @@ WHERE {
 }
 """
 
+GET_HOLON_PROJECTIONS = """
+PREFIX cga: <urn:holonic:ontology:>
+
+SELECT ?graph
+WHERE {
+    graph ?g {
+        ?holon cga:hasProjection ?graph .
+    }
+}
+"""
+
+GET_HOLON_CONTEXTS = """
+PREFIX cga: <urn:holonic:ontology:>
+
+SELECT ?graph
+WHERE {
+    graph ?g {
+        ?holon cga:hasContext ?graph .
+    }
+}
+"""
+
 # ──────────────────────────────────────────────────────────────
 # Portal discovery
 # ──────────────────────────────────────────────────────────────

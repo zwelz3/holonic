@@ -1,0 +1,393 @@
+@prefix cga:    <urn:holonic:ontology:> .
+@prefix sh:     <http://www.w3.org/ns/shacl#> .
+@prefix rdfs:   <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
+@prefix prov:   <http://www.w3.org/ns/prov#> .
+@prefix schema: <https://schema.org/> .
+
+# ══════════════════════════════════════════════════════════════
+# SHACL Shapes for the CGA Ontology  v0.3.0
+#
+# Validates holarchy registry graphs.  Organized by concern:
+#   1. Core structural shapes (holon, portal)
+#   2. Governance shapes (authority, classification)
+#   3. Operational shapes (freshness, sizing)
+#   4. Lifecycle shapes (split/merge validity)
+#   5. Cross-holon constraints (referential integrity)
+# ══════════════════════════════════════════════════════════════
+
+
+# ──────────────────────────────────────────────────────────────
+# 1. CORE STRUCTURAL SHAPES
+# ──────────────────────────────────────────────────────────────
+
+cga:HolonShape a sh:NodeShape ;
+    sh:targetClass cga:Holon ;
+    sh:property [
+        sh:path     rdfs:label ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:severity sh:Info ;
+        sh:message  "Holon has no label. Consider adding one for discoverability."
+    ] ;
+    sh:property [
+        sh:path     cga:hasInterior ;
+        sh:severity sh:Info ;
+        sh:message  "Holon has no interior graphs."
+    ] ;
+    sh:property [
+        sh:path     cga:memberOf ;
+        sh:maxCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:severity sh:Info ;
+        sh:message  "Holon should have at most one parent (tree structure)."
+    ] ;
+    sh:property [
+        sh:path     cga:holonStatus ;
+        sh:maxCount 1 ;
+        sh:severity sh:Info ;
+        sh:message  "Holon should have at most one status."
+    ] ;
+    .
+
+cga:PortalShape a sh:NodeShape ;
+    sh:targetClass cga:Portal ;
+    sh:property [
+        sh:path     cga:sourceHolon ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:severity sh:Violation ;
+        sh:message  "Portal must have exactly one sourceHolon."
+    ] ;
+    sh:property [
+        sh:path     cga:targetHolon ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:severity sh:Violation ;
+        sh:message  "Portal must have exactly one targetHolon."
+    ] ;
+    sh:property [
+        sh:path     rdfs:label ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message  "Portal should have a label."
+    ] ;
+    .
+
+cga:TransformPortalShape a sh:NodeShape ;
+    sh:targetClass cga:TransformPortal ;
+    sh:property [
+        sh:path     cga:constructQuery ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:severity sh:Violation ;
+        sh:message  "TransformPortal must have exactly one constructQuery."
+    ] ;
+    .
+
+
+# ──────────────────────────────────────────────────────────────
+# 2. GOVERNANCE SHAPES
+# ──────────────────────────────────────────────────────────────
+
+cga:DataDomainShape a sh:NodeShape ;
+    sh:targetClass cga:DataDomain ;
+    sh:property [
+        sh:path     rdfs:label ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:severity sh:Violation ;
+        sh:message  "DataDomain must have a label."
+    ] ;
+    .
+
+cga:DataHolonGovernanceShape a sh:NodeShape ;
+    sh:targetClass cga:DataHolon ;
+    sh:property [
+        sh:path     cga:dataSteward ;
+        sh:maxCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:severity sh:Warning ;
+        sh:message  "Data holon should have a steward."
+    ] ;
+    sh:property [
+        sh:path     cga:dataClassification ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:severity sh:Warning ;
+        sh:message  "Data holon should declare a classification."
+    ] ;
+    .
+
+cga:ExternalSystemShape a sh:NodeShape ;
+    sh:targetClass cga:ExternalSystem ;
+    sh:property [
+        sh:path     rdfs:label ;
+        sh:minCount 1 ;
+        sh:severity sh:Violation ;
+        sh:message  "ExternalSystem must have a label."
+    ] ;
+    sh:property [
+        sh:path     cga:systemType ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:severity sh:Warning ;
+        sh:message  "ExternalSystem should declare its type."
+    ] ;
+    .
+
+cga:CapabilityShape a sh:NodeShape ;
+    sh:targetClass cga:Capability ;
+    sh:property [
+        sh:path     rdfs:label ;
+        sh:minCount 1 ;
+        sh:severity sh:Violation ;
+        sh:message  "Capability must have a label."
+    ] ;
+    sh:property [
+        sh:path     cga:requiresInput ;
+        sh:maxCount 1 ;
+        sh:severity sh:Info ;
+        sh:message  "Capability should declare its input shape."
+    ] ;
+    sh:property [
+        sh:path     cga:producesOutput ;
+        sh:maxCount 1 ;
+        sh:severity sh:Info ;
+        sh:message  "Capability should declare its output shape."
+    ] ;
+    .
+
+cga:BusinessProcessShape a sh:NodeShape ;
+    sh:targetClass cga:BusinessProcess ;
+    sh:property [
+        sh:path     rdfs:label ;
+        sh:minCount 1 ;
+        sh:severity sh:Violation ;
+        sh:message  "BusinessProcess must have a label."
+    ] ;
+    .
+
+
+# ──────────────────────────────────────────────────────────────
+# 3. OPERATIONAL SHAPES
+# ──────────────────────────────────────────────────────────────
+
+cga:HolonOperationalShape a sh:NodeShape ;
+    sh:targetClass cga:Holon ;
+    sh:property [
+        sh:path     cga:lastIngestion ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:dateTime ;
+        sh:severity sh:Info ;
+        sh:message  "lastIngestion should be a dateTime."
+    ] ;
+    sh:property [
+        sh:path     cga:refreshFrequency ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:duration ;
+        sh:severity sh:Info ;
+        sh:message  "refreshFrequency should be an ISO 8601 duration."
+    ] ;
+    sh:property [
+        sh:path     cga:interiorTripleCount ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:integer ;
+        sh:severity sh:Info
+    ] ;
+    sh:property [
+        sh:path     cga:materializationMode ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:in       ( "materialized" "virtualized" "cached" "hybrid" ) ;
+        sh:severity sh:Warning ;
+        sh:message  "materializationMode should be materialized/virtualized/cached/hybrid."
+    ] ;
+    .
+
+
+# ──────────────────────────────────────────────────────────────
+# 4. LIFECYCLE SHAPES
+# ──────────────────────────────────────────────────────────────
+
+cga:HolonSplitShape a sh:NodeShape ;
+    sh:targetClass cga:HolonSplit ;
+    sh:property [
+        sh:path     prov:used ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:severity sh:Violation ;
+        sh:message  "HolonSplit must reference the holon being split (prov:used)."
+    ] ;
+    sh:property [
+        sh:path     prov:generated ;
+        sh:minCount 2 ;
+        sh:nodeKind sh:IRI ;
+        sh:severity sh:Violation ;
+        sh:message  "HolonSplit must produce at least two successor holons."
+    ] ;
+    sh:property [
+        sh:path     cga:splitRationale ;
+        sh:minCount 1 ;
+        sh:datatype xsd:string ;
+        sh:severity sh:Warning ;
+        sh:message  "HolonSplit should document its rationale."
+    ] ;
+    sh:property [
+        sh:path     prov:startedAtTime ;
+        sh:minCount 1 ;
+        sh:datatype xsd:dateTime ;
+        sh:severity sh:Warning ;
+        sh:message  "HolonSplit should record when it occurred."
+    ] ;
+    .
+
+cga:HolonMergeShape a sh:NodeShape ;
+    sh:targetClass cga:HolonMerge ;
+    sh:property [
+        sh:path     prov:used ;
+        sh:minCount 2 ;
+        sh:nodeKind sh:IRI ;
+        sh:severity sh:Violation ;
+        sh:message  "HolonMerge must reference at least two source holons."
+    ] ;
+    sh:property [
+        sh:path     prov:generated ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:severity sh:Violation ;
+        sh:message  "HolonMerge must produce exactly one successor holon."
+    ] ;
+    sh:property [
+        sh:path     cga:mergeRationale ;
+        sh:minCount 1 ;
+        sh:datatype xsd:string ;
+        sh:severity sh:Warning ;
+        sh:message  "HolonMerge should document its rationale."
+    ] ;
+    .
+
+cga:ArchivedHolonShape a sh:NodeShape ;
+    sh:target [
+        a sh:SPARQLTarget ;
+        sh:select """
+            SELECT ?this WHERE {
+                ?this cga:holonStatus cga:Archived .
+            }
+        """
+    ] ;
+    sh:property [
+        sh:path     cga:supersededBy ;
+        sh:minCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:severity sh:Warning ;
+        sh:message  "Archived holon should declare its successor(s)."
+    ] ;
+    .
+
+
+# ──────────────────────────────────────────────────────────────
+# 5. CROSS-HOLON CONSTRAINTS
+# ──────────────────────────────────────────────────────────────
+
+# Portal target must exist as a holon in the registry.
+cga:PortalTargetExistsShape a sh:NodeShape ;
+    sh:targetClass cga:Portal ;
+    sh:sparql [
+        sh:message  "Portal target holon does not exist in the holarchy." ;
+        sh:severity sh:Violation ;
+        sh:select """
+            SELECT $this WHERE {
+                $this cga:targetHolon ?target .
+                FILTER NOT EXISTS { ?target a cga:Holon }
+            }
+        """
+    ] ;
+    .
+
+# Portal source must exist as a holon in the registry.
+cga:PortalSourceExistsShape a sh:NodeShape ;
+    sh:targetClass cga:Portal ;
+    sh:sparql [
+        sh:message  "Portal source holon does not exist in the holarchy." ;
+        sh:severity sh:Violation ;
+        sh:select """
+            SELECT $this WHERE {
+                $this cga:sourceHolon ?source .
+                FILTER NOT EXISTS { ?source a cga:Holon }
+            }
+        """
+    ] ;
+    .
+
+# Portal should not target an archived holon.
+cga:PortalNotArchivedShape a sh:NodeShape ;
+    sh:targetClass cga:Portal ;
+    sh:sparql [
+        sh:message  "Active portal targets an archived holon." ;
+        sh:severity sh:Warning ;
+        sh:select """
+            SELECT $this WHERE {
+                $this cga:targetHolon ?target .
+                ?target cga:holonStatus cga:Archived .
+                FILTER NOT EXISTS {
+                    $this cga:holonStatus cga:Archived .
+                }
+            }
+        """
+    ] ;
+    .
+
+# Portal crossing data classification boundaries.
+cga:PortalClassificationShape a sh:NodeShape ;
+    sh:targetClass cga:Portal ;
+    sh:sparql [
+        sh:message  "Portal crosses a data classification boundary." ;
+        sh:severity sh:Warning ;
+        sh:select """
+            SELECT $this WHERE {
+                $this cga:sourceHolon ?source ;
+                      cga:targetHolon ?target .
+                ?source cga:dataClassification ?srcClass .
+                ?target cga:dataClassification ?tgtClass .
+                FILTER(?srcClass != ?tgtClass)
+            }
+        """
+    ] ;
+    .
+
+# memberOf target must be a holon.
+cga:MemberOfTargetShape a sh:NodeShape ;
+    sh:targetClass cga:Holon ;
+    sh:sparql [
+        sh:message  "memberOf target is not a holon in the holarchy." ;
+        sh:severity sh:Warning ;
+        sh:select """
+            SELECT $this WHERE {
+                $this cga:memberOf ?parent .
+                FILTER NOT EXISTS { ?parent a cga:Holon }
+            }
+        """
+    ] ;
+    .
+
+# Circular memberOf detection (self-membership).
+cga:SelfMembershipShape a sh:NodeShape ;
+    sh:targetClass cga:Holon ;
+    sh:sparql [
+        sh:message  "Holon is a member of itself." ;
+        sh:severity sh:Violation ;
+        sh:select """
+            SELECT $this WHERE {
+                $this cga:memberOf $this .
+            }
+        """
+    ] ;
+    .

@@ -102,3 +102,51 @@ class TestPathFinding:
         assert len(path) == 2
         assert path[0].source_iri == "urn:holon:a"
         assert path[1].target_iri == "urn:holon:c"
+
+    def test_self_path_returns_none_without_self_portal(self, ds_with_holons):
+        # No source → source portal exists, so BFS finds nothing
+        path = ds_with_holons.find_path("urn:holon:source", "urn:holon:source")
+        assert path is None
+
+    def test_unknown_source_returns_none(self, ds_with_holons):
+        path = ds_with_holons.find_path("urn:holon:ghost", "urn:holon:target")
+        assert path is None
+
+
+class TestTraverseInjection:
+    """traverse() with inject=False should NOT mutate the target's interior."""
+
+    def test_no_inject_leaves_target_interior_untouched(self, ds_with_holons):
+        before = ds_with_holons.backend.get_graph("urn:holon:target/interior")
+        before_size = len(before)
+
+        projected, _ = ds_with_holons.traverse(
+            "urn:holon:source",
+            "urn:holon:target",
+            inject=False,
+            validate=False,
+        )
+
+        after = ds_with_holons.backend.get_graph("urn:holon:target/interior")
+        assert len(after) == before_size
+        # But the projection itself still has triples
+        assert len(projected) > 0
+
+    def test_inject_default_writes_to_target_interior(self, ds_with_holons):
+        ds_with_holons.traverse(
+            "urn:holon:source",
+            "urn:holon:target",
+            validate=False,
+        )
+        g = ds_with_holons.backend.get_graph("urn:holon:target/interior")
+        assert len(g) > 0
+
+    def test_traverse_without_agent_skips_provenance(self, ds_with_holons):
+        ds_with_holons.traverse(
+            "urn:holon:source",
+            "urn:holon:target",
+            validate=False,
+            # no agent_iri
+        )
+        ctx = ds_with_holons.backend.get_graph("urn:holon:target/context")
+        assert len(ctx) == 0
