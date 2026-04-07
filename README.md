@@ -1,4 +1,4 @@
-![holonic](./static/holonic_banner.PNG)
+![holonic](./static/holonic_banner.png)
 
 A lightweight Python client for building holonic knowledge graphs (based on Cagel's four-graph holonic RDF model) backed by rdflib, Apache Jena Fuseki, or any SPARQL-compliant quad store.
 
