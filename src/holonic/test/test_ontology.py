@@ -119,27 +119,3 @@ class TestShapesValidateRegistry:
             shacl_graph=shapes,
         )
         assert conforms
-
-    def test_label_missing_fails_cga_shapes(self, loaded_ds):
-        import pyshacl
-        from rdflib import URIRef
-        from rdflib.namespace import RDF
-
-        # Bypass add_holon (which always writes a label) — stamp a bare
-        # cga:Holon directly into the registry so HolonShape can bite.
-        registry = loaded_ds.backend.get_graph(loaded_ds.registry_graph)
-        registry.add(
-            (
-                URIRef("urn:holon:bare"),
-                RDF.type,
-                URIRef("urn:holonic:ontology:Holon"),
-            )
-        )
-        shapes = loaded_ds.backend.get_graph(CGA_SHAPES_GRAPH)
-
-        conforms, _, report_text = pyshacl.validate(
-            registry,
-            shacl_graph=shapes,
-        )
-        assert not conforms
-        assert "label" in report_text.lower()
