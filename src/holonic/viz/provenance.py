@@ -395,7 +395,7 @@ class ProvenanceViz:
             if t.agent_iri:
                 print(f"    Agent:     {t.agent_iri.rsplit(':', 1)[-1]}")
             if t.timestamp:
-                print(f"    Timestamp: {t.timestamp[:19]}")
+                print(f"    Timestamp: {str(t.timestamp)[:19]}")
 
             # Target validation
             v = a.validation_for(t.target_iri)
