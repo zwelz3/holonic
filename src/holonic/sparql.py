@@ -136,7 +136,7 @@ ALL_PORTALS = """
 PREFIX cga:  <urn:holonic:ontology:>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 
-SELECT ?portal ?source ?target ?label
+SELECT DISTINCT ?portal ?source ?target ?label
 WHERE {
     graph ?g {
         ?portal a cga:TransformPortal ;

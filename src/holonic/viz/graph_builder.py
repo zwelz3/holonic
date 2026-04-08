@@ -86,7 +86,7 @@ def projected_to_yfiles(
     nodes: list[dict] = []
     edges: list[dict] = []
 
-    for iri, node in lpg.nodes.items():
+    for id_, node in lpg.nodes.items():
         # Detect SHACL shapes for special formatting
         is_shape = any("NodeShape" in t for t in node.types)
         fn = format_shacl_shape if is_shape else label_fn
@@ -94,8 +94,9 @@ def projected_to_yfiles(
         node_layer = _infer_layer(node, layer)
 
         n = {
-            "id": iri,
+            "id": id_,
             "properties": {
+                "iri": node.iri,
                 "label": fn(node),
                 "layer": node_layer,
                 "type": _primary_type(node),

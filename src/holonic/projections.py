@@ -169,7 +169,7 @@ def build_construct(
 
 @dataclass
 class ProjectedNode:
-    """A node in a projected graph with collapsed attributes."""
+    """A node in a projected graph with collapsed attributes.    """
 
     iri: str
     types: list[str] = field(default_factory=list)
@@ -331,7 +331,7 @@ def project_to_lpg(
 
         # Ensure source node exists
         if s_str not in projected.nodes and not isinstance(s, BNode):
-            projected.nodes[s_str] = ProjectedNode(iri=s_str)
+            projected.nodes[s_str] = ProjectedNode(iri=s, attributes={"iri": s})
 
         p_str = str(p)
 

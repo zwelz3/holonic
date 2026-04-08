@@ -42,6 +42,7 @@ def _filter_display_attrs(
         "rdf-syntax-ns#type",
         "label",  # already shown as node name
         "22-rdf-syntax",
+        "iri",
     }
     result = {}
     for k, v in attrs.items():
