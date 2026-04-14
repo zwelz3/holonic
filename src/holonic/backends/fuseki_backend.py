@@ -49,6 +49,8 @@ class FusekiBackend:
         self,
         base_url: str,
         dataset: str,
+        *,
+        extra_headers: dict[str, str] | None = None,
         **client_kwargs: Any,
     ):
         # Lazy import — don't require aiohttp unless this backend is used
@@ -57,6 +59,9 @@ class FusekiBackend:
         self.base_url = base_url
         self.dataset = dataset
         self._client_kwargs = client_kwargs
+        if extra_headers:
+            # Forward to FusekiClient, which merges them into every request.
+            self._client_kwargs["extra_headers"] = dict(extra_headers)
         self._client_cls = FusekiClient
 
     def _run(self, coro):

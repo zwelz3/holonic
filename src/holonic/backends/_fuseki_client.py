@@ -52,6 +52,7 @@ class FusekiClient:
         max_retries: int = 3,
         retry_backoff: float = 0.5,
         default_graph_content_type: str = "text/turtle",
+        extra_headers: dict[str, str] | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.dataset = dataset  # default dataset; may be None
@@ -60,6 +61,11 @@ class FusekiClient:
         self.max_retries = max_retries
         self.retry_backoff = retry_backoff
         self.default_ct = default_graph_content_type
+        # Extra headers merged into every outbound request. Per-call
+        # headers (e.g. Content-Type, Accept) take precedence over
+        # these — useful for bearer tokens, mTLS-handshake hints,
+        # tenant identifiers passed through by the console.
+        self.extra_headers: dict[str, str] = dict(extra_headers or {})
 
     # ------------------------------------------------------------------
     # Admin API endpoint
@@ -122,6 +128,13 @@ class FusekiClient:
             raise FusekiError(
                 "Client session is not open; use 'async with FusekiClient(...)' or call .open()"
             )
+
+        # Merge extra_headers under per-call headers (per-call wins)
+        if self.extra_headers:
+            merged = dict(self.extra_headers)
+            if headers:
+                merged.update(headers)
+            headers = merged
 
         expected = set(expected_status)
         attempt = 0

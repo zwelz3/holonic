@@ -287,3 +287,89 @@ WHERE {
     }
 }
 """
+
+# ──────────────────────────────────────────────────────────────
+# Holon listing for browser/list views (0.3.1)
+#
+# Lighter than LIST_HOLONS — returns the optional "registry" facets
+# (member_of, classification) in one query so callers don't N+1
+# the layer-graph queries when they only need a summary.
+# ──────────────────────────────────────────────────────────────
+
+COLLECT_HOLONS = """
+PREFIX cga:  <urn:holonic:ontology:>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?holon ?label ?member_of ?classification ?kind
+WHERE {
+    GRAPH ?g {
+        ?holon a cga:Holon .
+        OPTIONAL { ?holon rdfs:label        ?label }
+        OPTIONAL { ?holon cga:memberOf      ?member_of }
+        OPTIONAL { ?holon cga:classification ?classification }
+        OPTIONAL {
+            ?holon a ?kind .
+            FILTER(?kind != cga:Holon)
+        }
+    }
+}
+ORDER BY ?label
+"""
+
+# ──────────────────────────────────────────────────────────────
+# Interior class instance counts (0.3.1)
+#
+# Bind ?g via VALUES to scope the query to a holon's interior
+# graph IRIs. Using VALUES rather than concatenating keeps the
+# template parsable by static SPARQL validators.
+# ──────────────────────────────────────────────────────────────
+
+COUNT_INTERIOR_CLASSES_TEMPLATE = """
+SELECT ?class (COUNT(DISTINCT ?subject) AS ?cnt)
+WHERE {{
+    VALUES ?g {{ {graph_values} }}
+    GRAPH ?g {{
+        ?subject a ?class .
+    }}
+}}
+GROUP BY ?class
+ORDER BY DESC(?cnt)
+"""
+
+COUNT_INTERIOR_TRIPLES_TEMPLATE = """
+SELECT (COUNT(*) AS ?cnt)
+WHERE {{
+    VALUES ?g {{ {graph_values} }}
+    GRAPH ?g {{ ?s ?p ?o }}
+}}
+"""
+
+# ──────────────────────────────────────────────────────────────
+# Portal traversal history scoped to one portal (0.3.1)
+#
+# The current RECORD_TRAVERSAL template does not write a structured
+# triple linking the activity back to the portal IRI; the portal IRI
+# only appears inside the rdfs:label string. Until that changes,
+# scope by (source, target) pair — correct in the common case where
+# at most one portal exists per ordered pair.
+# ──────────────────────────────────────────────────────────────
+
+PORTAL_TRAVERSAL_HISTORY_TEMPLATE = """
+PREFIX cga:  <urn:holonic:ontology:>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?activity ?label ?agent ?timestamp
+WHERE {{
+    GRAPH ?g {{
+        ?activity a prov:Activity ;
+            prov:used      <{source_iri}> ;
+            prov:generated <{target_iri}> .
+        OPTIONAL {{ ?activity rdfs:label             ?label }}
+        OPTIONAL {{ ?activity prov:wasAssociatedWith ?agent }}
+        OPTIONAL {{ ?activity prov:startedAtTime     ?timestamp }}
+    }}
+}}
+ORDER BY DESC(?timestamp)
+LIMIT {limit}
+"""

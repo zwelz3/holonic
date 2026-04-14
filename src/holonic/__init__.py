@@ -4,10 +4,20 @@ A lightweight Python client for building holonic knowledge graphs
 backed by rdflib, Apache Jena Fuseki, or any SPARQL-compliant store.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 from holonic.backends import GraphBackend, RdflibBackend
 from holonic.client import HolonicDataset
+from holonic.console_model import (
+    ClassInstanceCount,
+    HolonDetail,
+    HolonSummary,
+    NeighborhoodEdge,
+    NeighborhoodGraph,
+    NeighborhoodNode,
+    PortalDetail,
+    PortalSummary,
+)
 from holonic.model import (
     AuditTrail,
     HolonInfo,
@@ -53,6 +63,15 @@ __all__ = [
     "MembraneHealth",
     "MembraneResult",
     "PortalInfo",
+    # Console model (0.3.1)
+    "ClassInstanceCount",
+    "HolonDetail",
+    "HolonSummary",
+    "NeighborhoodEdge",
+    "NeighborhoodGraph",
+    "NeighborhoodNode",
+    "PortalDetail",
+    "PortalSummary",
     # Backends
     "GraphBackend",
     "RdflibBackend",
