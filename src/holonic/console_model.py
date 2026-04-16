@@ -49,14 +49,14 @@ class HolonSummary:
     iri: str
     label: str | None = None
     kind: str | None = None
-    """The most-specific rdf:type other than cga:Holon, or 'Holon' if none."""
     classification: str | None = None
-    """Optional cga:classification value (governance label)."""
     member_of: str | None = None
-    """Parent holon IRI, if any."""
     interior_triple_count: int | None = None
-    """Sum of triples across all interior graphs. None if not computed."""
     health: str | None = None
+    """The most-specific rdf:type other than cga:Holon, or 'Holon' if none."""
+    """Optional cga:classification value (governance label)."""
+    """Parent holon IRI, if any."""
+    """Sum of triples across all interior graphs. None if not computed."""
     """Latest membrane health (intact|weakened|compromised), or None."""
 
 
@@ -92,6 +92,8 @@ class ClassInstanceCount:
 
 @dataclass
 class NeighborhoodNode:
+    """Stores metadata about a node in a neighborhood subgraph."""
+
     key: str
     label: str | None = None
     kind: str | None = None
@@ -103,6 +105,8 @@ class NeighborhoodNode:
 
 @dataclass
 class NeighborhoodEdge:
+    """Stores metadata about an edge in a neighborhood subgraph."""
+
     key: str
     source: str
     target: str
@@ -188,8 +192,8 @@ class PortalSummary:
     target_iri: str
     label: str | None = None
     last_traversal: str | None = None
-    """ISO-8601 timestamp of the most-recent recorded traversal."""
     health: str | None = None
+    """ISO-8601 timestamp of the most-recent recorded traversal."""
     """Latest target-membrane health (intact|weakened|compromised) or None."""
 
 

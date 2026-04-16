@@ -22,6 +22,16 @@ from rdflib.namespace import RDF, RDFS, XSD
 from holonic import sparql as Q
 from holonic.backends.protocol import GraphBackend
 from holonic.backends.rdflib_backend import RdflibBackend
+from holonic.console_model import (
+    ClassInstanceCount,
+    HolonDetail,
+    HolonSummary,
+    NeighborhoodEdge,
+    NeighborhoodGraph,
+    NeighborhoodNode,
+    PortalDetail,
+    PortalSummary,
+)
 from holonic.model import (
     AuditTrail,
     HolonInfo,
@@ -1062,14 +1072,12 @@ class HolonicDataset:
     # richer HolonInfo type and remain unchanged.
     # ══════════════════════════════════════════════════════════
 
-    def list_holons_summary(self) -> "list[HolonSummary]":
+    def list_holons_summary(self) -> list[HolonSummary]:
         """Return lightweight holon summaries for browser/list views.
 
         Single SPARQL query — no per-holon layer fan-out. Use
         ``get_holon_detail()`` for the full picture of one holon.
         """
-        from holonic.console_model import HolonSummary
-
         rows = self.backend.query(Q.COLLECT_HOLONS)
         # COLLECT_HOLONS may emit multiple rows per holon (one per
         # rdf:type that isn't cga:Holon). Collapse server-side here.
@@ -1093,13 +1101,11 @@ class HolonicDataset:
                     existing.kind = row["kind"]
         return list(merged.values())
 
-    def get_holon_detail(self, holon_iri: str) -> "HolonDetail | None":
+    def get_holon_detail(self, holon_iri: str) -> HolonDetail | None:
         """Return the full holon descriptor including layer graph IRIs.
 
         Returns None if the holon is not registered.
         """
-        from holonic.console_model import HolonDetail
-
         # Reuse list_holons_summary for the registry triples
         summaries = self.list_holons_summary()
         match = next((s for s in summaries if s.iri == holon_iri), None)
@@ -1137,14 +1143,12 @@ class HolonicDataset:
 
         return detail
 
-    def holon_interior_classes(self, holon_iri: str) -> "list[ClassInstanceCount]":
+    def holon_interior_classes(self, holon_iri: str) -> list[ClassInstanceCount]:
         """Return (rdf:type, instance count) pairs across a holon's interior.
 
         Empty list if the holon has no interior graphs or no typed
         instances. Counts are DISTINCT subject counts per class.
         """
-        from holonic.console_model import ClassInstanceCount
-
         interior_rows = self.backend.query(
             Q.GET_HOLON_INTERIORS.replace("?holon", f"<{holon_iri}>")
         )
@@ -1168,7 +1172,7 @@ class HolonicDataset:
         self,
         holon_iri: str,
         depth: int = 1,
-    ) -> "NeighborhoodGraph":
+    ) -> NeighborhoodGraph:
         """Return a portal-bounded subgraph around a holon, depth-limited.
 
         BFS over portals from the source holon; each hop adds the
@@ -1181,12 +1185,6 @@ class HolonicDataset:
         deterministic (``edge-NNNN``) so re-fetches with the same
         backing data produce stable IDs for diffing.
         """
-        from holonic.console_model import (
-            NeighborhoodEdge,
-            NeighborhoodGraph,
-            NeighborhoodNode,
-        )
-
         if depth < 0:
             raise ValueError("depth must be >= 0")
 
@@ -1263,10 +1261,8 @@ class HolonicDataset:
     # Portal browsing (0.3.1)
     # ══════════════════════════════════════════════════════════
 
-    def list_portals(self) -> "list[PortalSummary]":
+    def list_portals(self) -> list[PortalSummary]:
         """Return a flat list of all portals across the dataset."""
-        from holonic.console_model import PortalSummary
-
         rows = self.backend.query(Q.ALL_PORTALS)
         return [
             PortalSummary(
@@ -1278,13 +1274,11 @@ class HolonicDataset:
             for r in rows
         ]
 
-    def get_portal(self, portal_iri: str) -> "PortalDetail | None":
+    def get_portal(self, portal_iri: str) -> PortalDetail | None:
         """Return the full portal descriptor including the CONSTRUCT body.
 
         Returns None if no portal with that IRI is registered.
         """
-        from holonic.console_model import PortalDetail
-
         # Single query to pull all portal triples
         rows = self.backend.query(f"""
             PREFIX cga:  <urn:holonic:ontology:>

@@ -2912,8 +2912,8 @@ packages:
   timestamp: 1756364871835
 - pypi: ./
   name: holonic
-  version: 0.3.0
-  sha256: d4c28c52a9f198daead1e4a1c3de2eae038af8ca856f027cd50f6593dcac94bc
+  version: 0.3.1
+  sha256: d6b14ad718aafbf5e19f8559187944a3a2f2f1f13d5c182c03c30ce2f179d022
   requires_dist:
   - pydantic>=2
   - pyshacl>=0.25

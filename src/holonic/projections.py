@@ -169,7 +169,7 @@ def build_construct(
 
 @dataclass
 class ProjectedNode:
-    """A node in a projected graph with collapsed attributes.    """
+    """A node in a projected graph with collapsed attributes."""
 
     iri: str
     types: list[str] = field(default_factory=list)
