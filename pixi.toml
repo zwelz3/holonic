@@ -70,24 +70,8 @@ inputs = ["notebooks/*.ipynb"]
 description = """Fail if any notebook has cell outputs. Uses --stdout to a
     throwaway comparison instead of modifying the files. Notebook outputs
     should never be committed; they bloat diffs and leak data."""
-cmd = """python -c "
-import sys, nbformat, pathlib
-leaks = []
-for p in pathlib.Path('notebooks').glob('*.ipynb'):
-    nb = nbformat.read(p, as_version=4)
-    for cell in nb.cells:
-        if cell.get('cell_type') == 'code' and (cell.get('outputs') or cell.get('execution_count')):
-            leaks.append(str(p))
-            break
-if leaks:
-    print('Notebooks with committed outputs or execution counts:')
-    for p in leaks: print(f'  {p}')
-    print('Run: pixi run clean-notebooks')
-    sys.exit(1)
-print('Notebooks clean.')
-"
-"""
-inputs = ["notebooks/*.ipynb"]
+cmd = "python scripts/check_notebooks.py"
+inputs = ["notebooks/*.ipynb", "scripts/check_notebooks.py"]
 
 [feature.tasks-lint.tasks.fix-pyproject]
 cmd = "pyproject-fmt pyproject.toml"
@@ -134,9 +118,7 @@ outputs = ["docs/SPEC.ttl"]
 
 [feature.tasks-spec.tasks.spec-validate]
 description = "Validate docs/SPEC.ttl against specl shapes with explanations"
-cmd = """specl-validate validate docs/SPEC.ttl
-    $(python -c 'import specl, pathlib; print(pathlib.Path(specl.__file__).parent / \"shapes.ttl\")')
-    --explain"""
+cmd = "specl-validate validate docs/SPEC.ttl $(python -c 'import specl, pathlib; print(pathlib.Path(specl.__file__).parent / \"shapes.ttl\")') --explain"
 depends-on = ["spec-translate"]
 
 [feature.tasks-spec.tasks.spec-score]
@@ -144,15 +126,12 @@ description = """Compute the spec maturity score (0-100%). Fraction of
     requirements without SHACL violations or warnings. Embed the SVG
     badge in the README by running `spec-badge` and referencing the
     generated file. See docs/SPEC.md for the embed snippet."""
-cmd = """specl-validate score docs/SPEC.ttl
-    $(python -c 'import specl, pathlib; print(pathlib.Path(specl.__file__).parent / \"shapes.ttl\")')"""
+cmd = "specl-validate score docs/SPEC.ttl $(python -c 'import specl, pathlib; print(pathlib.Path(specl.__file__).parent / \"shapes.ttl\")')"
 depends-on = ["spec-translate"]
 
 [feature.tasks-spec.tasks.spec-badge]
 description = "Generate a spec-maturity SVG badge at build/spec-badge.svg"
-cmd = """specl-validate badge docs/SPEC.ttl
-    $(python -c 'import specl, pathlib; print(pathlib.Path(specl.__file__).parent / \"shapes.ttl\")')
-    --out build/spec-badge.svg"""
+cmd = "specl-validate badge docs/SPEC.ttl $(python -c 'import specl, pathlib; print(pathlib.Path(specl.__file__).parent / \"shapes.ttl\")') --out build/spec-badge.svg"
 depends-on = ["spec-translate"]
 
 [feature.tasks-docs.tasks.autogen]
