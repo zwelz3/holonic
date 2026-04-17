@@ -1,8 +1,8 @@
 """Graph-native holonic dataset client.
 
-HolonicDataset is a thin Python wrapper around a GraphBackend.
-All state lives in the backend as named graphs.  All discovery,
-traversal, and validation use SPARQL against the backend.
+HolonicDataset is a thin Python wrapper around a HolonicStore.
+All state lives in the store as named graphs.  All discovery,
+traversal, and validation use SPARQL against the store.
 Python methods are convenience, not architecture.
 """
 
@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+import warnings
 from collections import deque
 from datetime import UTC, datetime
 from pathlib import Path
@@ -20,10 +21,11 @@ from rdflib import Graph, Namespace
 from rdflib.namespace import RDF, RDFS, XSD
 
 from holonic import sparql as Q
-from holonic.backends.protocol import GraphBackend
 from holonic.backends.rdflib_backend import RdflibBackend
+from holonic.backends.store import HolonicStore
 from holonic.console_model import (
     ClassInstanceCount,
+    GraphMetadata,
     HolonDetail,
     HolonSummary,
     NeighborhoodEdge,
@@ -31,6 +33,9 @@ from holonic.console_model import (
     NeighborhoodNode,
     PortalDetail,
     PortalSummary,
+    ProjectionPipelineSpec,
+    ProjectionPipelineStep,
+    ProjectionPipelineSummary,
 )
 from holonic.model import (
     AuditTrail,
@@ -58,20 +63,64 @@ _KNOWN_PREFIX_STR = f"""@prefix rdf: <{RDF}> .
 """
 
 
+# ══════════════════════════════════════════════════════════════
+# Module-level helpers for 0.3.5
+# ══════════════════════════════════════════════════════════════
+
+
+def _escape_ttl(s: str) -> str:
+    """Escape a string for use inside a Turtle "..." literal."""
+    return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+
+def _escape_construct(s: str) -> str:
+    """Escape a CONSTRUCT for use inside Turtle triple-quoted literal.
+
+    Triple-quoted literals allow most content, but backslash-escape
+    triple quotes if they appear in the query body.
+    """
+    return s.replace('"""', '\\"\\"\\"')
+
+
+def _run_construct_on_graph(graph: Graph, construct_query: str) -> Graph:
+    """Run a SPARQL CONSTRUCT against an in-memory Graph.
+
+    Used by run_projection when a step carries an inline CONSTRUCT.
+    Isolated from the dataset backend so intermediate results stay
+    ephemeral and don't pollute named-graph state.
+    """
+    return graph.query(construct_query).graph
+
+
 class HolonicDataset:
     """A holonic system backed by an RDF quad store.
 
     Parameters
     ----------
     backend :
-        A GraphBackend implementation.  Defaults to RdflibBackend
-        (in-memory rdflib.Dataset).
-    registry_graph :
-        IRI of the named graph holding holon/portal declarations.
+        A HolonicStore implementation. Defaults to RdflibBackend
+        (in-memory rdflib.Dataset). Any duck-typed object satisfying
+        the protocol works; ``AbstractHolonicStore`` is the
+        recommended base class for custom implementations.
+    registry_iri :
+        IRI of the named graph holding holon/portal declarations and
+        graph-level metadata. Default: ``urn:holarchy:registry``.
+        ``registry_graph`` is accepted as a deprecated alias.
     load_ontology :
         If True (default), load the CGA ontology and shapes into
         the dataset on construction.
+    metadata_updates :
+        One of ``"eager"`` (default) or ``"off"``. See § D-0.3.3-2.
     """
+
+    # Map the _register_layer predicate shortcut to the cga:LayerRole
+    # individual for graph typing. Added 0.3.4.
+    _PREDICATE_ROLE_MAP: dict[str, str] = {
+        "hasInterior": "InteriorRole",
+        "hasBoundary": "BoundaryRole",
+        "hasProjection": "ProjectionRole",
+        "hasContext": "ContextRole",
+    }
 
     # ══════════════════════════════════════════════════════════
     # Ontology loading
@@ -93,16 +142,84 @@ class HolonicDataset:
 
     def __init__(
         self,
-        backend: GraphBackend | None = None,
+        backend: HolonicStore | None = None,
         *,
-        registry_graph: str = REGISTRY_GRAPH,
+        registry_iri: str = REGISTRY_GRAPH,
+        registry_graph: str | None = None,
         load_ontology: bool = True,
+        metadata_updates: str = "eager",
     ):
-        self.backend: GraphBackend = backend or RdflibBackend()
-        self.registry_graph = registry_graph
+        """Construct a HolonicDataset.
+
+        Parameters
+        ----------
+        backend :
+            A HolonicStore instance. Defaults to RdflibBackend().
+        registry_iri :
+            IRI of the registry graph (holon/portal declarations
+            and graph-level metadata). Default: urn:holarchy:registry.
+            In 0.3.x this parameter was ``registry_graph``; the old
+            name is still accepted with a DeprecationWarning and will
+            be removed in 0.5.0.
+        registry_graph :
+            Deprecated alias for ``registry_iri``. Do not use both.
+        load_ontology :
+            Whether to auto-load the CGA ontology into the store.
+        metadata_updates :
+            One of ``"eager"`` or ``"off"``. When ``"eager"`` (default),
+            graph-level metadata is refreshed on every library-mediated
+            write to a layer graph. When ``"off"``, callers refresh
+            explicitly via ``refresh_metadata()``. See
+            docs/DECISIONS.md § D-0.3.3-2.
+        """
+        if metadata_updates not in ("eager", "off"):
+            raise ValueError(f"metadata_updates must be 'eager' or 'off', got {metadata_updates!r}")
+
+        # Handle the 0.3.x -> 0.4.0 registry_graph -> registry_iri rename.
+        if registry_graph is not None:
+            import os
+
+            if registry_iri != REGISTRY_GRAPH:
+                raise ValueError(
+                    "Cannot pass both registry_iri and registry_graph; "
+                    "the latter is a deprecated alias for the former."
+                )
+            if not os.environ.get("HOLONIC_SILENCE_DEPRECATION"):
+                warnings.warn(
+                    "registry_graph is deprecated; use registry_iri instead. "
+                    "The registry_graph parameter will be removed in 0.5.0.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+            registry_iri = registry_graph
+
+        self.backend: HolonicStore = backend or RdflibBackend()
+        self.registry_iri = registry_iri
+        self._metadata_updates = metadata_updates
 
         if load_ontology:
             self._load_ontology()
+
+        # Metadata refresher is always constructed; `metadata_updates`
+        # controls whether it runs automatically, not whether it exists.
+        from holonic._metadata import MetadataRefresher
+
+        self._metadata = MetadataRefresher(backend=self.backend, registry_iri=self.registry_iri)
+
+        # Scope resolver (0.3.4). Delegated to by HolonicDataset.resolve().
+        from holonic.scope import ScopeResolver
+
+        self._scope = ScopeResolver(backend=self.backend, registry_iri=self.registry_iri)
+
+    @property
+    def registry_graph(self) -> str:
+        """Deprecated alias for ``registry_iri``. Read-only.
+
+        Kept for 0.3.x compatibility; access does NOT emit a warning
+        (too noisy for existing code). The constructor parameter by
+        the same name DOES warn. Scheduled for removal in 0.5.0.
+        """
+        return self.registry_iri
 
     # ══════════════════════════════════════════════════════════
     # Holon management
@@ -142,16 +259,44 @@ class HolonicDataset:
             ttl += f"    <{iri}> cga:memberOf <{member_of}> .\n"
 
         ttl = _KNOWN_PREFIX_STR + ttl
-        self.backend.parse_into(self.registry_graph, ttl, "turtle")
+        self.backend.parse_into(self.registry_iri, ttl, "turtle")
         return iri
 
     # TODO move predicate to arg[1] position
     def _register_layer(self, holon_iri: str, graph_iri: str, predicate: str) -> None:
+        """Register a layer graph with the holon and type it in the registry.
+
+        Writes three triples into the registry graph:
+        - ``<holon_iri> cga:<predicate> <graph_iri>`` (the layer binding)
+        - ``<graph_iri> a cga:HolonicGraph`` (the graph-type declaration, 0.3.4)
+        - ``<graph_iri> cga:graphRole <role>`` (the role individual, 0.3.4)
+
+        ``predicate`` is the bare suffix like ``"hasInterior"``; the
+        corresponding role is derived (``hasInterior -> InteriorRole``,
+        etc.) per the 0.3.4 graph-type vocabulary. See D-0.3.4-1 and
+        D-0.3.4-2 in docs/DECISIONS.md.
+        """
+        role = self._PREDICATE_ROLE_MAP.get(predicate)
         ttl = f"""
             @prefix cga: <urn:holonic:ontology:> .
             <{holon_iri}> cga:{predicate} <{graph_iri}> .
         """
-        self.backend.parse_into(self.registry_graph, ttl, "turtle")
+        if role:
+            ttl += f"""
+            <{graph_iri}> a cga:HolonicGraph ;
+                cga:graphRole cga:{role} .
+            """
+        self.backend.parse_into(self.registry_iri, ttl, "turtle")
+
+    def _maybe_refresh(self, graph_iri: str) -> None:
+        """Trigger automatic metadata refresh if eager mode is active.
+
+        Called after every library-mediated write to a layer graph.
+        No-op when ``metadata_updates="off"``. See D-0.3.3-5 in
+        docs/DECISIONS.md for the trigger list.
+        """
+        if self._metadata_updates == "eager":
+            self._metadata.refresh_graph(graph_iri)
 
     def add_interior(
         self,
@@ -165,6 +310,7 @@ class HolonicDataset:
         ttl = _KNOWN_PREFIX_STR + ttl
         self.backend.parse_into(graph_iri, ttl, "turtle")
         self._register_layer(holon_iri, graph_iri, "hasInterior")
+        self._maybe_refresh(graph_iri)
         return graph_iri
 
     def add_boundary(
@@ -179,6 +325,7 @@ class HolonicDataset:
         ttl = _KNOWN_PREFIX_STR + ttl
         self.backend.parse_into(graph_iri, ttl, "turtle")
         self._register_layer(holon_iri, graph_iri, "hasBoundary")
+        self._maybe_refresh(graph_iri)
         return graph_iri
 
     def add_projection(
@@ -193,6 +340,7 @@ class HolonicDataset:
         ttl = _KNOWN_PREFIX_STR + ttl
         self.backend.parse_into(graph_iri, ttl, "turtle")
         self._register_layer(holon_iri, graph_iri, "hasProjection")
+        self._maybe_refresh(graph_iri)
         return graph_iri
 
     def add_context(
@@ -207,6 +355,7 @@ class HolonicDataset:
         ttl = _KNOWN_PREFIX_STR + ttl
         self.backend.parse_into(graph_iri, ttl, "turtle")
         self._register_layer(holon_iri, graph_iri, "hasContext")
+        self._maybe_refresh(graph_iri)
         return graph_iri
 
     # ══════════════════════════════════════════════════════════
@@ -287,7 +436,7 @@ class HolonicDataset:
         """
         self.backend.parse_into(graph_iri, ttl, "turtle")
         # Also ensure portal is visible from registry
-        self.backend.parse_into(self.registry_graph, ttl, "turtle")
+        self.backend.parse_into(self.registry_iri, ttl, "turtle")
         return portal_iri
 
     # ══════════════════════════════════════════════════════════
@@ -417,6 +566,7 @@ class HolonicDataset:
 
         if inject_into and projected:
             self.backend.post_graph(inject_into, projected)
+            self._maybe_refresh(inject_into)
 
         return projected
 
@@ -860,6 +1010,7 @@ class HolonicDataset:
                 )
             self.backend.put_graph(store_as, result_graph)
             self._register_layer(holon_iri, store_as, "hasProjection")
+            self._maybe_refresh(store_as)
 
         return lpg
 
@@ -944,6 +1095,7 @@ class HolonicDataset:
         if store_as:
             self.backend.put_graph(store_as, result)
             self._register_layer(holon_iri, store_as, "hasProjection")
+            self._maybe_refresh(store_as)
 
         return result
 
@@ -1010,7 +1162,7 @@ class HolonicDataset:
             PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
             SELECT ?holon ?label ?parent
             WHERE {{
-                GRAPH <{self.registry_graph}> {{
+                GRAPH <{self.registry_iri}> {{
                     ?holon a cga:Holon .
                     OPTIONAL {{ ?holon rdfs:label ?label }}
                     OPTIONAL {{ ?holon cga:memberOf ?parent }}
@@ -1140,6 +1292,25 @@ class HolonicDataset:
                     detail.interior_triple_count = int(count_rows[0].get("cnt", 0))
                 except (TypeError, ValueError):
                     detail.interior_triple_count = None
+
+        # Per-layer metadata from the registry. Added 0.3.3. Any layer
+        # graph with no materialized metadata is simply absent from the
+        # dict — callers should not assume full coverage.
+        all_layer_graphs = (
+            detail.interior_graphs
+            + detail.boundary_graphs
+            + detail.projection_graphs
+            + detail.context_graphs
+        )
+        last_modified_seen: list[str] = []
+        for g in all_layer_graphs:
+            md = self._metadata.read(g)
+            if md is not None:
+                detail.layer_metadata[g] = md
+                if md.last_modified:
+                    last_modified_seen.append(md.last_modified)
+        if last_modified_seen:
+            detail.holon_last_modified = max(last_modified_seen)
 
         return detail
 
@@ -1344,3 +1515,418 @@ class HolonicDataset:
             )
             for r in rows
         ]
+
+    # ══════════════════════════════════════════════════════════
+    # Graph-level metadata (0.3.3)
+    # ══════════════════════════════════════════════════════════
+
+    def refresh_metadata(self, holon_iri: str) -> list[GraphMetadata]:
+        """Recompute and persist metadata for all of a holon's layer graphs.
+
+        Writes per-graph metadata (triple count, last-modified, class
+        inventory) and the per-holon rollup to the registry graph.
+        Use after out-of-band writes via ``backend.put_graph()`` or
+        ``backend.update()``.
+
+        Returns the refreshed per-graph metadata in the order
+        returned by the registry's ``cga:hasLayer`` enumeration.
+        """
+        return self._metadata.refresh_holon(holon_iri)
+
+    def refresh_all_metadata(self) -> int:
+        """Refresh metadata for every holon in the registry.
+
+        Returns the number of holons refreshed. Use after bulk data
+        loads that bypass the library's mutation API.
+        """
+        n = 0
+        for h in self.list_holons_summary():
+            self._metadata.refresh_holon(h.iri)
+            n += 1
+        return n
+
+    def get_graph_metadata(self, graph_iri: str) -> GraphMetadata | None:
+        """Return currently-materialized metadata for a graph.
+
+        Returns ``None`` if no metadata has been written. Use
+        ``refresh_metadata()`` to materialize it.
+        """
+        return self._metadata.read(graph_iri)
+
+    # ══════════════════════════════════════════════════════════
+    # Scoped discovery (0.3.4)
+    # ══════════════════════════════════════════════════════════
+
+    def resolve(
+        self,
+        predicate,
+        from_holon: str,
+        *,
+        max_depth: int = 3,
+        order: str = "network",
+        limit: int = 50,
+    ):
+        """Walk the holarchy in BFS order and return predicate matches.
+
+        Parameters
+        ----------
+        predicate :
+            A ``ResolvePredicate`` instance (``HasClassInInterior``,
+            ``CustomSPARQL``, or any object with the predicate
+            protocol from ``holonic.scope``).
+        from_holon :
+            IRI of the starting holon.
+        max_depth :
+            BFS depth limit. Clamped to ``[0, 100]``.
+        order :
+            ``"network"`` (outbound+inbound portals, default),
+            ``"reverse-network"`` (inbound only), or
+            ``"containment"`` (``cga:memberOf`` walk).
+        limit :
+            Maximum number of matches. Clamped to ``[1, 10_000]``.
+
+        Returns:
+        -------
+        list[ResolveMatch]
+            Matches in BFS depth order. See ``holonic.scope`` for
+            the dataclass and predicate types.
+        """
+        return self._scope.resolve(
+            predicate=predicate,
+            from_holon=from_holon,
+            max_depth=max_depth,
+            order=order,
+            limit=limit,
+        )
+
+    def _pipeline_to_ttl(self, spec: ProjectionPipelineSpec) -> str:
+        """Convert a ProjectionPipelineSpec to Turtle for the registry."""
+        lines = [
+            "@prefix cga:  <urn:holonic:ontology:> .",
+            "@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .",
+            "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .",
+            "",
+            f"<{spec.iri}> a cga:ProjectionPipelineSpec ;",
+            f'    rdfs:label "{_escape_ttl(spec.name)}" ;',
+        ]
+        if spec.description:
+            lines[-1] += ""
+            lines.append(f'    rdfs:comment "{_escape_ttl(spec.description)}" ;')
+
+        if not spec.steps:
+            # Empty pipeline — no steps, close the spec
+            lines[-1] = lines[-1].rstrip(" ;") + " ."
+            return "\n".join(lines)
+
+        # Build an rdf:List of blank-node step resources
+        step_iris = [f"<{spec.iri}/step/{i}>" for i in range(len(spec.steps))]
+        lines[-1] += ""  # keep trailing ;
+        lines.append(f"    cga:hasStep ({' '.join(step_iris)}) .")
+        lines.append("")
+
+        # Emit each step resource
+        for iri, step in zip(step_iris, spec.steps):
+            lines.append(f"{iri} a cga:ProjectionPipelineStep ;")
+            lines.append(f'    cga:stepName "{_escape_ttl(step.name)}"')
+            extras = []
+            if step.transform_name:
+                extras.append(f'    cga:transformName "{_escape_ttl(step.transform_name)}"')
+            if step.construct_query:
+                extras.append(
+                    f'    cga:constructQuery """{_escape_construct(step.construct_query)}"""'
+                )
+            if extras:
+                lines[-1] += " ;"
+                for i, extra in enumerate(extras):
+                    suffix = " ;" if i < len(extras) - 1 else " ."
+                    lines.append(extra + suffix)
+            else:
+                lines[-1] += " ."
+            lines.append("")
+        return "\n".join(lines)
+
+    # ══════════════════════════════════════════════════════════
+    # Projection pipelines (0.3.5)
+    # ══════════════════════════════════════════════════════════
+
+    def register_pipeline(self, spec: ProjectionPipelineSpec) -> str:
+        """Register a projection pipeline in the registry.
+
+        Validates that every step's ``transform_name`` (if any) is
+        known to the plugin registry. Raises ``TransformNotFoundError``
+        at registration time rather than later at run time.
+
+        Returns the pipeline's IRI.
+        """
+        from holonic.plugins import resolve_transform
+
+        # Validate named transforms up front
+        for step in spec.steps:
+            if step.transform_name:
+                resolve_transform(step.transform_name)
+
+        # Serialize to Turtle and write to registry
+        ttl = self._pipeline_to_ttl(spec)
+        self.backend.parse_into(self.registry_iri, ttl, "turtle")
+        return spec.iri
+
+    def register_pipeline_ttl(self, ttl: str) -> None:
+        """Escape hatch: register a pipeline from caller-supplied Turtle.
+
+        Parses the Turtle into the registry graph without validation.
+        Caller is responsible for conforming to the
+        ``cga:ProjectionPipelineSpec`` + ``cga:ProjectionPipelineStep``
+        vocabulary and for valid rdf:List ordering.
+        """
+        self.backend.parse_into(self.registry_iri, ttl, "turtle")
+
+    def attach_pipeline(self, holon_iri: str, spec_iri: str) -> None:
+        """Declare that a holon has access to a registered pipeline.
+
+        Writes ``<holon_iri> cga:hasPipeline <spec_iri>`` into the
+        registry graph. Idempotent at the RDF level (duplicate
+        triples in the same graph are coalesced).
+        """
+        self.backend.parse_into(
+            self.registry_iri,
+            f"""
+            @prefix cga: <urn:holonic:ontology:> .
+            <{holon_iri}> cga:hasPipeline <{spec_iri}> .
+            """,
+            "turtle",
+        )
+
+    def list_pipelines(self, holon_iri: str) -> list[ProjectionPipelineSummary]:
+        """Return projection pipelines attached to a holon.
+
+        Each summary carries just iri, name, description, and step
+        count — use ``get_pipeline(iri)`` for full step content.
+        """
+        from holonic.console_model import ProjectionPipelineSummary
+
+        rows = self.backend.query(
+            Q.LIST_PIPELINES_FOR_HOLON_TEMPLATE.format(
+                registry_iri=self.registry_iri,
+                holon_iri=holon_iri,
+            )
+        )
+        return [
+            ProjectionPipelineSummary(
+                iri=str(r["spec"]),
+                name=str(r["name"]),
+                description=str(r["description"]) if r.get("description") else None,
+                step_count=int(r.get("step_count") or 0),
+            )
+            for r in rows
+        ]
+
+    def _step_from_node(self, reg_graph, step_node):
+        """Materialize a ProjectionPipelineStep from its graph node."""
+        from rdflib import URIRef
+
+        from holonic.console_model import ProjectionPipelineStep
+
+        cga_stepName = URIRef("urn:holonic:ontology:stepName")
+        cga_transformName = URIRef("urn:holonic:ontology:transformName")
+        cga_constructQuery = URIRef("urn:holonic:ontology:constructQuery")
+        name = reg_graph.value(step_node, cga_stepName)
+        transform = reg_graph.value(step_node, cga_transformName)
+        construct = reg_graph.value(step_node, cga_constructQuery)
+        return ProjectionPipelineStep(
+            name=str(name) if name else "",
+            transform_name=str(transform) if transform else None,
+            construct_query=str(construct) if construct else None,
+        )
+
+    def _read_pipeline_steps_ordered(self, spec_iri: str) -> list[ProjectionPipelineStep]:
+        """Read pipeline steps preserving rdf:List order."""
+        from rdflib import RDF, URIRef
+
+
+        reg = self.backend.get_graph(self.registry_iri)
+        spec = URIRef(spec_iri)
+        cga_hasStep = URIRef("urn:holonic:ontology:hasStep")
+        head = reg.value(spec, cga_hasStep)
+        if head is None:
+            return []
+        # Walk rdf:first / rdf:rest
+        steps: list[ProjectionPipelineStep] = []
+        current = head
+        while current and current != RDF.nil:
+            step_node = reg.value(current, RDF.first)
+            if step_node is None:
+                break
+            step = self._step_from_node(reg, step_node)
+            steps.append(step)
+            current = reg.value(current, RDF.rest)
+        return steps
+
+    def get_pipeline(self, spec_iri: str) -> ProjectionPipelineSpec | None:
+        """Return the full pipeline spec as a ``ProjectionPipelineSpec``.
+
+        Returns ``None`` if no pipeline with the given IRI is registered.
+        Steps are returned in their declared rdf:List order.
+        """
+        from holonic.console_model import (
+            ProjectionPipelineSpec,
+        )
+
+        detail_rows = self.backend.query(
+            Q.READ_PIPELINE_DETAIL_TEMPLATE.format(
+                registry_iri=self.registry_iri,
+                spec_iri=spec_iri,
+            )
+        )
+        if not detail_rows:
+            return None
+        name = str(detail_rows[0]["name"])
+        description = (
+            str(detail_rows[0]["description"]) if detail_rows[0].get("description") else None
+        )
+        # Walk the rdf:List in registered order. We pull it from the
+        # registry graph directly so ordering is canonical.
+        steps = self._read_pipeline_steps_ordered(spec_iri)
+        return ProjectionPipelineSpec(
+            iri=spec_iri,
+            name=name,
+            description=description,
+            steps=steps,
+        )
+
+    def _record_projection_activity(
+        self,
+        *,
+        holon_iri: str,
+        spec_iri: str,
+        output_graph_iri: str | None,
+        started: datetime,
+        ended: datetime,
+        agent_iri: str | None,
+        transform_versions: list[str],
+        host_meta: dict[str, str],
+    ) -> str:
+        """Write a prov:Activity for a projection run. Returns activity IRI."""
+        activity_iri = f"urn:activity:projection:{uuid4()}"
+        # Find or default the holon's context graph
+        context_rows = self.backend.query(Q.GET_HOLON_CONTEXTS.replace("?holon", f"<{holon_iri}>"))
+        if context_rows:
+            ctx_graph_iri = str(context_rows[0]["graph"])
+        else:
+            ctx_graph_iri = f"{holon_iri}/context"
+            self._register_layer(holon_iri, ctx_graph_iri, "hasContext")
+
+        ttl_lines = [
+            "@prefix cga:  <urn:holonic:ontology:> .",
+            "@prefix prov: <http://www.w3.org/ns/prov#> .",
+            "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .",
+            "@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .",
+            "",
+            f"<{activity_iri}> a prov:Activity ;",
+            f'    rdfs:label "Projection run: {_escape_ttl(spec_iri)}" ;',
+            f"    prov:used <{spec_iri}> ;",
+            f'    prov:startedAtTime "{started.isoformat()}"^^xsd:dateTime ;',
+            f'    prov:endedAtTime "{ended.isoformat()}"^^xsd:dateTime ;',
+        ]
+        if output_graph_iri:
+            ttl_lines.append(f"    prov:generated <{output_graph_iri}> ;")
+        if agent_iri:
+            ttl_lines.append(f"    prov:wasAssociatedWith <{agent_iri}> ;")
+        for v in transform_versions:
+            ttl_lines.append(f'    cga:transformVersion "{_escape_ttl(v)}" ;')
+        ttl_lines.append(f'    cga:runHost "{_escape_ttl(host_meta["host"])}" ;')
+        ttl_lines.append(f'    cga:runPlatform "{_escape_ttl(host_meta["platform"])}" ;')
+        ttl_lines.append(f'    cga:runPythonVersion "{_escape_ttl(host_meta["python_version"])}" ;')
+        ttl_lines.append(
+            f'    cga:runHolonicVersion "{_escape_ttl(host_meta["holonic_version"])}" .'
+        )
+
+        self.backend.parse_into(ctx_graph_iri, "\n".join(ttl_lines), "turtle")
+        return activity_iri
+
+    def run_projection(
+        self,
+        holon_iri: str,
+        spec_iri: str,
+        *,
+        store_as: str | None = None,
+        agent_iri: str | None = None,
+    ) -> Graph:
+        """Execute a registered pipeline against a holon's interiors.
+
+        Merges the holon's interior graphs, runs each step in
+        declared order (transform first, then inline CONSTRUCT if
+        present), and optionally stores the result as a named graph
+        registered as a projection layer.
+
+        Records a ``prov:Activity`` in the holon's context graph
+        with:
+
+        - ``prov:used <spec_iri>``
+        - ``prov:generated <output_graph_iri>`` (if ``store_as``)
+        - ``prov:startedAtTime`` / ``prov:endedAtTime``
+        - ``prov:wasAssociatedWith <agent_iri>`` (if provided)
+        - ``cga:transformVersion`` for each transform used
+        - ``cga:runHost``, ``cga:runPlatform``, ``cga:runPythonVersion``,
+          ``cga:runHolonicVersion``
+
+        Raises ``ValueError`` if the spec is not registered, or
+        ``TransformNotFoundError`` if a step references an unknown
+        transform.
+        """
+        from holonic.plugins import (
+            host_metadata,
+            resolve_transform,
+            transform_version,
+        )
+
+        spec = self.get_pipeline(spec_iri)
+        if spec is None:
+            raise ValueError(f"No pipeline registered with IRI {spec_iri!r}")
+
+        started = datetime.now(UTC)
+
+        # Merge interiors
+        interior_rows = self.backend.query(
+            Q.GET_HOLON_INTERIORS.replace("?holon", f"<{holon_iri}>")
+        )
+        merged = Graph()
+        for row in interior_rows:
+            g = self.backend.get_graph(row["graph"])
+            for triple in g:
+                merged.add(triple)
+
+        # Execute steps
+        current = merged
+        transform_versions: list[str] = []
+        for step in spec.steps:
+            if step.transform_name:
+                fn = resolve_transform(step.transform_name)
+                current = fn(current)
+                ver = transform_version(step.transform_name)
+                if ver:
+                    transform_versions.append(ver)
+            if step.construct_query:
+                # Run the CONSTRUCT against the current intermediate graph
+                current = _run_construct_on_graph(current, step.construct_query)
+
+        ended = datetime.now(UTC)
+
+        # Optionally store result and register as a projection
+        if store_as:
+            self.backend.put_graph(store_as, current)
+            self._register_layer(holon_iri, store_as, "hasProjection")
+            self._maybe_refresh(store_as)
+
+        # Record provenance in the holon's context graph
+        self._record_projection_activity(
+            holon_iri=holon_iri,
+            spec_iri=spec_iri,
+            output_graph_iri=store_as,
+            started=started,
+            ended=ended,
+            agent_iri=agent_iri,
+            transform_versions=transform_versions,
+            host_meta=host_metadata(),
+        )
+
+        return current

@@ -40,6 +40,19 @@ Code quality is enforced using the following tools:
 3. [`ruff`](https://docs.astral.sh/ruff/) - linter and code formatter
 4. [`mypy`](https://mypy-lang.org/) - static type checker
 
+### Specl (optional, for spec work)
+
+`docs/SPEC.md` is validated by [specl](https://github.com/zwelz3/specl), which is pulled from git and kept out of the `dev` environment so day-to-day work doesn't depend on it. If you touch the SPEC, work in the dedicated `spec` environment:
+
+```bash
+pixi run -e spec spec-translate   # docs/SPEC.md -> docs/SPEC.ttl
+pixi run -e spec spec-validate    # SHACL validation with explanations
+pixi run -e spec spec-score       # maturity score (0-100%)
+pixi run -e spec spec-badge       # generate build/spec-badge.svg
+```
+
+First invocation materializes the `spec` environment and resolves the specl git pin; subsequent runs reuse the resolved environment.
+
 ### Style Guide
 
 For style, see [STYLE_GUIDE](STYLE_GUIDE.md).

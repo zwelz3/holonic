@@ -373,3 +373,340 @@ WHERE {{
 ORDER BY DESC(?timestamp)
 LIMIT {limit}
 """
+
+# ══════════════════════════════════════════════════════════════
+# 0.3.3 — GRAPH-LEVEL METADATA TEMPLATES
+#
+# All templates read from and write to the registry graph
+# (urn:holarchy:registry by default; configurable via
+# HolonicDataset(registry_graph_iri=...)). Substitution is done
+# with str.format(registry_iri=..., graph_iri=..., ...).
+# See docs/DECISIONS.md § 0.3.3 for the design rationale.
+# ══════════════════════════════════════════════════════════════
+
+COUNT_GRAPH_TRIPLES_TEMPLATE = """
+SELECT (COUNT(*) AS ?n)
+WHERE {{
+    GRAPH <{graph_iri}> {{ ?s ?p ?o }}
+}}
+"""
+
+COUNT_GRAPH_TYPES_TEMPLATE = """
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT ?class (COUNT(?s) AS ?n)
+WHERE {{
+    GRAPH <{graph_iri}> {{ ?s rdf:type ?class }}
+}}
+GROUP BY ?class
+ORDER BY DESC(?n)
+"""
+
+CLEAR_GRAPH_METADATA_TEMPLATE = """
+PREFIX cga: <urn:holonic:ontology:>
+
+DELETE {{
+    GRAPH <{registry_iri}> {{
+        <{graph_iri}> cga:tripleCount ?count .
+        <{graph_iri}> cga:lastModified ?modified .
+        ?inv a cga:ClassInstanceCount ;
+             cga:inGraph <{graph_iri}> ;
+             cga:class ?cls ;
+             cga:count ?n ;
+             cga:refreshedAt ?r .
+    }}
+}}
+WHERE {{
+    GRAPH <{registry_iri}> {{
+        OPTIONAL {{ <{graph_iri}> cga:tripleCount ?count }}
+        OPTIONAL {{ <{graph_iri}> cga:lastModified ?modified }}
+        OPTIONAL {{
+            ?inv a cga:ClassInstanceCount ;
+                 cga:inGraph <{graph_iri}> ;
+                 cga:class ?cls ;
+                 cga:count ?n .
+            OPTIONAL {{ ?inv cga:refreshedAt ?r }}
+        }}
+    }}
+}}
+"""
+
+CLEAR_HOLON_METADATA_TEMPLATE = """
+PREFIX cga: <urn:holonic:ontology:>
+
+DELETE {{
+    GRAPH <{registry_iri}> {{
+        <{holon_iri}> cga:interiorTripleCount ?c .
+        <{holon_iri}> cga:holonLastModified ?m .
+    }}
+}}
+WHERE {{
+    GRAPH <{registry_iri}> {{
+        OPTIONAL {{ <{holon_iri}> cga:interiorTripleCount ?c }}
+        OPTIONAL {{ <{holon_iri}> cga:holonLastModified ?m }}
+    }}
+}}
+"""
+
+READ_GRAPH_METADATA_TEMPLATE = """
+PREFIX cga: <urn:holonic:ontology:>
+
+SELECT ?triple_count ?last_modified
+WHERE {{
+    GRAPH <{registry_iri}> {{
+        OPTIONAL {{ <{graph_iri}> cga:tripleCount ?triple_count }}
+        OPTIONAL {{ <{graph_iri}> cga:lastModified ?last_modified }}
+    }}
+}}
+"""
+
+READ_GRAPH_CLASS_INVENTORY_TEMPLATE = """
+PREFIX cga: <urn:holonic:ontology:>
+
+SELECT ?class ?n ?refreshed_at
+WHERE {{
+    GRAPH <{registry_iri}> {{
+        ?inv a cga:ClassInstanceCount ;
+             cga:inGraph <{graph_iri}> ;
+             cga:class ?class ;
+             cga:count ?n .
+        OPTIONAL {{ ?inv cga:refreshedAt ?refreshed_at }}
+    }}
+}}
+ORDER BY DESC(?n)
+"""
+
+LIST_HOLON_LAYER_GRAPHS_TEMPLATE = """
+PREFIX cga: <urn:holonic:ontology:>
+
+SELECT DISTINCT ?graph
+WHERE {{
+    GRAPH ?g {{
+        <{holon_iri}> ?pred ?graph .
+        FILTER(?pred IN (cga:hasInterior, cga:hasBoundary,
+                          cga:hasProjection, cga:hasContext,
+                          cga:hasLayer))
+    }}
+}}
+"""
+
+LIST_HOLON_INTERIOR_GRAPHS_TEMPLATE = """
+PREFIX cga: <urn:holonic:ontology:>
+
+SELECT ?graph
+WHERE {{
+    GRAPH ?g {{
+        <{holon_iri}> cga:hasInterior ?graph .
+    }}
+}}
+"""
+
+# ══════════════════════════════════════════════════════════════
+# 0.3.4 — TYPED GRAPHS AND SCOPE RESOLUTION
+#
+# Templates write graph-category typing into the registry and walk
+# the holarchy for scoped discovery. See docs/DECISIONS.md § 0.3.4.
+# ══════════════════════════════════════════════════════════════
+
+TYPE_GRAPH_TEMPLATE = """
+PREFIX cga: <urn:holonic:ontology:>
+
+INSERT DATA {{
+    GRAPH <{registry_iri}> {{
+        <{graph_iri}> a cga:HolonicGraph ;
+            cga:graphRole cga:{role} .
+    }}
+}}
+"""
+
+QUERY_GRAPH_TYPE_TEMPLATE = """
+PREFIX cga: <urn:holonic:ontology:>
+
+SELECT DISTINCT ?role
+WHERE {{
+    GRAPH <{registry_iri}> {{
+        <{graph_iri}> cga:graphRole ?role .
+    }}
+}}
+"""
+
+LIST_UNTYPED_LAYER_GRAPHS_TEMPLATE = """
+PREFIX cga: <urn:holonic:ontology:>
+
+SELECT DISTINCT ?graph ?role
+WHERE {{
+    GRAPH ?g1 {{
+        ?holon ?pred ?graph .
+        FILTER(?pred IN (cga:hasInterior, cga:hasBoundary,
+                          cga:hasProjection, cga:hasContext))
+        BIND(
+            IF(?pred = cga:hasInterior,   cga:InteriorRole,
+            IF(?pred = cga:hasBoundary,   cga:BoundaryRole,
+            IF(?pred = cga:hasProjection, cga:ProjectionRole,
+            IF(?pred = cga:hasContext,    cga:ContextRole, ?pred))))
+            AS ?role
+        )
+    }}
+    FILTER NOT EXISTS {{
+        GRAPH <{registry_iri}> {{
+            ?graph cga:graphRole ?existing_role .
+        }}
+    }}
+}}
+"""
+
+# ── Scope resolution ──
+#
+# The resolver issues one BFS query per hop. At each hop, it asks
+# the backend for the neighbors of the current frontier. Portal
+# traversal is directional: "network" follows source→target edges
+# outbound, then inbound; "reverse-network" follows only inbound;
+# "containment" walks the cga:memberOf chain.
+
+WALK_OUTBOUND_PORTAL_NEIGHBORS_TEMPLATE = """
+PREFIX cga: <urn:holonic:ontology:>
+
+SELECT DISTINCT ?neighbor
+WHERE {{
+    GRAPH ?g {{
+        ?portal cga:sourceHolon <{from_holon}> ;
+                cga:targetHolon ?neighbor .
+    }}
+}}
+ORDER BY ?neighbor
+"""
+
+WALK_INBOUND_PORTAL_NEIGHBORS_TEMPLATE = """
+PREFIX cga: <urn:holonic:ontology:>
+
+SELECT DISTINCT ?neighbor
+WHERE {{
+    GRAPH ?g {{
+        ?portal cga:targetHolon <{from_holon}> ;
+                cga:sourceHolon ?neighbor .
+    }}
+}}
+ORDER BY ?neighbor
+"""
+
+WALK_MEMBER_OF_NEIGHBORS_TEMPLATE = """
+PREFIX cga: <urn:holonic:ontology:>
+
+SELECT DISTINCT ?neighbor
+WHERE {{
+    GRAPH ?g {{
+        {{ <{from_holon}> cga:memberOf ?neighbor }}
+        UNION
+        {{ ?neighbor cga:memberOf <{from_holon}> }}
+    }}
+}}
+ORDER BY ?neighbor
+"""
+
+# ── Predicate templates ──
+#
+# Each predicate is expressed as an ASK query with <holon> as the
+# subject-under-test. Callers substitute the candidate IRI at
+# walk time.
+
+ASK_HAS_CLASS_IN_INTERIOR_TEMPLATE = """
+PREFIX cga: <urn:holonic:ontology:>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+ASK WHERE {{
+    {{
+        GRAPH <{registry_iri}> {{
+            ?inv a cga:ClassInstanceCount ;
+                 cga:inGraph ?g ;
+                 cga:class <{class_iri}> ;
+                 cga:count ?n .
+            FILTER(?n > 0)
+        }}
+        GRAPH ?reg {{
+            <{holon_iri}> cga:hasInterior ?g .
+        }}
+    }}
+    UNION
+    {{
+        # Fallback when the registry has not materialized class
+        # inventory for this graph yet: query the interior directly.
+        GRAPH ?reg {{
+            <{holon_iri}> cga:hasInterior ?g .
+        }}
+        GRAPH ?g {{
+            ?s rdf:type <{class_iri}> .
+        }}
+    }}
+}}
+"""
+
+# ══════════════════════════════════════════════════════════════
+# 0.3.5 — PROJECTION PIPELINE TEMPLATES
+# ══════════════════════════════════════════════════════════════
+
+LIST_PIPELINES_FOR_HOLON_TEMPLATE = """
+PREFIX cga:  <urn:holonic:ontology:>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?spec ?name ?description (COUNT(?step) AS ?step_count)
+WHERE {{
+    GRAPH <{registry_iri}> {{
+        <{holon_iri}> cga:hasPipeline ?spec .
+        ?spec rdfs:label ?name .
+        OPTIONAL {{ ?spec rdfs:comment ?description }}
+        OPTIONAL {{
+            ?spec cga:hasStep ?list .
+            ?list rdf:rest*/rdf:first ?step .
+        }}
+    }}
+}}
+GROUP BY ?spec ?name ?description
+ORDER BY ?name
+"""
+
+READ_PIPELINE_DETAIL_TEMPLATE = """
+PREFIX cga:  <urn:holonic:ontology:>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?name ?description
+WHERE {{
+    GRAPH <{registry_iri}> {{
+        <{spec_iri}> a cga:ProjectionPipelineSpec ;
+            rdfs:label ?name .
+        OPTIONAL {{ <{spec_iri}> rdfs:comment ?description }}
+    }}
+}}
+"""
+
+PIPELINE_STEPS_TEMPLATE = """
+PREFIX cga:  <urn:holonic:ontology:>
+PREFIX rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT ?step ?step_name ?transform_name ?construct_query
+WHERE {{
+    GRAPH <{registry_iri}> {{
+        <{spec_iri}> cga:hasStep ?list .
+        ?list rdf:rest*/rdf:first ?step .
+        OPTIONAL {{ ?step cga:stepName        ?step_name }}
+        OPTIONAL {{ ?step cga:transformName   ?transform_name }}
+        OPTIONAL {{ ?step cga:constructQuery  ?construct_query }}
+    }}
+}}
+"""
+
+# Note: the SELECT order above intentionally relies on the rdf:List
+# structure for ordering. We reconstruct the canonical order in
+# Python by walking the list explicitly to avoid SPARQL ORDER BY
+# ambiguity.
+
+WALK_PIPELINE_LIST_TEMPLATE = """
+PREFIX cga: <urn:holonic:ontology:>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT ?head
+WHERE {{
+    GRAPH <{registry_iri}> {{
+        <{spec_iri}> cga:hasStep ?head .
+    }}
+}}
+"""

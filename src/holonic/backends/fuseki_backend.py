@@ -15,6 +15,8 @@ from typing import Any
 
 from rdflib import Graph
 
+from holonic.backends.store import AbstractHolonicStore
+
 log = logging.getLogger(__name__)
 
 
@@ -32,24 +34,32 @@ def _get_or_create_loop():
     return asyncio.new_event_loop()
 
 
-class FusekiBackend:
-    """GraphBackend implementation backed by an Apache Jena Fuseki server.
+class FusekiBackend(AbstractHolonicStore):
+    """HolonicStore implementation backed by an Apache Jena Fuseki server.
 
     Parameters
     ----------
     base_url :
-        Fuseki server URL, e.g. "http://localhost:3030".
+        Fuseki server URL, e.g. "http://localhost:3030". Positional.
     dataset :
-        Dataset name on the server.
-    client_kwargs :
+        Dataset name on the server. Keyword-only since 0.4.0.
+    extra_headers :
+        Optional HTTP headers merged into every outbound request.
+    **client_kwargs :
         Extra kwargs forwarded to FusekiClient.
+
+    .. versionchanged:: 0.4.0
+       ``dataset`` is now keyword-only. Callers using the legacy
+       positional form (``FusekiBackend(base_url, dataset)``)
+       receive a ``TypeError``; migrate to
+       ``FusekiBackend(base_url, dataset=name)``.
     """
 
     def __init__(
         self,
         base_url: str,
-        dataset: str,
         *,
+        dataset: str,
         extra_headers: dict[str, str] | None = None,
         **client_kwargs: Any,
     ):

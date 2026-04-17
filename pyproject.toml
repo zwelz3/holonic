@@ -6,7 +6,7 @@ requires = [
 
 [project]
 name = "holonic"
-version = "0.3.1"
+version = "0.4.0"
 description = "Graph-native holonic RDF systems"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -74,6 +74,13 @@ optional-dependencies.viz = [
   "ipywidgets>=8",
   "yfiles-jupyter-graphs>=1.7",
 ]
+scripts.holonic-migrate-registry = "holonic.cli.migrate_registry:main"
+entry-points."holonic.projections".collapse_reification = "holonic.projections:collapse_reification"
+entry-points."holonic.projections".localize_predicates = "holonic.projections:localize_predicates"
+# First-party projection transforms. Third-party packages register
+# their own transforms under this group in their pyproject.toml;
+# pipelines reference them by the entry-point name (left side).
+entry-points."holonic.projections".strip_blank_nodes = "holonic.projections:strip_blank_nodes"
 
 [tool.flit]
 sdist.exclude = [

@@ -1,5 +1,7 @@
 ![holonic](./static/holonic_banner.png)
 
+![spec maturity](./build/spec-badge.svg)
+
 A lightweight Python client for building holonic knowledge graphs (based on Cagel's four-graph holonic RDF model) backed by rdflib, Apache Jena Fuseki, or any SPARQL-compliant quad store.
 
 ## The Four-Graph Model
@@ -67,16 +69,21 @@ rows = ds.query('''
 | --------------- | ----------------------------------------------------------- | ---------------- |
 | `RdflibBackend` | `from holonic import RdflibBackend`                         | None (in-memory) |
 | `FusekiBackend` | `from holonic.backends.fuseki_backend import FusekiBackend` | Fuseki server    |
-| Custom          | Implement `GraphBackend` protocol                           | Any quad store   |
+| Custom          | Implement `HolonicStore` protocol                           | Any quad store   |
 
 ```python
 # Fuseki backend
 from holonic.backends.fuseki_backend import FusekiBackend
 
 ds = HolonicDataset(
-    backend=FusekiBackend("http://localhost:3030", "holarchy")
+    backend=FusekiBackend("http://localhost:3030", dataset="holarchy")
 )
 ```
+
+> Migrating from 0.3.x? `GraphBackend` is now `HolonicStore` (old
+> name kept as a deprecated alias through 0.4.x) and `FusekiBackend`
+> requires `dataset` as a keyword argument. See
+> [`docs/MIGRATION.md`](./docs/MIGRATION.md) for the full checklist.
 
 ## Key Concepts
 
@@ -162,10 +169,17 @@ The package includes a lightweight OWL 2 RL vocabulary (`holonic/ontology/cga.tt
 
 | Example                              | Description                                                      |
 | ------------------------------------ | ---------------------------------------------------------------- |
-| `examples/01_holon_basics.ipynb`     | Holon creation, multi-interior, membrane validation              |
-| `examples/02_portal_traversal.ipynb` | Portal discovery, multi-hop paths, provenance                    |
-| `examples/03_cco_to_schemaorg.ipynb` | Cross-standard data translation (CCO→Schema.org)                 |
-| `examples/04_projections.ipynb`      | Type/literal/blank-node collapse, pipelines, holarchy projection |
+| `notebooks/01_holon_basics.ipynb`    | Holon creation, multi-interior, membrane validation              |
+| `notebooks/02_portal_traversal.ipynb`| Portal discovery, multi-hop paths, provenance                    |
+| `notebooks/03_cco_to_schemaorg.ipynb`| Cross-standard data translation (CCO→Schema.org)                 |
+| `notebooks/04_projections.ipynb`     | Type/literal/blank-node collapse, pipelines, holarchy projection |
+| `notebooks/05_holarchy_viz.ipynb`    | Holarchy topology visualization                                  |
+
+> The notebooks cover the 0.3.0 feature set. Features introduced in
+> later 0.3.x releases (graph-level metadata in 0.3.3, scope
+> resolution in 0.3.4, projection plugin system in 0.3.5) are
+> documented in the API reference and `docs/SPEC.md`; notebook
+> examples for them are tracked as future work.
 
 ## Documentation
 
@@ -202,7 +216,7 @@ pixi run test
 │                    HolonicDataset                       │
 │  (thin Python wrapper — SPARQL queries)                 │
 ├─────────────────────────────────────────────────────────┤
-│                   GraphBackend Protocol                 │
+│                   HolonicStore Protocol                 │
 │         graph_exists · get/put/post/delete_graph        │
 │         query · construct · ask · update                │
 ├──────────────────┬──────────────────────────────────────┤

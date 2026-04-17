@@ -280,7 +280,7 @@ class TestFusekiBackendExtraHeaders:
 
         backend = FusekiBackend(
             "http://fuseki.test:3030",
-            "ds",
+            dataset="ds",
             extra_headers={"Authorization": "Bearer abc"},
         )
         assert backend._client_kwargs.get("extra_headers") == {"Authorization": "Bearer abc"}
@@ -289,7 +289,7 @@ class TestFusekiBackendExtraHeaders:
         pytest.importorskip("aiohttp")
         from holonic.backends.fuseki_backend import FusekiBackend
 
-        backend = FusekiBackend("http://fuseki.test:3030", "ds")
+        backend = FusekiBackend("http://fuseki.test:3030", dataset="ds")
         assert "extra_headers" not in backend._client_kwargs
 
     def test_fuseki_client_stores_extra_headers(self):

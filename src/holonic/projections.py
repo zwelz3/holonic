@@ -608,3 +608,27 @@ def localize_predicates(graph: Graph) -> Graph:
         local_name = str(p).rsplit("/", 1)[-1].rsplit("#", 1)[-1]
         result.add((s, local_ns[local_name], o))
     return result
+
+
+# ══════════════════════════════════════════════════════════════
+# Plugin registration (0.3.5)
+#
+# First-party transforms with the (Graph) -> Graph signature are
+# registered under stable names via the projection_transform
+# decorator. Pipelines (cga:ProjectionPipelineSpec) reference them
+# by registered name, not dotted path. Third-party packages register
+# their own transforms via the "holonic.projections" entry-point
+# group in their pyproject.toml. See holonic.plugins.
+#
+# extract_types is not registered (returns a dict, not a Graph).
+# filter_by_class is not registered (requires a class_iri argument;
+# 0.3.5 pipeline steps do not carry per-step arguments — see
+# D-0.3.5-9).
+# ══════════════════════════════════════════════════════════════
+
+from holonic.plugins import projection_transform as _projection_transform
+
+# Wrap existing names via the decorator.
+strip_blank_nodes = _projection_transform("strip_blank_nodes")(strip_blank_nodes)
+localize_predicates = _projection_transform("localize_predicates")(localize_predicates)
+collapse_reification = _projection_transform("collapse_reification")(collapse_reification)

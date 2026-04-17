@@ -75,6 +75,12 @@ class HolonDetail:
     context_graphs: list[str] = field(default_factory=list)
     interior_triple_count: int | None = None
     health: str | None = None
+    layer_metadata: dict[str, GraphMetadata] = field(default_factory=dict)
+    holon_last_modified: str | None = None
+    """Per-graph metadata keyed by graph IRI. Populated when the registry has
+    materialized metadata (see HolonicDataset.refresh_metadata). Empty dict if
+    metadata_updates="off" and no explicit refresh has been called. Added 0.3.3."""
+    """Max of layer lastModified values. ISO 8601 UTC. Added 0.3.3."""
 
 
 @dataclass
@@ -83,6 +89,91 @@ class ClassInstanceCount:
 
     class_iri: str
     count: int
+
+
+@dataclass
+class GraphMetadata:
+    """Per-graph operational metadata, materialized in the registry.
+
+    Added in 0.3.3. Read via ``HolonicDataset.get_graph_metadata()``.
+    Written on every library-mediated write to the graph; direct
+    backend writes do not update it. Call
+    ``HolonicDataset.refresh_metadata()`` after out-of-band writes.
+
+    ``last_modified`` is UTC; ``refreshed_at`` is the time the
+    current row was written (may be later than ``last_modified``
+    if a refresh ran without a content change).
+    """
+
+    iri: str
+    triple_count: int = 0
+    last_modified: str | None = None
+    refreshed_at: str | None = None
+    class_inventory: list[ClassInstanceCount] = field(default_factory=list)
+    graph_role: str | None = None
+    """ISO 8601 UTC datetime, microsecond precision. None if never written."""
+    """ISO 8601 UTC datetime of the most recent metadata refresh."""
+    """cga:LayerRole short name (interior|boundary|projection|context) or None."""
+
+
+# ══════════════════════════════════════════════════════════════
+# Projection pipelines (0.3.5)
+# ══════════════════════════════════════════════════════════════
+
+
+@dataclass
+class ProjectionPipelineStep:
+    """One step in a projection pipeline.
+
+    Either ``transform_name`` or ``construct_query`` must be set.
+    When both are present, the transform runs first, then the
+    CONSTRUCT is applied to its output.
+
+    ``transform_name`` refers to an entry point in the
+    ``holonic.projections`` group. See ``holonic.plugins`` for
+    discovery and registration.
+    """
+
+    name: str
+    transform_name: str | None = None
+    construct_query: str | None = None
+
+
+@dataclass
+class ProjectionPipelineSpec:
+    """A named, ordered pipeline of projection steps.
+
+    Created in Python, registered into the holonic registry graph
+    via ``HolonicDataset.register_pipeline()``. Once registered,
+    holons attach to it via ``attach_pipeline()`` and execution
+    happens through ``run_projection()``.
+
+    The ``iri`` is the identity anchor of the spec in the registry;
+    callers choose the IRI. A common convention is
+    ``urn:projection:<name>`` or ``urn:holon:<holon>/pipeline/<name>``.
+    """
+
+    iri: str
+    name: str
+    steps: list[ProjectionPipelineStep] = field(default_factory=list)
+    description: str | None = None
+
+
+@dataclass
+class ProjectionPipelineSummary:
+    """Lightweight pipeline descriptor for browser/list views.
+
+    Excludes step content to keep list queries cheap. Use
+    ``HolonicDataset.get_pipeline(iri)`` for the full detail.
+
+    Forward-looking note: console integration should consume this
+    for the pipelines-available-on-holon view.
+    """
+
+    iri: str
+    name: str
+    step_count: int = 0
+    description: str | None = None
 
 
 # ══════════════════════════════════════════════════════════════

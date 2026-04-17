@@ -13,6 +13,8 @@ from typing import Any
 from rdflib import Dataset, Graph, Literal, URIRef
 from rdflib.term import Node
 
+from holonic.backends.store import AbstractHolonicStore
+
 log = logging.getLogger(__name__)
 
 
@@ -25,8 +27,8 @@ def _node_to_value(node: Node) -> Any:
     return str(node)
 
 
-class RdflibBackend:
-    """GraphBackend implementation backed by an rdflib.Dataset.
+class RdflibBackend(AbstractHolonicStore):
+    """HolonicStore implementation backed by an rdflib.Dataset.
 
     Parameters
     ----------
