@@ -3,6 +3,25 @@ name = "holonic"
 channels = ["conda-forge"]
 platforms = ["linux-64", "win-64"]
 
+# ──────────────────────────────────────────────────────────
+# Environment layout
+#
+# pixi features are composable units of (dependencies | tasks).
+# They assemble into environments. Two everyday environments:
+#
+#   dev   — the default for development. Library + lint + test +
+#           docs + jupyterlite + lab. Does NOT pull specl.
+#   spec  — layered over a subset of dev with specl pinned
+#           from git. Use when working on docs/SPEC.md:
+#             pixi run -e spec spec-validate
+#             pixi run -e spec spec-score
+#             pixi run -e spec spec-badge
+#
+# Specl is kept out of dev so day-to-day work doesn't pull
+# a git dependency on every install. It's optional infrastructure
+# for spec-driven development, not required for the library itself.
+# ──────────────────────────────────────────────────────────
+
 [pypi-dependencies]
 holonic = { path=".", editable=true}
 yfiles-jupyter-graphs = ">=1.7.0"
@@ -26,19 +45,33 @@ jupytext = "*"
 
 [tasks.lint-fix]
 description = """Run all lint fixers"""
-depends-on = ["fix-pyproject", "fix-ssort", "format-ruff", "fix-ruff"]
+depends-on = ["clean-notebooks", "fix-pyproject", "fix-ssort", "format-ruff", "fix-ruff"]
 cmd = "echo 🚧"
 
 # TODO: Add mypy back to lint checker
 [tasks.lint-check]
 description = """Run all lint checkers"""
-depends-on = ["check-pyproject", "check-ssort", "check-ruff"]
+depends-on = ["check-pyproject", "check-ssort", "check-ruff", "check-notebooks"]
 cmd = "echo 🔎"
 
 [feature.tasks-test.tasks]
 
 [feature.tasks-test.tasks.test]
 cmd = "pytest"
+
+[feature.tasks-lint.tasks.clean-notebooks]
+description = """Strip all outputs from notebooks in place. Runs first in
+    lint-fix so any stray committed cell outputs are removed before the
+    Python formatters touch anything."""
+cmd = "jupyter nbconvert --clear-output --inplace notebooks/*.ipynb"
+inputs = ["notebooks/*.ipynb"]
+
+[feature.tasks-lint.tasks.check-notebooks]
+description = """Fail if any notebook has cell outputs. Uses --stdout to a
+    throwaway comparison instead of modifying the files. Notebook outputs
+    should never be committed; they bloat diffs and leak data."""
+cmd = "python scripts/check_notebooks.py"
+inputs = ["notebooks/*.ipynb", "scripts/check_notebooks.py"]
 
 [feature.tasks-lint.tasks.fix-pyproject]
 cmd = "pyproject-fmt pyproject.toml"
@@ -71,6 +104,35 @@ inputs = ["src/**/*.py"]
 [feature.tasks-lint.tasks.check-ruff]
 cmd = "ruff check src/"
 inputs = ["src/**/*.py"]
+
+# Spec-driven development via specl #################
+# Translates docs/SPEC.md to RDF, validates against SHACL shapes shipped
+# with specl, and reports a maturity score (0-100%). The score is the
+# fraction of ekga:Requirement instances with zero SHACL violations or
+# warnings. Useful as a CI gate and as a README badge.
+[feature.tasks-spec.tasks.spec-translate]
+description = "Translate docs/SPEC.md to docs/SPEC.ttl via specl"
+cmd = "specl-translate docs/SPEC.md docs/SPEC.ttl"
+inputs = ["docs/SPEC.md"]
+outputs = ["docs/SPEC.ttl"]
+
+[feature.tasks-spec.tasks.spec-validate]
+description = "Validate docs/SPEC.ttl against specl shapes with explanations"
+cmd = "specl-validate validate docs/SPEC.ttl $(python -c 'import specl, pathlib; print(pathlib.Path(specl.__file__).parent / \"shapes.ttl\")') --explain"
+depends-on = ["spec-translate"]
+
+[feature.tasks-spec.tasks.spec-score]
+description = """Compute the spec maturity score (0-100%). Fraction of
+    requirements without SHACL violations or warnings. Embed the SVG
+    badge in the README by running `spec-badge` and referencing the
+    generated file. See docs/SPEC.md for the embed snippet."""
+cmd = "specl-validate score docs/SPEC.ttl $(python -c 'import specl, pathlib; print(pathlib.Path(specl.__file__).parent / \"shapes.ttl\")')"
+depends-on = ["spec-translate"]
+
+[feature.tasks-spec.tasks.spec-badge]
+description = "Generate a spec-maturity SVG badge at build/spec-badge.svg"
+cmd = "specl-validate badge docs/SPEC.ttl $(python -c 'import specl, pathlib; print(pathlib.Path(specl.__file__).parent / \"shapes.ttl\")') --out build/spec-badge.svg"
+depends-on = ["spec-translate"]
 
 [feature.tasks-docs.tasks.autogen]
 description = "Autobuild the code documentation"
@@ -106,7 +168,22 @@ features = [
   "tasks-docs",
   "tasks-start",
   "tasks-jlite",
-  "tasks-lab"
+  "tasks-lab",
+]
+
+# Specl environment: layered on top of dev. Only resolves the
+# specl git dependency when this environment is materialized.
+# Usage: `pixi run -e spec spec-validate`. Add `--frozen` if you want
+# to skip re-resolving on every invocation.
+[environments.spec]
+features = [
+  "deps-lint",
+  "deps-test",
+  "deps-docs",
+  "deps-spec",
+  "tasks-lint",
+  "tasks-test",
+  "tasks-spec",
 ]
 
 
@@ -157,6 +234,13 @@ mypy = "*"
 pyproject-fmt = ">=2.5"
 ruff = ">=0.6"
 ssort = ">=0.12"
+nbconvert = "*"
+nbformat = "*"
+
+[feature.deps-spec.pypi-dependencies]
+# specl: RDF-native spec validation. Not on PyPI yet; pin to git URL
+# or local path. Replace with a PyPI version once specl ships there.
+specl = { git = "https://github.com/zwelz3/specl.git" }
 
 [feature.deps-test.dependencies]
 pytest = "*"

@@ -1,15 +1,20 @@
-"""Tests for GraphBackend protocol and rdflib implementation."""
+"""Tests for HolonicStore protocol and rdflib implementation."""
 
 import pytest
 from rdflib import Graph, URIRef
 
-from holonic.backends import GraphBackend, RdflibBackend
+from holonic.backends import AbstractHolonicStore, HolonicStore, RdflibBackend
 
 
 class TestProtocolConformance:
     def test_rdflib_backend_implements_protocol(self):
         backend = RdflibBackend()
-        assert isinstance(backend, GraphBackend)
+        assert isinstance(backend, HolonicStore)
+
+    def test_rdflib_backend_inherits_abc(self):
+        """First-party backends dogfood AbstractHolonicStore."""
+        backend = RdflibBackend()
+        assert isinstance(backend, AbstractHolonicStore)
 
 
 class TestRdflibBackend:

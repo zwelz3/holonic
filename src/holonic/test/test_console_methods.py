@@ -188,9 +188,7 @@ class TestHolonNeighborhood:
         assert keys1 == keys2
 
     def test_node_attributes_carry_through_to_payload(self, populated_ds):
-        payload = populated_ds.holon_neighborhood(
-            "urn:holon:alpha", depth=1
-        ).to_graphology()
+        payload = populated_ds.holon_neighborhood("urn:holon:alpha", depth=1).to_graphology()
         for node in payload["nodes"]:
             attrs = node["attributes"]
             assert "label" in attrs
@@ -256,18 +254,14 @@ class TestPortalTraversalHistory:
             target_iri="urn:holon:beta",
             agent_iri="urn:agent:test",
         )
-        records = populated_ds.portal_traversal_history(
-            "urn:portal:alpha-to-beta"
-        )
+        records = populated_ds.portal_traversal_history("urn:portal:alpha-to-beta")
         assert len(records) == 2
         assert all(r.source_iri == "urn:holon:alpha" for r in records)
         assert all(r.target_iri == "urn:holon:beta" for r in records)
 
     def test_limit_clamped(self, populated_ds):
         # limit=0 must not raise; gets clamped to 1
-        out = populated_ds.portal_traversal_history(
-            "urn:portal:alpha-to-beta", limit=0
-        )
+        out = populated_ds.portal_traversal_history("urn:portal:alpha-to-beta", limit=0)
         assert isinstance(out, list)
 
 
@@ -286,18 +280,16 @@ class TestFusekiBackendExtraHeaders:
 
         backend = FusekiBackend(
             "http://fuseki.test:3030",
-            "ds",
+            dataset="ds",
             extra_headers={"Authorization": "Bearer abc"},
         )
-        assert backend._client_kwargs.get("extra_headers") == {
-            "Authorization": "Bearer abc"
-        }
+        assert backend._client_kwargs.get("extra_headers") == {"Authorization": "Bearer abc"}
 
     def test_no_extra_headers_omits_kwarg(self):
         pytest.importorskip("aiohttp")
         from holonic.backends.fuseki_backend import FusekiBackend
 
-        backend = FusekiBackend("http://fuseki.test:3030", "ds")
+        backend = FusekiBackend("http://fuseki.test:3030", dataset="ds")
         assert "extra_headers" not in backend._client_kwargs
 
     def test_fuseki_client_stores_extra_headers(self):
