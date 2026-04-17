@@ -61,29 +61,6 @@ class HolonSummary:
 
 
 @dataclass
-class HolonDetail:
-    """Full holon descriptor including layer graph IRIs and registry triples."""
-
-    iri: str
-    label: str | None = None
-    kind: str | None = None
-    classification: str | None = None
-    member_of: str | None = None
-    interior_graphs: list[str] = field(default_factory=list)
-    boundary_graphs: list[str] = field(default_factory=list)
-    projection_graphs: list[str] = field(default_factory=list)
-    context_graphs: list[str] = field(default_factory=list)
-    interior_triple_count: int | None = None
-    health: str | None = None
-    layer_metadata: dict[str, GraphMetadata] = field(default_factory=dict)
-    holon_last_modified: str | None = None
-    """Per-graph metadata keyed by graph IRI. Populated when the registry has
-    materialized metadata (see HolonicDataset.refresh_metadata). Empty dict if
-    metadata_updates="off" and no explicit refresh has been called. Added 0.3.3."""
-    """Max of layer lastModified values. ISO 8601 UTC. Added 0.3.3."""
-
-
-@dataclass
 class ClassInstanceCount:
     """Count of instances of a single rdf:type within a holon's interior."""
 
@@ -114,6 +91,29 @@ class GraphMetadata:
     """ISO 8601 UTC datetime, microsecond precision. None if never written."""
     """ISO 8601 UTC datetime of the most recent metadata refresh."""
     """cga:LayerRole short name (interior|boundary|projection|context) or None."""
+
+
+@dataclass
+class HolonDetail:
+    """Full holon descriptor including layer graph IRIs and registry triples."""
+
+    iri: str
+    label: str | None = None
+    kind: str | None = None
+    classification: str | None = None
+    member_of: str | None = None
+    interior_graphs: list[str] = field(default_factory=list)
+    boundary_graphs: list[str] = field(default_factory=list)
+    projection_graphs: list[str] = field(default_factory=list)
+    context_graphs: list[str] = field(default_factory=list)
+    interior_triple_count: int | None = None
+    health: str | None = None
+    layer_metadata: dict[str, GraphMetadata] = field(default_factory=dict)
+    holon_last_modified: str | None = None
+    """Per-graph metadata keyed by graph IRI. Populated when the registry has
+    materialized metadata (see HolonicDataset.refresh_metadata). Empty dict if
+    metadata_updates="off" and no explicit refresh has been called. Added 0.3.3."""
+    """Max of layer lastModified values. ISO 8601 UTC. Added 0.3.3."""
 
 
 # ══════════════════════════════════════════════════════════════

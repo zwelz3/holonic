@@ -150,7 +150,7 @@ def __getattr__(name: str):
     Removal scheduled for 0.5.0. Set
     ``HOLONIC_SILENCE_DEPRECATION=1`` in the environment to suppress.
     """
-    global _GRAPHBACKEND_WARNED
+    global _GRAPHBACKEND_WARNED  # noqa: PLW0603 — load-bearing session flag
 
     if name == "GraphBackend":
         if not _GRAPHBACKEND_WARNED and not _os.environ.get("HOLONIC_SILENCE_DEPRECATION"):

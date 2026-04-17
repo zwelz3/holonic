@@ -21,7 +21,7 @@ _WARNED = False
 
 
 def _warn_once() -> None:
-    global _WARNED
+    global _WARNED  # noqa: PLW0603 — load-bearing session flag
     if _WARNED or os.environ.get("HOLONIC_SILENCE_DEPRECATION"):
         return
     _WARNED = True

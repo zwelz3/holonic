@@ -1742,7 +1742,6 @@ class HolonicDataset:
         """Read pipeline steps preserving rdf:List order."""
         from rdflib import RDF, URIRef
 
-
         reg = self.backend.get_graph(self.registry_iri)
         spec = URIRef(spec_iri)
         cga_hasStep = URIRef("urn:holonic:ontology:hasStep")

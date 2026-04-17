@@ -626,7 +626,9 @@ def localize_predicates(graph: Graph) -> Graph:
 # D-0.3.5-9).
 # ══════════════════════════════════════════════════════════════
 
-from holonic.plugins import projection_transform as _projection_transform
+from holonic.plugins import (  # noqa: E402 — deferred import: wraps transforms defined above
+    projection_transform as _projection_transform,
+)
 
 # Wrap existing names via the decorator.
 strip_blank_nodes = _projection_transform("strip_blank_nodes")(strip_blank_nodes)
