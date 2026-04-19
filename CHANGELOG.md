@@ -2,6 +2,207 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.2] - 2026-04-18
+
+Structural lifecycle completion. The library now exposes clean
+deletion for holons and portals, completing the CRUD surface that
+`add_holon` / `add_portal` started. Portal creation gains
+extensibility: `construct_query` is optional, the portal's RDF
+type is customizable, and arbitrary Turtle can be appended via
+`extra_ttl`. Portal discovery is relaxed to recognize any portal
+subtype (previously hardcoded to `cga:TransformPortal`).
+
+### Added
+
+- **`HolonicDataset.remove_holon(iri)`** (R9.20) — cascading
+  removal of a holon and all its state. Cleans up the registry
+  entry, all four layer graphs, graph-typing triples,
+  graph-level metadata records, the per-holon rollup, and every
+  portal where the holon is source or target. Child holons that
+  referenced the removed holon via `cga:memberOf` are orphaned
+  (their `memberOf` triple is removed) but preserved. Provenance
+  activities are preserved because provenance is immutable
+  history. Idempotent — returns `False` for a non-existent IRI
+  rather than raising.
+- **`HolonicDataset.remove_portal(portal_iri)`** (R9.21) —
+  targeted portal removal. Deletes all triples with the portal
+  as subject from every graph containing them (typically the
+  source boundary graph and the registry mirror). The boundary
+  graph itself is preserved; sibling portals and SHACL shapes in
+  the same graph are unaffected. Idempotent.
+- **`add_portal()` gains three new parameters** (R9.22):
+  `construct_query` is now optional (default `None`); the new
+  `portal_type` kwarg (default `"cga:TransformPortal"`) lets
+  callers create `cga:IconPortal`, `cga:SealedPortal`, or
+  downstream subclasses; the new `extra_ttl` kwarg accepts
+  additional Turtle triples for predicates carried by downstream
+  portal subclasses. All existing positional-argument calls
+  continue to work unchanged.
+- **`cga:IconPortal` class** added to `cga.ttl`. Previously
+  referenced in documentation but not declared in the ontology.
+  An IconPortal represents a purely referential relationship
+  between two holons — traversal returns an empty projection
+  because no transformation is defined. Used when a relationship
+  should be visible for discovery or display without implying a
+  data flow.
+- **Sharpened portal subclass semantics in the ontology.** The
+  `cga:TransformPortal`, `cga:IconPortal`, and `cga:SealedPortal`
+  skos:definition blocks now document the per-subtype
+  `cga:constructQuery` expectations explicitly: TransformPortal
+  requires one, IconPortal and SealedPortal must not carry one.
+- **New SHACL shapes**: `cga:IconPortalShape` and
+  `cga:SealedPortalShape` enforce the `cga:constructQuery
+  maxCount 0` constraint at Warning severity. A TransformPortal
+  silently reclassified to SealedPortal for temporary blocking
+  retains its query definition but surfaces a warning, which is
+  the intended behavior — the warning signals intent to
+  reclassify back.
+- **`src/holonic/test/test_lifecycle.py`** — 19 new tests
+  covering the three lifecycle surfaces plus metadata-eager
+  behavior during cascade.
+- **`src/holonic/test/test_ontology.py`** — 5 new tests verifying
+  the IconPortal class is declared and the three portal subtype
+  shapes enforce their expected semantics (TransformPortal
+  without query → violation; IconPortal/SealedPortal with query
+  → warning; IconPortal/SealedPortal without query → conforms).
+
+### Changed
+
+- **Portal discovery queries relaxed.**
+  `FIND_PORTALS_FROM/TO/DIRECT` in `holonic/sparql.py` no longer
+  filter on `a cga:TransformPortal`. The `cga:sourceHolon` +
+  `cga:targetHolon` predicate pair uniquely identifies a portal
+  regardless of its specific subtype, and relaxing the filter
+  means `cga:SealedPortal`, `cga:IconPortal`, and downstream
+  subclasses created via the new `portal_type` kwarg are
+  discoverable through the same public API.
+- **Portal discovery deduplicated.** `FIND_PORTALS_FROM/TO/DIRECT`
+  now use `SELECT DISTINCT`. The pre-0.4.2 queries matched the
+  portal triples in every graph they appeared, which produced
+  one duplicate row per additional graph (typically returning
+  each portal twice — once from the boundary graph, once from
+  the registry mirror). This was a latent bug; existing test
+  assertions used `>= 1` rather than `== 1` and did not catch it.
+- **`add_portal()` now fires `_maybe_refresh(graph_iri)`** after
+  writing the portal triples, matching the invariant the other
+  `add_*` methods maintain. Previously `add_portal` silently
+  skipped metadata refresh — a latent bug surfaced while adding
+  the lifecycle methods.
+
+### SPEC updates
+
+- **R9.20, R9.21, R9.22** added under "Shipped in 0.4.2" with
+  full annotations (priority, constrains, acceptance,
+  verifiedBy). Spec maturity remains at 100% (63/63 clean, 0
+  violations, 0 warnings).
+- **Compliance check script** extended with three new checks for
+  R9.20–R9.22. Script now runs 64 checks total: 56 pass, 0 fail,
+  8 manual (SHOULD items deferred per their recommendation
+  text).
+
+### Notes for downstream
+
+No migration work is required for 0.4.2. All existing API
+signatures continue to work unchanged; the three lifecycle
+additions and the `add_portal()` new kwargs are additive. The
+portal discovery relaxation affects what `find_portals_*`
+returns when non-`TransformPortal` subtypes exist in the
+registry — these were previously invisible to the public API
+despite being declared in the ontology. If a downstream consumer
+was relying on the hardcoded filter as a way to exclude
+non-TransformPortal subtypes from results, they can re-add the
+filter at the consumer level.
+
+---
+
+## [0.4.1] - 2026-04-18
+
+Documentation, release hygiene, a new dispatch-patterns notebook,
+restored JupyterLite deployment, and a new visualization example.
+No library behavior changes.
+
+### Added
+
+- **`docs/source/dom-comparison.md`** — a dedicated documentation
+  page mapping holonic concepts onto the W3C DOM for readers
+  already familiar with that model. Covers the concept-mapping
+  table, how holons might eventually be dispatched, and where the
+  DOM analogy diverges. Expanded treatment of synchronous APIs
+  over asynchronous substrates.
+- **OQ9 in `docs/SPEC.md`** — captures DOM-style event
+  propagation as a candidate coordination model, with status
+  `deferred` and recommendation to verify strain against real use
+  cases before committing to implementation.
+- **`notebooks/10_dispatch_patterns.ipynb`** — demonstrates three
+  dispatch patterns against the synchronous HolonicDataset API:
+  direct synchronous, event-queue with a single worker, and
+  asyncio over a single-worker `ThreadPoolExecutor`. Ties
+  directly to the DOM comparison documentation. Includes a
+  correctness note about rdflib's SPARQL parser not being
+  thread-safe.
+- **`notebooks/11_visualization.ipynb`** — restored yFiles-based
+  visualization example. Uses `HolarchyViz`, `HolonViz`,
+  `SPARQLExplorer`, and `ProvenanceViz` from the existing
+  `holonic.viz` module. Begins with `%pip install
+  "holonic[viz]"` to pull the optional `yfiles-jupyter-graphs`
+  dependency.
+- **JupyterLite deployment restored.** `jupyterlite/content/`
+  now carries all example notebooks plus a new
+  `00_start_here.ipynb` landing notebook that introduces the
+  in-browser environment and its constraints. The `build_jl`
+  pixi task outputs to `docs/source/_static/jupyterlite/` so
+  Sphinx picks it up automatically.
+- **`.readthedocs.yaml`** — new config that runs `jupyter lite
+  build` as a pre-build step, so the hosted docs at ReadTheDocs
+  include the in-browser lab under `/_static/jupyterlite/`.
+- **"Try in browser" section** in `docs/source/index.md` linking
+  to the hosted JupyterLite build.
+- **`scripts/sync_notebooks_to_jlite.py`** — keeps
+  `jupyterlite/content/` in sync with the canonical `notebooks/`
+  directory. Invoked via `pixi run sync_notebooks_to_jlite`.
+- **`scripts/spec_compliance_check.py`** — comprehensive
+  release-gate audit that exercises each SPEC requirement against
+  actual library behavior (not just specl annotation coverage).
+  Invoked via `pixi run -e spec spec-compliance`. Reports
+  53 pass, 0 fail, 8 manual (SHOULD items deferred per their
+  recommendation text) for 0.4.1.
+- **`ProjectionPipeline.apply_to_graph()`** — alias for
+  `apply()` that matches the terminal-method naming used in SPEC
+  R7.3 alongside `apply_to_lpg()`. Existing callers using
+  `apply()` keep working unchanged.
+- **PyPI badge** in the README (`shields.io/pypi/v/holonic`).
+- **Note about conda-forge** in the README install section —
+  package is available on PyPI now; `conda-forge` support is in
+  progress.
+
+### Changed
+
+- **Spec maturity badge location** moved from `build/spec-badge.svg`
+  to `static/spec-badge.svg` so the generated artifact is
+  committed alongside other static assets rather than living in
+  the (gitignored) build directory. README link updated.
+- **Sphinx `release` in `docs/source/conf.py`** corrected from
+  `0.2.0` to `0.4.1`. This was a stale config value driving an
+  incorrect version label in the ReadTheDocs header.
+- **Version bumped** to `0.4.1` in `pyproject.toml` and
+  `src/holonic/__init__.py`.
+- **`jupyterlite/requirements.txt`** rewritten; old file pinned
+  `holonic>=0.1,<0.2` which was long stale.
+- **SPEC R7.2 wording** aligned with actual implementation
+  parameter names (`collapse_types`, `collapse_literals`,
+  `resolve_blanks`, `resolve_lists`). No code change; purely a
+  documentation accuracy fix surfaced by the new compliance
+  check.
+
+### Notes for downstream
+
+No migration work is required for 0.4.1. Behavior, protocols,
+and APIs are unchanged from 0.4.0. `ProjectionPipeline.apply()`
+remains fully supported; `apply_to_graph()` is a new alias, not
+a replacement. Upgrading is a drop-in version bump.
+
+---
+
 ## [0.4.0] - 2026-04-16
 
 **Breaking release.** The `GraphBackend` protocol is renamed

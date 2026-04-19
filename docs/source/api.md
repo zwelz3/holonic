@@ -12,6 +12,38 @@ portal, traversal, projection, and discovery operations.
    :show-inheritance:
 ```
 
+## Structural Lifecycle (0.4.2)
+
+Complete CRUD surface for holons and portals. The `add_*` methods
+from earlier releases are now paired with `remove_*` counterparts,
+and `add_portal()` is extensible to all portal subtypes declared in
+the CGA ontology plus downstream subclasses.
+
+**Holon lifecycle.** `HolonicDataset.add_holon(iri, label, ...)`
+creates a holon; `HolonicDataset.remove_holon(iri)` performs
+cascading cleanup of the registry entry, all four layer graphs,
+graph-typing triples, metadata records, per-holon rollup, and every
+portal where the holon is source or target. Child holons that
+reference the removed holon via `cga:memberOf` are orphaned but
+preserved. Provenance activities are preserved because provenance
+is immutable history. Idempotent — returns `False` for a
+non-existent IRI.
+
+**Portal lifecycle.** `HolonicDataset.add_portal(iri, source_iri,
+target_iri, construct_query=None, *, portal_type="cga:TransformPortal",
+extra_ttl=None, ...)` supports all portal subtypes. Pass
+`construct_query=None` for referential or blocked subtypes; pass
+`portal_type` to select the subclass; pass `extra_ttl` for
+predicates carried by downstream subclasses.
+`HolonicDataset.remove_portal(portal_iri)` deletes the portal's
+triples from every graph containing them while preserving the
+boundary graph and sibling portals.
+
+**Portal subtype semantics.** See [`ontology.md`](./ontology.md) for
+the per-subtype `cga:constructQuery` expectations enforced by SHACL
+shapes: `cga:TransformPortal` requires one, `cga:IconPortal` and
+`cga:SealedPortal` must not carry one.
+
 ## Store Protocol (0.4.0)
 
 ```{eval-rst}

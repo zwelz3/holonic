@@ -545,6 +545,14 @@ class ProjectionPipeline:
             current = step.apply(current, backend)
         return current
 
+    def apply_to_graph(self, source: Graph, backend=None) -> Graph:
+        """Apply all steps sequentially, returning the final Graph.
+
+        Alias for :meth:`apply` that matches the terminal-method naming
+        used in SPEC R7.3 alongside :meth:`apply_to_lpg`.
+        """
+        return self.apply(source, backend)
+
     def apply_to_lpg(self, source: Graph, backend=None, **lpg_kwargs) -> ProjectedGraph:
         """Apply all steps, then convert the result to an LPG projection."""
         result = self.apply(source, backend)

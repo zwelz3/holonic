@@ -358,6 +358,180 @@ class HolonicDataset:
         self._maybe_refresh(graph_iri)
         return graph_iri
 
+    def remove_holon(self, iri: str) -> bool:
+        """Remove a holon and all its associated state from the dataset.
+
+        Completes the CRUD lifecycle started by :meth:`add_holon`. Cleans
+        up the holon's registry entry, all layer graphs, graph-level
+        metadata records, and any portals incident to the holon.
+
+        Parameters
+        ----------
+        iri :
+            The holon's IRI.
+
+        Returns:
+        -------
+        bool
+            ``True`` if the holon existed and was removed. ``False`` if
+            the IRI was not found in the registry (idempotent — not an
+            error).
+
+        Notes:
+        -----
+        What is removed:
+
+        - The holon's registry entry (``cga:Holon`` type triple,
+          ``rdfs:label``, ``cga:memberOf``)
+        - All ``cga:hasInterior`` / ``hasBoundary`` / ``hasProjection``
+          / ``hasContext`` bindings in the registry
+        - The layer graphs themselves (via ``backend.delete_graph``)
+        - Graph-typing triples for the layer graphs (``cga:HolonicGraph``,
+          ``cga:graphRole`` — added by 0.3.4 eager typing)
+        - Graph-level metadata records (``cga:tripleCount``,
+          ``cga:lastModified``, ``cga:ClassInstanceCount`` inventory
+          records — added by 0.3.3)
+        - The per-holon rollup (``cga:holonLastModified``)
+        - ``cga:memberOf`` triples where OTHER holons reference this
+          holon as parent (those children become root-level; they are
+          NOT themselves deleted)
+        - Any portals where this holon is the source or target
+          (delegated to :meth:`remove_portal`)
+
+        What is preserved:
+
+        - Child holons (they become parentless, not deleted — matches
+          the semantic that the containment relationship is dissolved,
+          not the child)
+        - Provenance activities referencing this holon (provenance is
+          immutable history)
+
+        When ``metadata_updates="eager"``, metadata refresh fires once
+        after the full removal rather than per-layer, to avoid
+        redundant work during cascading cleanup.
+        """
+        # Existence check. Using SELECT COUNT for backend portability
+        # (ASK result handling varies across backends; COUNT is uniform).
+        count_rows = list(
+            self.backend.query(
+                f"""
+            PREFIX cga: <urn:holonic:ontology:>
+            SELECT (COUNT(*) AS ?n) WHERE {{
+                GRAPH <{self.registry_iri}> {{
+                    <{iri}> a cga:Holon .
+                }}
+            }}
+            """
+            )
+        )
+        exists = bool(count_rows) and int(count_rows[0]["n"]) > 0
+        if not exists:
+            return False
+
+        # 1. Collect layer graph IRIs for this holon
+        layer_rows = list(
+            self.backend.query(
+                f"""
+            PREFIX cga: <urn:holonic:ontology:>
+            SELECT ?graph WHERE {{
+                GRAPH <{self.registry_iri}> {{
+                    <{iri}> ?pred ?graph .
+                    FILTER(?pred IN (cga:hasInterior, cga:hasBoundary,
+                                     cga:hasProjection, cga:hasContext))
+                }}
+            }}
+            """
+            )
+        )
+        layer_graphs = [str(r["graph"]) for r in layer_rows]
+
+        # 2. Collect portals where this holon is source or target
+        portal_rows = list(
+            self.backend.query(
+                f"""
+            PREFIX cga: <urn:holonic:ontology:>
+            SELECT DISTINCT ?portal WHERE {{
+                GRAPH ?g {{
+                    ?portal ?pred <{iri}> .
+                    FILTER(?pred IN (cga:sourceHolon, cga:targetHolon))
+                }}
+            }}
+            """
+            )
+        )
+        portal_iris = [str(r["portal"]) for r in portal_rows]
+
+        # Suppress per-step metadata refresh during cascading cleanup —
+        # we'll fire one consolidated refresh at the end.
+        original_mode = self._metadata_updates
+        self._metadata_updates = "off"
+        try:
+            # 3. Remove each portal incident to the holon
+            for portal_iri in portal_iris:
+                self.remove_portal(portal_iri)
+
+            # 4. Delete each layer graph and its registry bindings
+            for graph_iri in layer_graphs:
+                # Delete the graph's contents
+                if self.backend.graph_exists(graph_iri):
+                    self.backend.delete_graph(graph_iri)
+                # Delete the registry binding + graph-typing triples
+                self.backend.update(
+                    f"""
+                    PREFIX cga: <urn:holonic:ontology:>
+                    DELETE WHERE {{
+                        GRAPH <{self.registry_iri}> {{
+                            <{iri}> ?pred <{graph_iri}> .
+                        }}
+                    }}
+                    """
+                )
+                self.backend.update(
+                    f"""
+                    PREFIX cga: <urn:holonic:ontology:>
+                    DELETE WHERE {{
+                        GRAPH <{self.registry_iri}> {{
+                            <{graph_iri}> ?p ?o .
+                        }}
+                    }}
+                    """
+                )
+
+            # 5. Remove cga:memberOf triples where OTHER holons reference
+            # this holon as parent. Children become root-level; they are
+            # not themselves deleted.
+            self.backend.update(
+                f"""
+                PREFIX cga: <urn:holonic:ontology:>
+                DELETE WHERE {{
+                    GRAPH <{self.registry_iri}> {{
+                        ?child cga:memberOf <{iri}> .
+                    }}
+                }}
+                """
+            )
+
+            # 6. Remove the holon's own registry entry (type, label,
+            # memberOf outgoing, per-holon rollup metadata, any other
+            # registry-level triples about the holon).
+            self.backend.update(
+                f"""
+                DELETE WHERE {{
+                    GRAPH <{self.registry_iri}> {{
+                        <{iri}> ?p ?o .
+                    }}
+                }}
+                """
+            )
+        finally:
+            self._metadata_updates = original_mode
+
+        # 7. One consolidated metadata refresh after the cascade
+        if self._metadata_updates == "eager":
+            self._metadata.refresh_graph(self.registry_iri)
+
+        return True
+
     # ══════════════════════════════════════════════════════════
     # Holon discovery (SPARQL-driven)
     # ══════════════════════════════════════════════════════════
@@ -410,34 +584,206 @@ class HolonicDataset:
         portal_iri: str,
         source_iri: str,
         target_iri: str,
-        construct_query: str,
+        construct_query: str | None = None,
         *,
+        portal_type: str = "cga:TransformPortal",
+        extra_ttl: str | None = None,
         label: str | None = None,
         graph_iri: str | None = None,
     ) -> str:
-        """Register a TransformPortal in the source holon's boundary graph.
+        """Register a portal in the source holon's boundary graph.
 
         The portal definition IS RDF in the boundary named graph.
         Discovery uses SPARQL, not Python lookups.
+
+        Parameters
+        ----------
+        portal_iri :
+            IRI for the portal resource.
+        source_iri :
+            IRI of the source holon.
+        target_iri :
+            IRI of the target holon.
+        construct_query :
+            Optional SPARQL CONSTRUCT query that produces the target
+            interior from the source. Omit for portal subtypes that do
+            not carry a SPARQL transformation (e.g. ``cga:IconPortal``,
+            ``cga:SealedPortal``, or downstream subclasses whose
+            transformation is specified by a different predicate).
+        portal_type :
+            RDF type for the portal. Defaults to ``"cga:TransformPortal"``.
+            Accepts a prefixed name (``"cga:SealedPortal"``,
+            ``"ext:NeuralPortal"``) or a full IRI. The caller is
+            responsible for ensuring the type resolves to a declared
+            class.
+        extra_ttl :
+            Additional Turtle triples appended verbatim to the portal
+            block before parsing. Useful for portal subclasses that
+            carry extra predicates. Applied to both the boundary graph
+            and the registry mirror. The string should NOT include
+            ``@prefix`` declarations — the method prepends the
+            standard prefix block.
+        label :
+            Human-readable label. Defaults to "<source> → <target>".
+        graph_iri :
+            Explicit boundary graph IRI. Defaults to
+            ``"<source_iri>/boundary"``.
+
+        Returns:
+        -------
+        str
+            The portal's IRI (same as the input, returned for chaining).
+
+        Examples:
+        --------
+        Minimal TransformPortal with CONSTRUCT (the 0.3.x/0.4.0 form,
+        unchanged)::
+
+            ds.add_portal(
+                "urn:portal:a-to-b",
+                source_iri="urn:holon:a",
+                target_iri="urn:holon:b",
+                construct_query="CONSTRUCT { ?s ?p ?o } WHERE { GRAPH ?g { ?s ?p ?o } }",
+            )
+
+        SealedPortal with no CONSTRUCT query::
+
+            ds.add_portal(
+                "urn:portal:sealed",
+                source_iri="urn:holon:a",
+                target_iri="urn:holon:b",
+                portal_type="cga:SealedPortal",
+            )
+
+        Downstream portal subclass carrying extra predicates::
+
+            ds.add_portal(
+                "urn:portal:neural",
+                source_iri="urn:holon:a",
+                target_iri="urn:holon:b",
+                portal_type="ext:NeuralPortal",
+                extra_ttl='''
+                    @prefix ext: <urn:ext:> .
+                    <urn:portal:neural> ext:transformRef <urn:model:v1> ;
+                        ext:portalWeight 0.87 .
+                ''',
+            )
         """
         graph_iri = graph_iri or f"{source_iri}/boundary"
-        escaped_query = construct_query.replace("\\", "\\\\").replace('"', '\\"')
         # TODO to_pithy_id
         lbl = label or f"{source_iri} → {target_iri}"
+
+        # Extract any @prefix lines from extra_ttl so they can be placed
+        # at the top of the combined Turtle block (prefix declarations
+        # must precede any triples in Turtle syntax).
+        extra_prefixes = ""
+        extra_body = ""
+        if extra_ttl:
+            for line in extra_ttl.splitlines():
+                stripped = line.strip()
+                if stripped.lower().startswith("@prefix") and stripped.endswith("."):
+                    extra_prefixes += line + "\n"
+                else:
+                    extra_body += line + "\n"
+
         ttl = f"""
             @prefix cga:  <urn:holonic:ontology:> .
             @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
-
-            <{portal_iri}> a cga:TransformPortal ;
+            {extra_prefixes}
+            <{portal_iri}> a {portal_type} ;
                 cga:sourceHolon <{source_iri}> ;
                 cga:targetHolon <{target_iri}> ;
-                rdfs:label "{lbl}" ;
-                cga:constructQuery \"\"\"{escaped_query}\"\"\" .
-        """
+                rdfs:label "{lbl}\""""
+        if construct_query is not None:
+            escaped_query = construct_query.replace("\\", "\\\\").replace('"', '\\"')
+            ttl += f' ;\n                cga:constructQuery """{escaped_query}"""'
+        ttl += " .\n"
+
+        if extra_body.strip():
+            ttl += extra_body + "\n"
+
         self.backend.parse_into(graph_iri, ttl, "turtle")
         # Also ensure portal is visible from registry
         self.backend.parse_into(self.registry_iri, ttl, "turtle")
+        self._maybe_refresh(graph_iri)
         return portal_iri
+
+    def remove_portal(self, portal_iri: str) -> bool:
+        """Remove a portal from the dataset.
+
+        Cleans up all triples with ``portal_iri`` as subject across every
+        named graph that contains them (typically the source holon's
+        boundary graph and the registry mirror). The boundary graph
+        itself is preserved; only the triples about this specific
+        portal are deleted.
+
+        Parameters
+        ----------
+        portal_iri :
+            The portal's IRI.
+
+        Returns:
+        -------
+        bool
+            ``True`` if the portal existed and was removed. ``False`` if
+            the IRI was not found in any graph (idempotent — not an
+            error).
+
+        Notes:
+        -----
+        Does NOT remove:
+
+        - The source or target holons
+        - The boundary graph itself (other portals or SHACL shapes may
+          live there)
+        - Provenance activities referencing this portal
+
+        When ``metadata_updates="eager"``, metadata for each affected
+        graph is refreshed after the removal.
+        """
+        # Find every graph containing triples about this portal
+        rows = list(
+            self.backend.query(
+                f"""
+            SELECT DISTINCT ?g WHERE {{
+                GRAPH ?g {{ <{portal_iri}> ?p ?o }}
+            }}
+            """
+            )
+        )
+        if not rows:
+            return False
+
+        affected_graphs = [str(r["g"]) for r in rows]
+
+        # Delete all triples with the portal as subject in each graph
+        for g in affected_graphs:
+            self.backend.update(
+                f"""
+                DELETE WHERE {{
+                    GRAPH <{g}> {{ <{portal_iri}> ?p ?o }}
+                }}
+                """
+            )
+
+        # Belt-and-suspenders: also delete from the registry in case the
+        # portal was added without the registry mirror being picked up
+        # by the graph search (e.g. if the portal's only subject-position
+        # triples were in blank-node contexts that elided the discovery).
+        if self.registry_iri not in affected_graphs:
+            self.backend.update(
+                f"""
+                DELETE WHERE {{
+                    GRAPH <{self.registry_iri}> {{ <{portal_iri}> ?p ?o }}
+                }}
+                """
+            )
+
+        # Refresh metadata for affected graphs if eager
+        for g in affected_graphs:
+            self._maybe_refresh(g)
+
+        return True
 
     # ══════════════════════════════════════════════════════════
     # Portal discovery (SPARQL-driven)

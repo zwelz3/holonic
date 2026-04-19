@@ -30,13 +30,27 @@ vocabulary that defines the structural concepts for holonic RDF systems.
 |-------|-------------|
 | `cga:Holon` | Entity with four-layer named-graph structure |
 | `cga:Portal` | Governed traversal mechanism between holons |
-| `cga:TransformPortal` | Portal carrying a SPARQL CONSTRUCT query |
+| `cga:TransformPortal` | Portal carrying a SPARQL CONSTRUCT query (reshapes data during traversal) |
+| `cga:IconPortal` | Portal declaring a referential relationship with no transformation (traversal returns an empty projection) |
+| `cga:SealedPortal` | Portal whose traversal is currently blocked; IRI persists for discovery and future re-opening |
 | `cga:LayerGraph` | A named graph serving as one layer of a holon |
 | `cga:LayerRole` | Individual: Interior, Boundary, Projection, Context, Registry |
 | `cga:HolonicGraph` | Umbrella class for typed graphs (0.3.4; superclass of LayerGraph) |
 | `cga:ClassInstanceCount` | Reified per-graph class inventory record (0.3.3) |
 | `cga:ProjectionPipelineSpec` | Named, ordered pipeline of projection steps (0.3.5) |
 | `cga:ProjectionPipelineStep` | One step carrying transform name or CONSTRUCT (0.3.5) |
+
+### Portal subtype semantics
+
+The three portal subclasses differ in whether they carry a `cga:constructQuery` and what traversal means for each. SHACL shapes in `cga-shapes.ttl` enforce these invariants.
+
+| Subclass | `cga:constructQuery` | Traversal behavior | Shape severity for misuse |
+|----------|---------------------|--------------------|--------------------------|
+| `cga:TransformPortal` | **required** (minCount 1, maxCount 1) | Executes CONSTRUCT against source; produces projection | Violation if missing |
+| `cga:IconPortal` | **forbidden** (maxCount 0) | Returns empty projection; relationship is purely referential | Warning if present |
+| `cga:SealedPortal` | **forbidden** (maxCount 0) | Traversal blocked entirely; any query would never fire | Warning if present |
+
+Downstream extensions may declare subclasses of `cga:TransformPortal` that substitute a domain-specific transformation predicate (for example, a reference to a learned function) for `cga:constructQuery`. Such subclasses override the query requirement with their own SHACL shape; the ontology does not force every portal to carry a SPARQL query.
 
 ## Key Properties
 
@@ -49,13 +63,13 @@ vocabulary that defines the structural concepts for holonic RDF systems.
 | `cga:hasProjection` | Holon → graph | Associates projection named graph(s) |
 | `cga:hasContext` | Holon → graph | Associates context named graph(s) |
 
-### Portal (0.2.x)
+### Portal (0.2.x, refined 0.4.2)
 
 | Property | Domain → Range | Description |
 |----------|---------------|-------------|
-| `cga:sourceHolon` | Portal → Holon | Traversal origin |
-| `cga:targetHolon` | Portal → Holon | Traversal destination |
-| `cga:constructQuery` | TransformPortal → string | SPARQL CONSTRUCT query |
+| `cga:sourceHolon` | Portal → Holon | Traversal origin (all subtypes) |
+| `cga:targetHolon` | Portal → Holon | Traversal destination (all subtypes) |
+| `cga:constructQuery` | TransformPortal → string | SPARQL CONSTRUCT query (required for TransformPortal; forbidden on IconPortal and SealedPortal by SHACL shape) |
 | `cga:memberOf` | Holon → Holon | Holarchy containment |
 
 ### Derivation (distinguished in 0.3.2)

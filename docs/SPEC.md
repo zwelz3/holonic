@@ -88,7 +88,7 @@ Make it practical to build holarchies for digital engineering, defense C2, enter
   - acceptance: Given `pip install holonic`, when the package is introspected, then both TTL files are present as resources under holonic.ontology and parse cleanly with rdflib.
   - verifiedBy: src/holonic/test/test_ontology.py::test_cga_ttl_packaged_and_parseable
 
-- R3.2 The ontology MUST define `cga:Holon` and its functional subclasses (`cga:DataHolon`, `cga:AlignmentHolon`, `cga:AgentHolon`, `cga:GovernanceHolon`, `cga:AggregateHolon`, `cga:IndexHolon`), `cga:Portal` and its subclasses (`cga:TransformPortal`, `cga:SealedPortal`), `cga:LayerGraph`, and `cga:LayerRole`.
+- R3.2 The ontology MUST define `cga:Holon` and its functional subclasses (`cga:DataHolon`, `cga:AlignmentHolon`, `cga:AgentHolon`, `cga:GovernanceHolon`, `cga:AggregateHolon`, `cga:IndexHolon`), `cga:Portal` and its subclasses (`cga:TransformPortal`, `cga:IconPortal`, `cga:SealedPortal`), `cga:LayerGraph`, and `cga:LayerRole`. Portal subtype semantics MUST be enforced by SHACL shapes in `cga-shapes.ttl`: `cga:TransformPortal` requires exactly one `cga:constructQuery`; `cga:IconPortal` and `cga:SealedPortal` must not carry `cga:constructQuery` (carrying one is semantically incoherent because an IconPortal is purely referential and a SealedPortal blocks traversal).
   - priority: MUST
   - constrains: cga.ttl
   - acceptance: Given cga.ttl, when SPARQL queries every declared class, then all listed class IRIs are returned with their subclass relationships intact.
@@ -222,10 +222,10 @@ Make it practical to build holarchies for digital engineering, defense C2, enter
   - acceptance: Given a source graph, when build_construct() returns a CONSTRUCT string AND project_to_lpg() returns a ProjectedGraph dict, then both modes are available and produce the documented shapes.
   - verifiedBy: src/holonic/test/test_projections.py::test_both_projection_modes_supported
 
-- R7.2 `project_to_lpg(graph, ...)` MUST support collapsing types, literals, blank nodes, and RDF lists independently (each a boolean flag).
+- R7.2 `project_to_lpg(graph, ...)` MUST support four independent boolean flags controlling the core simplifications: `collapse_types`, `collapse_literals`, `resolve_blanks`, and `resolve_lists`. Each flag governs a distinct transformation (types→node annotations, literals→node attributes, blank nodes inlined as nested attributes, RDF lists resolved to Python lists) and each MUST be toggleable independently of the others.
   - priority: MUST
   - constrains: project_to_lpg
-  - acceptance: Given a graph with all four RDF features, when project_to_lpg is called with each flag independently toggled, then each feature is collapsed only when its corresponding flag is true.
+  - acceptance: Given a graph with all four RDF features, when project_to_lpg is called with each flag independently toggled, then each feature is transformed only when its corresponding flag is true.
   - verifiedBy: src/holonic/test/test_projections.py::test_project_to_lpg_flags_independent
 
 - R7.3 `ProjectionPipeline` MUST compose named steps as a sequence of CONSTRUCT queries and Python transforms, with `.apply_to_lpg()` and `.apply_to_graph()` terminal methods.
@@ -398,11 +398,33 @@ Make it practical to build holarchies for digital engineering, defense C2, enter
   - acceptance: Given holonic 0.5.0 installed, when code imports GraphBackend or passes registry_graph=, then an ImportError or TypeError is raised respectively.
   - verifiedBy: (pending 0.5.0 release; test added at removal time)
 
-- R9.19 The library SHOULD ship a JupyterLite static build of the example notebooks (`notebooks/01`–`09`) for in-browser exploration without local Python installation. Target: 0.6.0. Build step integrates with the existing `notebooks/` directory; published via the project's documentation site or static hosting. Establishes the zero-install demo path referenced in the README's quickstart.
-  - priority: SHOULD
-  - constrains: jupyterlite/, build pipeline, notebooks/
-  - acceptance: Given a released 0.6.0 artifact, when the JupyterLite page is opened in a browser, then all nine notebooks load and execute in-browser without a local Python installation.
-  - verifiedBy: (pending 0.6.0 release; build validated in CI)
+### Shipped in 0.4.1
+
+- R9.19 The library MUST ship a JupyterLite static build of the example notebooks for in-browser exploration without local Python installation. Build integrates with the existing `notebooks/` directory via `scripts/sync_notebooks_to_jlite.py`; output lands in `docs/source/_static/jupyterlite/` so Sphinx (and ReadTheDocs) serve it under the documentation domain. Notebook 11 (yFiles visualization) is excluded from in-browser execution because yFiles requires a Jupyter server extension that Pyodide cannot provide; the landing notebook `00_start_here.ipynb` documents this constraint.
+  - priority: MUST
+  - constrains: jupyterlite/, scripts/sync_notebooks_to_jlite.py, .readthedocs.yaml, pixi.toml (tasks-jlite), docs/source/_static/jupyterlite/
+  - acceptance: Given the 0.4.1 release on ReadTheDocs, when a reader opens the docs and follows the "Try in browser" link, then the JupyterLite lab loads and notebooks 01-10 execute against a Pyodide kernel without local Python installation.
+  - verifiedBy: docs/source/index.md "Try in browser" section + .readthedocs.yaml pre_build hooks + manual verification during release rehearsal
+
+### Shipped in 0.4.2
+
+- R9.20 The library MUST provide `HolonicDataset.remove_holon(iri)` completing the CRUD lifecycle started by `add_holon()`. Cleans up the holon's registry entry, all four layer graphs (interior/boundary/projection/context), graph-typing triples, graph-level metadata records, the per-holon rollup, and cascades to `remove_portal()` for every portal where the holon is source or target. Child holons that reference the removed holon via `cga:memberOf` are orphaned (their `memberOf` triple is removed) but not themselves deleted. Idempotent — returns `False` for a non-existent IRI rather than raising. Provenance activities referencing the removed holon are preserved because provenance is immutable history.
+  - priority: MUST
+  - constrains: HolonicDataset.remove_holon, holonic/client.py
+  - acceptance: Given a holon with interior, boundary, and context layer graphs, plus a portal from it and a portal to it, plus a child holon referencing it as `cga:memberOf`, when `remove_holon(iri)` is called, then the holon is gone from `list_holons()`, all four layer graphs are deleted via `backend.graph_exists()=False`, both portals are gone from `find_portals_from`/`find_portals_to`, and the child remains in `list_holons()` but without its `memberOf` triple.
+  - verifiedBy: src/holonic/test/test_lifecycle.py::TestRemoveHolon
+
+- R9.21 The library MUST provide `HolonicDataset.remove_portal(portal_iri)` completing the CRUD lifecycle started by `add_portal()`. Removes all triples with `portal_iri` as subject from every graph containing them (typically the source holon's boundary graph and the registry mirror). The boundary graph itself is preserved — sibling portals and SHACL shapes in the same graph are unaffected. Idempotent — returns `False` for a non-existent portal IRI rather than raising. Metadata refresh fires per affected graph when `metadata_updates="eager"`.
+  - priority: MUST
+  - constrains: HolonicDataset.remove_portal, holonic/client.py
+  - acceptance: Given a source holon with two portals declared in the same boundary graph plus a SHACL shape, when `remove_portal(portal_a)` is called, then portal_a is absent from `find_portals_from(source)`, portal_b is still discoverable, and the SHACL shape is still present in the boundary graph.
+  - verifiedBy: src/holonic/test/test_lifecycle.py::TestRemovePortal
+
+- R9.22 The `add_portal()` method MUST support creation of all portal subtypes declared in the CGA ontology (`cga:TransformPortal`, `cga:IconPortal`, `cga:SealedPortal`) as well as downstream subclasses via three additive parameters: `construct_query` is optional (default `None`); `portal_type` is a customizable RDF type (default `"cga:TransformPortal"`); `extra_ttl` accepts additional Turtle triples for predicates carried by downstream portal subclasses. All existing positional calls continue to work unchanged. Portal discovery (`find_portals_from/to/direct`) MUST match any portal subtype — the pre-0.4.2 hardcoded filter on `cga:TransformPortal` is relaxed because the `cga:sourceHolon` + `cga:targetHolon` predicate pair uniquely identifies a portal regardless of its specific subtype. Discovery queries use `SELECT DISTINCT` to deduplicate results across the boundary graph and registry mirror. The CGA ontology ships `cga:IconPortal` (previously undeclared) and SHACL shapes (`cga:IconPortalShape`, `cga:SealedPortalShape`) that warn when these subtypes carry `cga:constructQuery`; `cga:TransformPortalShape` continues to require exactly one `cga:constructQuery`.
+  - priority: MUST
+  - constrains: HolonicDataset.add_portal, holonic/client.py, holonic/sparql.py (FIND_PORTALS_FROM, FIND_PORTALS_TO, FIND_PORTAL_DIRECT), holonic/ontology/cga.ttl (cga:IconPortal), holonic/ontology/cga-shapes.ttl (cga:IconPortalShape, cga:SealedPortalShape)
+  - acceptance: Given a portal created with `portal_type="cga:SealedPortal"` and no `construct_query`, when `find_portals_from(source)` is called, then exactly one `PortalInfo` is returned with `construct_query=None`; and given a portal created with `extra_ttl` carrying a downstream predicate, when the boundary graph is queried by SPARQL for that predicate, then the extra triples are present; and given a TransformPortal without a constructQuery or a SealedPortal/IconPortal carrying one, when the registry is validated against `cga-shapes.ttl`, then the corresponding shape reports a violation (for TransformPortal) or warning (for SealedPortal and IconPortal).
+  - verifiedBy: src/holonic/test/test_lifecycle.py::TestAddPortalExtensibility and src/holonic/test/test_ontology.py::TestPortalSubtypeShapeSemantics
 
 # User Stories
 
@@ -457,6 +479,7 @@ Make it practical to build holarchies for digital engineering, defense C2, enter
 - The registry graph (`urn:holarchy:registry`) in R9 proposals refers to a cross-cutting catalog graph for holarchy-level declarations. It is distinct from per-holon layer graphs and is declared at the holarchy level, not the holon level.
 - `holonic-console` is the primary downstream consumer driving the 0.3.1 API additions. Its stage 2 work (sigma.js neighborhood view, portal browser, provenance feed) is the functional proof for R6.
 - `specl` provides the SHACL validation of this SPEC itself. The spec is dogfood: the library under development is specified using a tool whose ontology was co-designed with it.
+- Cagle's "The Graph as State Machine" (*The Inference Engineer*, April 2026) frames a holonic graph as a graph-level state machine where the four layers map to Scene / Boundary / Event / Projection and `sh:SPARQLRule` is the transition function driven by a clock-triggered tick. The library today implements the four layers structurally but operates event-triggered (portal traversals invoked by callers) rather than clock-triggered. Whether to add a tick primitive is captured as OQ8.
 
 # Open Questions and Gaps (flag for follow-up)
 
@@ -493,6 +516,16 @@ Make it practical to build holarchies for digital engineering, defense C2, enter
 - OQ7 Federation semantics across multiple registries are out of scope for 0.3.x. Open question preserved because the typed-graph design (R9.1) should not close the door on registry-to-registry declarations like `cga:federatesWith`.
   - owner: zwelz3
   - recommendation: Defer to 0.5.0 design session; ensure R9.3's typed-graph vocabulary leaves room for a future federation property without schema migration.
+  - status: deferred
+
+- OQ8 Graph-level tick semantics and transition rules. Cagle's "The Graph as State Machine" (*The Inference Engineer*, April 2026) frames a holonic graph as a graph-level state machine in the Game-of-Life sense: Scene Graph (interior state), Boundary Graph (SHACL rules including `sh:SPARQLRule` transition functions), Event Graph (PROV-O transition history), and Projection Graph (external observation). The library implements all four layers structurally but does not implement a tick — portal traversals are event-triggered rather than clock-triggered, and SHACL is used for validation rather than for `$this`-based transformation rules. A future `HolonicDataset.tick()` primitive could fire SHACL transition rules across the whole holarchy, either accumulating PROV-O activities into the Event Graph or mutating the Scene Graph directly via SPARQL UPDATE. Whether to add this is a distinct architectural question from anything currently in the roadmap; adopting it would extend the library from a read-heavy, portal-triggered coordination layer into a living-system model with continuous dynamics.
+  - owner: zwelz3
+  - recommendation: Wait for Part 2 of the Cagle series (Active Inference / Free Energy Principle) to land before committing to a tick API. Evaluate whether a tick is the right primitive or whether something finer-grained (an active-inference step, an energy-minimization iteration) is more apt. If pursued at all, target a `holonic.contrib` experimental module first to test the pattern without committing the core ontology. No release slot assigned; this may or may not be implemented.
+  - status: deferred
+
+- OQ9 DOM-style event propagation as a coordination model. Cagle proposes (LinkedIn thread, April 2026) that plural-orchestrator coordination can be resolved by treating the holarchy as a structure over which events propagate in the W3C Document Object Model's capture/target/bubble pattern. Under this framing: the containing holon makes no expectations on child interiors (opacity is first-class); external events arrive at a holon and are either consumed, delegated to children via portals, or ignored after propagation completes; "eventually ignored" is a legitimate outcome rather than a failure mode. This is distinct from OQ8's tick proposal — event propagation is structural (who receives an event depends on the containment topology) rather than clock-triggered. The library today implements something DOM-adjacent via portal traversal and multi-hop path finding, but does not expose explicit event-dispatch semantics. Open questions surface immediately when mapping DOM to holons: DOM events are synchronous and the DOM is a strict tree, whereas a federated holarchy is asynchronous and a containment graph may have multiple portal paths between two holons. Whether to adopt the DOM framing as library architecture, as a mental model for explaining existing capabilities, or neither, remains open.
+  - owner: zwelz3
+  - recommendation: Before any implementation, verify whether the existing portal-traversal API strains under real use cases that DOM-style event dispatch would address more naturally. If strain emerges, the design question becomes: extend existing portal semantics with explicit event-phase hooks (capture/target/bubble), add a dedicated `dispatch_event` API parallel to `traverse`, or adopt the DOM model as framing while keeping the current API unchanged. The documentation at `docs/source/dom-comparison.md` establishes the mental-model mapping without committing to implementation. No release slot assigned; this may or may not be implemented.
   - status: deferred
 
 # Appendix A: Suggested Namespaces

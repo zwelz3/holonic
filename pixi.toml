@@ -121,6 +121,11 @@ description = "Validate docs/SPEC.ttl against specl shapes with explanations"
 cmd = "specl-validate validate docs/SPEC.ttl $(python -c 'import specl, pathlib; print(pathlib.Path(specl.__file__).parent / \"shapes.ttl\")') --explain"
 depends-on = ["spec-translate"]
 
+[feature.tasks-spec.tasks.spec-compliance]
+description = "Run the comprehensive SPEC compliance check — verifies each requirement against actual library behavior (not just annotation coverage)"
+cmd = "python scripts/spec_compliance_check.py"
+inputs = ["docs/SPEC.md", "src/holonic/**/*.py", "scripts/spec_compliance_check.py"]
+
 [feature.tasks-spec.tasks.spec-score]
 description = """Compute the spec maturity score (0-100%). Fraction of
     requirements without SHACL violations or warnings. Embed the SVG
@@ -130,8 +135,8 @@ cmd = "specl-validate score docs/SPEC.ttl $(python -c 'import specl, pathlib; pr
 depends-on = ["spec-translate"]
 
 [feature.tasks-spec.tasks.spec-badge]
-description = "Generate a spec-maturity SVG badge at build/spec-badge.svg"
-cmd = "specl-validate badge docs/SPEC.ttl $(python -c 'import specl, pathlib; print(pathlib.Path(specl.__file__).parent / \"shapes.ttl\")') --out build/spec-badge.svg"
+description = "Generate a spec-maturity SVG badge at static/spec-badge.svg (committed alongside other static assets)"
+cmd = "specl-validate badge docs/SPEC.ttl $(python -c 'import specl, pathlib; print(pathlib.Path(specl.__file__).parent / \"shapes.ttl\")') --out static/spec-badge.svg"
 depends-on = ["spec-translate"]
 
 [feature.tasks-docs.tasks.autogen]
@@ -148,8 +153,17 @@ description = "Set up and test"
 depends-on = ["lint-check", "test", "build_html_docs"]
 
 [feature.tasks-jlite.tasks.build_jl]
-description = "Create jupyterlite page"
-cmd = "jupyter lite build --contents jupyterlite/content  --output-dir build/docs/demo"
+description = "Build the JupyterLite static site into docs/source/_static/jupyterlite so Sphinx includes it in the docs tree"
+cmd = "jupyter lite build --output-dir ../docs/source/_static/jupyterlite"
+cwd = "jupyterlite"
+inputs = ["jupyterlite/content/*.ipynb", "jupyterlite/requirements.txt", "jupyterlite/jupyter_lite_config.json"]
+outputs = ["docs/source/_static/jupyterlite/index.html"]
+
+[feature.tasks-jlite.tasks.sync_notebooks_to_jlite]
+description = "Copy the latest example notebooks into jupyterlite/content so the next JupyterLite build serves them"
+cmd = "python scripts/sync_notebooks_to_jlite.py"
+inputs = ["notebooks/*.ipynb"]
+outputs = ["jupyterlite/content/01_holon_basics.ipynb"]
 
 [feature.tasks-lab.tasks.serve]
 description = "Serve local jupyterlab"

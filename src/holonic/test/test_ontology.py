@@ -82,6 +82,30 @@ class TestOntologyAutoLoaded:
             }}
         """)
 
+    def test_icon_portal_class_defined(self, loaded_ds):
+        assert loaded_ds.backend.ask(f"""
+            ASK {{
+                GRAPH <{CGA_GRAPH}> {{
+                    <urn:holonic:ontology:IconPortal>
+                        a <http://www.w3.org/2002/07/owl#Class> ;
+                        <http://www.w3.org/2000/01/rdf-schema#subClassOf>
+                            <urn:holonic:ontology:Portal> .
+                }}
+            }}
+        """)
+
+    def test_sealed_portal_class_defined(self, loaded_ds):
+        assert loaded_ds.backend.ask(f"""
+            ASK {{
+                GRAPH <{CGA_GRAPH}> {{
+                    <urn:holonic:ontology:SealedPortal>
+                        a <http://www.w3.org/2002/07/owl#Class> ;
+                        <http://www.w3.org/2000/01/rdf-schema#subClassOf>
+                            <urn:holonic:ontology:Portal> .
+                }}
+            }}
+        """)
+
     def test_holon_shape_defined(self, loaded_ds):
         assert loaded_ds.backend.ask(f"""
             ASK {{
@@ -118,4 +142,106 @@ class TestShapesValidateRegistry:
             registry,
             shacl_graph=shapes,
         )
+        assert conforms
+
+
+class TestPortalSubtypeShapeSemantics:
+    """SHACL shapes enforce the per-subtype constructQuery semantics:
+
+    - TransformPortal MUST have exactly one constructQuery
+    - IconPortal MUST NOT have a constructQuery (warning)
+    - SealedPortal MUST NOT have a constructQuery (warning)
+    """
+
+    def _validate_registry(self, ds):
+        import pyshacl
+
+        registry = ds.backend.get_graph(ds.registry_graph)
+        shapes = ds.backend.get_graph(CGA_SHAPES_GRAPH)
+        conforms, _report_graph, report_text = pyshacl.validate(
+            registry,
+            shacl_graph=shapes,
+        )
+        return conforms, report_text
+
+    def test_transform_portal_without_query_fails_validation(self, loaded_ds):
+        """TransformPortal without cga:constructQuery triggers a violation."""
+        loaded_ds.add_holon("urn:holon:a", "A")
+        loaded_ds.add_interior("urn:holon:a", "<urn:x> a <urn:T> .")
+        loaded_ds.add_holon("urn:holon:b", "B")
+        loaded_ds.add_interior("urn:holon:b", "<urn:y> a <urn:T> .")
+        # Transform portal with no query — violates TransformPortalShape
+        loaded_ds.add_portal(
+            "urn:portal:incomplete",
+            source_iri="urn:holon:a",
+            target_iri="urn:holon:b",
+            construct_query=None,  # missing query on a TransformPortal
+            portal_type="cga:TransformPortal",
+        )
+        conforms, report = self._validate_registry(loaded_ds)
+        assert not conforms
+        assert "TransformPortal must have exactly one constructQuery" in report
+
+    def test_sealed_portal_with_query_fails_validation(self, loaded_ds):
+        """SealedPortal carrying a constructQuery triggers a warning."""
+        loaded_ds.add_holon("urn:holon:a", "A")
+        loaded_ds.add_interior("urn:holon:a", "<urn:x> a <urn:T> .")
+        loaded_ds.add_holon("urn:holon:b", "B")
+        loaded_ds.add_interior("urn:holon:b", "<urn:y> a <urn:T> .")
+        loaded_ds.add_portal(
+            "urn:portal:sealed-with-query",
+            source_iri="urn:holon:a",
+            target_iri="urn:holon:b",
+            construct_query="CONSTRUCT { ?s ?p ?o } WHERE { GRAPH ?g { ?s ?p ?o } }",
+            portal_type="cga:SealedPortal",
+        )
+        conforms, report = self._validate_registry(loaded_ds)
+        assert not conforms
+        assert "SealedPortal should not carry a constructQuery" in report
+
+    def test_icon_portal_with_query_fails_validation(self, loaded_ds):
+        """IconPortal carrying a constructQuery triggers a warning."""
+        loaded_ds.add_holon("urn:holon:a", "A")
+        loaded_ds.add_interior("urn:holon:a", "<urn:x> a <urn:T> .")
+        loaded_ds.add_holon("urn:holon:b", "B")
+        loaded_ds.add_interior("urn:holon:b", "<urn:y> a <urn:T> .")
+        loaded_ds.add_portal(
+            "urn:portal:icon-with-query",
+            source_iri="urn:holon:a",
+            target_iri="urn:holon:b",
+            construct_query="CONSTRUCT { ?s ?p ?o } WHERE { GRAPH ?g { ?s ?p ?o } }",
+            portal_type="cga:IconPortal",
+        )
+        conforms, report = self._validate_registry(loaded_ds)
+        assert not conforms
+        assert "IconPortal should not carry a constructQuery" in report
+
+    def test_sealed_portal_without_query_passes_validation(self, loaded_ds):
+        """Sealed portal without a query conforms to its shape."""
+        loaded_ds.add_holon("urn:holon:a", "A")
+        loaded_ds.add_interior("urn:holon:a", "<urn:x> a <urn:T> .")
+        loaded_ds.add_holon("urn:holon:b", "B")
+        loaded_ds.add_interior("urn:holon:b", "<urn:y> a <urn:T> .")
+        loaded_ds.add_portal(
+            "urn:portal:sealed-ok",
+            source_iri="urn:holon:a",
+            target_iri="urn:holon:b",
+            portal_type="cga:SealedPortal",
+        )
+        conforms, _ = self._validate_registry(loaded_ds)
+        assert conforms
+
+    def test_icon_portal_without_query_passes_validation(self, loaded_ds):
+        """Icon portal without a query conforms to its shape."""
+        loaded_ds.add_holon("urn:holon:a", "A")
+        loaded_ds.add_interior("urn:holon:a", "<urn:x> a <urn:T> .")
+        loaded_ds.add_holon("urn:holon:b", "B")
+        loaded_ds.add_interior("urn:holon:b", "<urn:y> a <urn:T> .")
+        loaded_ds.add_portal(
+            "urn:portal:icon-ok",
+            source_iri="urn:holon:a",
+            target_iri="urn:holon:b",
+            portal_type="cga:IconPortal",
+        )
+        conforms, _ = self._validate_registry(loaded_ds)
         assert conforms

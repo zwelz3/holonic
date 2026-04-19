@@ -46,19 +46,41 @@ cga:Holon a owl:Class ;
 cga:Portal a owl:Class ;
     rdfs:label "Portal" ;
     skos:definition """A boundary-membrane object that governs traversal
-        between holons.  First-class RDF entity with its own IRI.""" .
+        between holons.  First-class RDF entity with its own IRI.  The
+        concrete subclass determines whether traversal is transformative
+        (TransformPortal), purely referential (IconPortal), or blocked
+        (SealedPortal).""" .
 
 cga:TransformPortal a owl:Class ;
     rdfs:subClassOf cga:Portal ;
     rdfs:label "Transform Portal" ;
     skos:definition """A portal carrying a SPARQL CONSTRUCT query to
-        reshape data during traversal.""" .
+        reshape data during traversal.  MUST declare a cga:constructQuery
+        (enforced by cga:TransformPortalShape).  Downstream extensions
+        MAY subclass TransformPortal and substitute a domain-specific
+        transformation predicate for cga:constructQuery, in which case
+        the subclass overrides the query requirement via its own shape.""" .
+
+cga:IconPortal a owl:Class ;
+    rdfs:subClassOf cga:Portal ;
+    rdfs:label "Icon Portal" ;
+    skos:definition """A portal whose role is purely referential: it
+        declares that a relationship between two holons exists for
+        display or navigation, without carrying a transformation.
+        Traversal returns an empty projection; no data is reshaped.
+        MUST NOT declare a cga:constructQuery (carrying one is
+        semantically meaningless and flagged as a warning by
+        cga:IconPortalShape).""" .
 
 cga:SealedPortal a owl:Class ;
     rdfs:subClassOf cga:Portal ;
     rdfs:label "Sealed Portal" ;
     skos:definition """A portal whose target exists but traversal is
-        currently blocked.  IRI persists.""" .
+        currently blocked.  The IRI persists so the relationship is
+        discoverable and can later be re-opened by reclassification.
+        MUST NOT declare a cga:constructQuery (any query would never
+        fire because traversal is blocked; carrying one is flagged as
+        a warning by cga:SealedPortalShape).""" .
 
 cga:LayerGraph a owl:Class ;
     rdfs:label "Layer Graph" ;
