@@ -95,6 +95,12 @@ jobs:
         with:
           environments: dev
 
+      - name: Sync notebooks to JupyterLite content
+        run: pixi run -e dev sync_notebooks_to_jlite
+
+      - name: Build JupyterLite site
+        run: pixi run -e dev build_jl
+
       - name: Build documentation
         run: pixi run -e dev build_html_docs
 
