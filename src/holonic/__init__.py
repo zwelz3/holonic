@@ -7,7 +7,7 @@ backed by rdflib, Apache Jena Fuseki, or any SPARQL-compliant store.
 import os as _os
 import warnings as _warnings
 
-__version__ = "0.4.0"
+__version__ = "0.4.2"
 
 from holonic.backends import AbstractHolonicStore, HolonicStore, RdflibBackend
 from holonic.client import HolonicDataset

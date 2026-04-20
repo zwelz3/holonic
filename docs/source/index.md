@@ -8,6 +8,7 @@ api
 projections
 backends
 ontology
+dom-comparison
 ```
 
 ```{toctree}
@@ -31,6 +32,23 @@ A holon is an IRI whose associated named graphs exist in an RDF
 dataset. The dataset IS the holarchy — no separate registry
 object. Portals are RDF triples discoverable via SPARQL; membranes
 are SHACL shapes; all state lives in the graph.
+
+## Try in Browser
+
+The example notebooks run in your browser via [JupyterLite](https://jupyterlite.readthedocs.io/).
+No installation required — the library and its dependencies load
+into a Pyodide kernel the first time you execute a cell.
+
+[Open the in-browser lab](./_static/jupyterlite/index.html)
+
+What works: everything that doesn't need external services or
+system extensions — `HolonicDataset`, portal traversal, membrane
+validation via SHACL, projections, scope resolution, the projection
+plugin system. What doesn't work: `FusekiBackend` (no HTTP in the
+browser sandbox) and the `yfiles-jupyter-graphs` widgets from
+notebook 11 (requires a Jupyter server extension). See the
+`00_start_here.ipynb` notebook once you open the lab for the full
+caveats.
 
 ## Quick Start
 
@@ -86,9 +104,14 @@ cd docs
 sphinx-build -b html . _build/html
 ```
 
-## Generating Notebooks
+## Running the Example Notebooks
 
 ```bash
-pip install holonic[notebooks]
-jupytext --to notebook examples/01_holon_basics.py
+pixi run serve
 ```
+
+This launches JupyterLab with the eleven example notebooks in `notebooks/` available. Notebooks are committed with outputs stripped; executing them locally populates output cells without affecting the committed state. Run `pixi run check-notebooks` before committing to confirm no outputs leaked in.
+
+## Roadmap
+
+See the project README for the headline roadmap. Full requirements tracked in [`SPEC`](../SPEC) under R9.11–R9.22.

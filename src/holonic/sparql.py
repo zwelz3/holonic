@@ -87,11 +87,10 @@ FIND_PORTALS_FROM = """
 PREFIX cga:  <urn:holonic:ontology:>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 
-SELECT ?portal ?target ?label ?query
+SELECT DISTINCT ?portal ?target ?label ?query
 WHERE {
     graph ?g {
-        ?portal a cga:TransformPortal ;
-            cga:sourceHolon ?source ;
+        ?portal cga:sourceHolon ?source ;
             cga:targetHolon ?target .
         OPTIONAL { ?portal rdfs:label ?label }
         OPTIONAL { ?portal cga:constructQuery ?query }
@@ -103,11 +102,10 @@ FIND_PORTALS_TO = """
 PREFIX cga:  <urn:holonic:ontology:>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 
-SELECT ?portal ?source ?label ?query
+SELECT DISTINCT ?portal ?source ?label ?query
 WHERE {
     graph ?g {
-        ?portal a cga:TransformPortal ;
-            cga:sourceHolon ?source ;
+        ?portal cga:sourceHolon ?source ;
             cga:targetHolon ?target .
         OPTIONAL { ?portal rdfs:label ?label }
         OPTIONAL { ?portal cga:constructQuery ?query }
@@ -119,11 +117,10 @@ FIND_PORTAL_DIRECT = """
 PREFIX cga:  <urn:holonic:ontology:>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 
-SELECT ?portal ?label ?query
+SELECT DISTINCT ?portal ?label ?query
 WHERE {
     graph ?g {
-        ?portal a cga:TransformPortal ;
-            cga:sourceHolon ?source ;
+        ?portal cga:sourceHolon ?source ;
             cga:targetHolon ?target .
         OPTIONAL { ?portal rdfs:label ?label }
         OPTIONAL { ?portal cga:constructQuery ?query }
@@ -139,9 +136,8 @@ PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 SELECT DISTINCT ?portal ?source ?target ?label
 WHERE {
     graph ?g {
-        ?portal a cga:TransformPortal ;
-        cga:sourceHolon ?source ;
-        cga:targetHolon ?target .
+        ?portal cga:sourceHolon ?source ;
+            cga:targetHolon ?target .
         OPTIONAL { ?portal rdfs:label ?label }
     }
 }

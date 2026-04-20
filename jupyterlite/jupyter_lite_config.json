@@ -1,0 +1,10 @@
+{
+  "LiteBuildConfig": {
+    "contents": ["content"],
+    "apps": ["notebooks", "lab"],
+    "no_unused_shared_packages": true
+  },
+  "PipliteAddon": {
+    "piplite_urls": []
+  }
+}

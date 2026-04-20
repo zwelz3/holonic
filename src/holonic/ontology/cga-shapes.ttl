@@ -88,6 +88,33 @@ cga:TransformPortalShape a sh:NodeShape ;
     ] ;
     .
 
+# IconPortal is purely referential; any CONSTRUCT query on it would
+# be dead code because traversal returns an empty projection.  Flag
+# as Warning rather than Violation so downstream extensions that
+# subclass IconPortal for other reasons are not blocked.
+cga:IconPortalShape a sh:NodeShape ;
+    sh:targetClass cga:IconPortal ;
+    sh:property [
+        sh:path     cga:constructQuery ;
+        sh:maxCount 0 ;
+        sh:severity sh:Warning ;
+        sh:message  "IconPortal should not carry a constructQuery (it is purely referential; use TransformPortal if a transformation is intended)."
+    ] ;
+    .
+
+# SealedPortal blocks traversal entirely; any CONSTRUCT query would
+# never fire.  Flag as Warning so a portal temporarily sealed for
+# maintenance does not lose its query definition on reclassification.
+cga:SealedPortalShape a sh:NodeShape ;
+    sh:targetClass cga:SealedPortal ;
+    sh:property [
+        sh:path     cga:constructQuery ;
+        sh:maxCount 0 ;
+        sh:severity sh:Warning ;
+        sh:message  "SealedPortal should not carry a constructQuery (traversal is blocked, so the query would never fire; remove the query or reclassify as TransformPortal to unblock)."
+    ] ;
+    .
+
 
 # ──────────────────────────────────────────────────────────────
 # 2. GOVERNANCE SHAPES

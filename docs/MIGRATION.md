@@ -141,9 +141,53 @@ generic Python implementation runs. No registration required.
 
 - **0.4.0**: aliases land, warnings introduced, `FusekiBackend`
   positional form removed
-- **0.4.1 – 0.4.x**: warnings continue unchanged
+- **0.4.1**: documentation/hygiene release; no migration required
+- **0.4.2**: structural lifecycle completion (`remove_holon`,
+  `remove_portal`, extensible `add_portal`); no migration
+  required — all additions are backward-compatible. See the 0.4.2
+  section below for two behavioral changes worth knowing about.
+- **0.4.x beyond**: warnings continue unchanged
 - **0.5.0**: `GraphBackend` alias removed, `registry_graph` kwarg
   removed, `ds.registry_graph` property removed
+
+---
+
+## 0.4.1 → 0.4.2
+
+Zero required changes. All three additions are backward-compatible:
+
+| Change | Required? | Notes |
+|--------|-----------|-------|
+| `remove_holon` / `remove_portal` | Optional (new surface) | Adopt when structural evolution (split, merge, prune) enters your use case |
+| `add_portal(construct_query=None, portal_type=..., extra_ttl=...)` | Optional (new kwargs) | Existing positional `add_portal(iri, source, target, query)` calls keep working |
+| `cga:IconPortal` class added to ontology | None | Previously referenced but undeclared; now available |
+| `cga:IconPortalShape`, `cga:SealedPortalShape` | None | Warn (not Violate) if an Icon/Sealed portal carries a constructQuery |
+
+### Behavioral changes in portal discovery
+
+Two latent bugs were fixed as side effects of 0.4.2's work on
+portal subtype support. Both are behavioral changes rather than
+API changes, so no code needs to move, but downstream consumers
+should know about them.
+
+**`find_portals_from/to/direct` no longer return duplicates.**
+Pre-0.4.2 queries matched portal triples in every graph where the
+portal appeared (typically the boundary graph AND the registry
+mirror), so each portal came back twice. Consumers that de-duped
+on their side can now skip that step. Consumers that relied on
+the count of returned rows for any reason must update their
+expectations.
+
+**`find_portals_from/to/direct` now return all portal subtypes,
+not just `cga:TransformPortal`.** Pre-0.4.2 queries hardcoded a
+type filter that silently omitted any portal whose type was not
+`cga:TransformPortal`. This was inconsistent with the ontology,
+which always declared `cga:SealedPortal` as a valid subclass. The
+new queries match any node with `cga:sourceHolon` and
+`cga:targetHolon`, regardless of specific subtype. If a downstream
+consumer actually wanted the old filter, it can re-add a type
+check at the consumer level by filtering the returned
+`PortalInfo` list.
 
 ### Getting help
 

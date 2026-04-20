@@ -572,18 +572,37 @@ since 0.3.1:
 - **Hard break**: `FusekiBackend(url, dataset=name)` — `dataset`
   keyword-only.
 
-### Remaining (see SPEC R9.11–R9.19)
+### Remaining (see SPEC R9.11–R9.22)
 
-Tracked as candidates for 0.4.x and 0.5.0. The 0.5.0 release itself
-is under-specified beyond R9.18 (hard removal of 0.4.x aliases) —
-see the commentary in `SPEC-objections.md` and `DECISIONS.md`.
-Features likely to surface in a dedicated 0.5.0 design pass:
-optional-protocol expansion (scope walk native hook, bulk load,
-pipeline execution), `metadata_updates="lazy"` mode, additional
-scope predicates, `holonic.generators` module.
+Tracked across the 0.5 → 0.7+ iterations with themes set in the
+README roadmap:
 
-R9.19 targets 0.6.0: JupyterLite static build of `notebooks/01`–`09`
-for in-browser exploration.
+- **0.5.0** — breaking cleanup with soft landing: R9.18 removals +
+  R9.11 generators + R9.15 projection migration pass.
+- **0.5.x** — protocol surface growth (additive): R9.17 native
+  hooks, R9.12 lazy metadata mode, R9.16 per-step pipeline
+  arguments.
+- **0.6.0** — scope and registry expansion: R9.13 aggregated
+  membrane health, R9.14 additional scope predicates.
+- **0.7.0+** — contingent on evidence: OQ7 federation, R2.5
+  async protocol, OQ8 tick semantics, OQ9 DOM event propagation.
+
+R9.19 shipped in 0.4.1: JupyterLite static build of
+`notebooks/01`–`11` (minus 11 which requires local Jupyter for
+yFiles) served at `docs/source/_static/jupyterlite/` by the
+ReadTheDocs build pipeline.
+
+R9.20–R9.22 shipped in 0.4.2: structural lifecycle completion.
+`remove_holon(iri)` with cascading cleanup of layer graphs,
+registry bindings, metadata records, and incident portals.
+`remove_portal(portal_iri)` with targeted removal that preserves
+the boundary graph and sibling portals. Extended `add_portal()`
+supporting all CGA portal subtypes (`TransformPortal`,
+`IconPortal`, `SealedPortal`) plus downstream subclasses via
+optional `construct_query`, customizable `portal_type`, and
+`extra_ttl` for additional predicates. Portal discovery queries
+relaxed to match any portal subtype and deduplicated via
+`SELECT DISTINCT`.
 
 Each step ships a patch version, passes its own specl
 validation, and updates `CHANGELOG.md`. The SPEC maturity badge

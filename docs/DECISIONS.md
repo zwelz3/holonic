@@ -829,6 +829,205 @@ revisited.
 
 ---
 
+## 0.4.2 — Structural lifecycle completion
+
+### D-0.4.2-1 — Orphan children rather than cascade-delete them
+
+**Decision:** When `remove_holon(parent)` is called, any child
+holons declared via `cga:memberOf <parent>` have their `memberOf`
+triple removed but are themselves preserved as root-level holons.
+
+**Alternatives considered:**
+
+1. Cascade-delete children — matches filesystem `rm -rf` semantics.
+2. Refuse to remove a holon with children — requires explicit
+   detachment before deletion.
+3. Orphan children — the chosen option.
+
+**Rationale:** The `cga:memberOf` relationship expresses
+containment, not ownership. Dissolving a containment scope does
+not dissolve what was inside it. A research department being
+closed does not delete its projects; they become top-level
+projects or get reassigned. Cascade-delete would surprise users
+and risk data loss. Refusing to remove with children shifts the
+decision burden onto callers for what is usually a routine
+operation (reorganization). Orphaning is the semantically honest
+middle ground, and callers who actually want cascade-delete can
+iterate over children first.
+
+**Implications:** `remove_holon` is safe to call on any holon in
+the holarchy without requiring caller awareness of the
+containment topology. Downstream consumers that need
+cascade-delete build it on top by listing children first.
+
+### D-0.4.2-2 — Preserve provenance activities on `remove_holon`
+
+**Decision:** `remove_holon` deletes the holon's four layer
+graphs (interior, boundary, projection, context) and registry
+entries, but does NOT search out and delete `prov:Activity`
+records in OTHER holons' context graphs that happen to reference
+the removed holon.
+
+**Alternatives considered:**
+
+1. Scrub all references to the removed holon from every context
+   graph in the holarchy.
+2. Leave provenance untouched — the chosen option.
+
+**Rationale:** Provenance is immutable history. An activity
+recording "holon X sent a projection to holon Y on date Z" is
+true regardless of whether holon X still exists at query time.
+Scrubbing provenance would degrade the audit trail and violate
+PROV-O semantics. Consumers that want to filter out activities
+referencing deleted holons can do so at query time with a
+`FILTER EXISTS { ?holon a cga:Holon }` clause.
+
+**Implications:** The context graphs of surviving holons may
+carry references to IRIs that no longer resolve to `cga:Holon`
+instances in the registry. This is correct behavior. The
+`PortalTargetExistsShape` and `PortalSourceExistsShape` in
+`cga-shapes.ttl` apply only to active portal definitions in the
+registry, not to historical activity records in context graphs.
+
+### D-0.4.2-3 — SELECT COUNT over ASK for existence checks
+
+**Decision:** `remove_holon`'s existence check uses
+`SELECT (COUNT(*) AS ?n) WHERE { ... }` rather than
+`ASK { ... }`.
+
+**Alternatives considered:**
+
+1. Use `ASK` via `backend.query()` — idiomatic SPARQL for
+   existence questions.
+2. Use `backend.ask()` directly — bypasses the generic `query()`
+   path.
+3. Use `SELECT COUNT` — the chosen option.
+
+**Rationale:** The `HolonicStore.query()` method is specified to
+return a list of dict-shaped rows. ASK queries produce a single
+boolean which the rdflib backend implements via a `result.vars`
+iteration path that returns None, causing a `TypeError` when the
+caller tries to iterate. `backend.ask()` exists as a dedicated
+method, but its contract is less uniform across backend
+implementations than `query()` is. SELECT COUNT returns a normal
+row with an integer binding, works identically against every
+backend that implements `HolonicStore`, and gives the same
+answer.
+
+**Implications:** Downstream backend implementers don't need to
+specialize ASK handling to be compatible with `remove_holon`.
+The pattern generalizes — any future existence-check use case in
+the library can adopt the same COUNT-based idiom.
+
+### D-0.4.2-4 — Warning severity for IconPortal / SealedPortal query shapes
+
+**Decision:** `cga:IconPortalShape` and `cga:SealedPortalShape`
+report `sh:Warning` severity (not `sh:Violation`) when a portal
+of those subtypes carries a `cga:constructQuery`.
+
+**Alternatives considered:**
+
+1. Violation severity — matches the strictness of
+   `cga:TransformPortalShape` (which uses Violation for a missing
+   query).
+2. No shape — rely on the `rdfs:domain cga:TransformPortal` on
+   `cga:constructQuery` plus caller discipline.
+3. Warning severity — the chosen option.
+
+**Rationale:** Consider a TransformPortal temporarily reclassified
+to SealedPortal for maintenance. The operator's intent is to
+unblock traversal later, at which point the portal reverts to
+TransformPortal. Deleting the `constructQuery` just because the
+type changed would lose information the operator wants to keep.
+Violation severity would force callers to choose between keeping
+the query (SHACL validation fails) or losing it (losing intent).
+Warning preserves the query on disk while making the misuse
+visible — operators who validate their registry will see the
+warning and either remove the query permanently or unblock the
+portal. No shape at all leaves incoherence undetectable. Warning
+is the honest middle.
+
+**Implications:** Callers who enforce "conforms=True" strictly in
+CI will see warnings from validly-intended SealedPortal
+temporarily-stored queries. They can either relax the threshold
+to "no Violations" or clear the query when sealing and re-add it
+when unsealing. The SPEC R3.2 description documents the
+expectation; callers who choose stricter enforcement can subclass
+the shape and bump severity.
+
+### D-0.4.2-5 — `add_portal()` extensibility via three new kwargs
+
+**Decision:** `add_portal()` gains three new parameters: make
+`construct_query` optional, add `portal_type`, add `extra_ttl`.
+Existing positional calls continue to work.
+
+**Alternatives considered:**
+
+1. Add a separate `add_icon_portal()` / `add_sealed_portal()`
+   method per subtype. Symmetric but creates combinatorial growth
+   when downstream extensions add more subtypes.
+2. Replace `add_portal()` with a builder pattern (`PortalBuilder`
+   with chainable setters). More flexible but breaks the existing
+   call sites and adds conceptual overhead for the common case.
+3. Extend `add_portal()` with optional kwargs — the chosen option.
+
+**Rationale:** Option 3 keeps the common case (TransformPortal
+with CONSTRUCT) a one-line call identical to 0.4.0. Subtype
+support appears as additional keyword arguments with sensible
+defaults, so the learning curve is proportional to the
+complexity of what you're building. Downstream subclasses that
+carry domain-specific transformation predicates use `extra_ttl`
+to supply them in a single call; they don't need a second
+`backend.parse_into()` and they automatically get graph typing
+(0.3.4) and metadata refresh (0.3.3) for free.
+
+**Implications:** The signature grows from 4 positional+2 keyword
+parameters to 4 positional+4 keyword parameters. Complexity in
+callers is bounded because subtype-specific defaults mean most
+callers still write a 3- or 4-argument call. Downstream
+extensions declare their own portal subclass in their own
+namespace and call `add_portal(portal_type="ext:MyPortal",
+extra_ttl="...")`; the library doesn't need to know about them.
+
+### D-0.4.2-6 — Relax portal discovery queries to match any subtype
+
+**Decision:** `FIND_PORTALS_FROM`, `FIND_PORTALS_TO`, and
+`FIND_PORTAL_DIRECT` drop their `a cga:TransformPortal` filter
+and match any RDF node carrying `cga:sourceHolon` +
+`cga:targetHolon`. They also gain `SELECT DISTINCT` to deduplicate
+across the boundary and registry graphs.
+
+**Alternatives considered:**
+
+1. Keep the `cga:TransformPortal` filter, add separate discovery
+   methods per subtype (`find_sealed_portals_from`, etc.).
+2. Relax the filter entirely — the chosen option.
+3. Make the filter configurable via a method parameter
+   (`find_portals_from(source, portal_type=...)`).
+
+**Rationale:** The `cga:sourceHolon` + `cga:targetHolon`
+predicate pair uniquely identifies a portal regardless of
+specific subtype — that pair IS the definitive portal structural
+signature in the CGA ontology. Filtering on a specific subclass
+omits valid portals that the caller should see. The only reason
+the pre-0.4.2 queries had the filter was that `cga:SealedPortal`
+and `cga:IconPortal` were not in common use. With 0.4.2's
+extensibility work making non-TransformPortal subtypes creatable
+through the public API, the filter became actively wrong. Option
+3 (parameterized filter) is attractive but was deferred: no
+current consumer has expressed a need to filter by subtype, and
+the `PortalInfo.iri` is sufficient for consumer-side filtering
+when needed.
+
+**Implications:** This is a behavior change documented in
+`CHANGELOG.md` (0.4.2 "Changed" section) and `MIGRATION.md`
+(0.4.1 → 0.4.2 section). Consumers relying on the old filter's
+implicit subtype-exclusion behavior must add their own filter.
+Consumers that want all portal subtypes visible — the common
+case — get the correct behavior without changes.
+
+---
+
 ## How to add a decision to this document
 
 Decisions are append-only within a release section. Each decision
