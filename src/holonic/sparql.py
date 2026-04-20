@@ -136,9 +136,8 @@ PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 SELECT DISTINCT ?portal ?source ?target ?label
 WHERE {
     graph ?g {
-        ?portal a cga:TransformPortal ;
-        cga:sourceHolon ?source ;
-        cga:targetHolon ?target .
+        ?portal cga:sourceHolon ?source ;
+            cga:targetHolon ?target .
         OPTIONAL { ?portal rdfs:label ?label }
     }
 }

@@ -1381,8 +1381,7 @@ class HolonicDataset:
                 ?holon a cga:Holon ;
                     rdfs:label ?label ;
                     cga:memberOf ?parent .
-                ?portal a cga:TransformPortal ;
-                    cga:sourceHolon ?src ;
+                ?portal cga:sourceHolon ?src ;
                     cga:targetHolon ?tgt ;
                     rdfs:label ?plabel .
             }
@@ -1397,8 +1396,7 @@ class HolonicDataset:
                 UNION
                 {
                     graph ?g {
-                        ?portal a cga:TransformPortal ;
-                            cga:sourceHolon ?src ;
+                        ?portal cga:sourceHolon ?src ;
                             cga:targetHolon ?tgt .
                         OPTIONAL { ?portal rdfs:label ?plabel }
                     }
@@ -1804,8 +1802,7 @@ class HolonicDataset:
             SELECT ?source ?target ?label ?query
             WHERE {{
                 GRAPH ?g {{
-                    <{portal_iri}> a cga:TransformPortal ;
-                        cga:sourceHolon ?source ;
+                    <{portal_iri}> cga:sourceHolon ?source ;
                         cga:targetHolon ?target .
                     OPTIONAL {{ <{portal_iri}> rdfs:label        ?label }}
                     OPTIONAL {{ <{portal_iri}> cga:constructQuery ?query }}
