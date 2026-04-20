@@ -2,7 +2,10 @@
   "LiteBuildConfig": {
     "contents": ["content"],
     "apps": ["notebooks", "lab"],
-    "no_unused_shared_packages": true
+    "no_unused_shared_packages": true,
+    "disabled_addons": [
+      "jupyterlite-xeus"
+    ]
   },
   "PipliteAddon": {
     "piplite_urls": []
