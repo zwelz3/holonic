@@ -8,10 +8,7 @@ Covers:
   ``portal_type``, ``extra_ttl``)
 """
 
-import pytest
-
 from holonic import HolonicDataset, RdflibBackend
-
 
 # ══════════════════════════════════════════════════════════════
 # Change 3 — extensible add_portal()
@@ -47,8 +44,9 @@ class TestAddPortalExtensibility:
             portal_type="cga:SealedPortal",
         )
         # Verify the type triple
-        rows = list(ds.query(
-            """
+        rows = list(
+            ds.query(
+                """
             PREFIX cga: <urn:holonic:ontology:>
             SELECT (COUNT(*) AS ?n) WHERE {
                 GRAPH ?g {
@@ -56,7 +54,8 @@ class TestAddPortalExtensibility:
                 }
             }
             """
-        ))
+            )
+        )
         assert rows and int(rows[0]["n"]) > 0
 
     def test_add_portal_with_extra_ttl(self, ds):
@@ -76,8 +75,9 @@ class TestAddPortalExtensibility:
         )
 
         # Extra triples reachable via SPARQL in the boundary graph
-        boundary_rows = list(ds.query(
-            """
+        boundary_rows = list(
+            ds.query(
+                """
             PREFIX ext: <urn:ext:>
             SELECT ?ref WHERE {
                 GRAPH <urn:holon:a/boundary> {
@@ -85,13 +85,15 @@ class TestAddPortalExtensibility:
                 }
             }
             """
-        ))
+            )
+        )
         assert len(boundary_rows) == 1
         assert str(boundary_rows[0]["ref"]) == "urn:model:v1"
 
         # Also mirrored in the registry
-        registry_rows = list(ds.query(
-            """
+        registry_rows = list(
+            ds.query(
+                """
             PREFIX ext: <urn:ext:>
             SELECT ?ref WHERE {
                 GRAPH <urn:holarchy:registry> {
@@ -99,7 +101,8 @@ class TestAddPortalExtensibility:
                 }
             }
             """
-        ))
+            )
+        )
         assert len(registry_rows) == 1
 
     def test_existing_positional_call_still_works(self, ds):
@@ -184,8 +187,9 @@ class TestRemovePortal:
         self._setup_two_portals(ds)
         ds.remove_portal("urn:portal:a-to-b")
         # SHACL shape still present
-        shape_rows = list(ds.query(
-            """
+        shape_rows = list(
+            ds.query(
+                """
             PREFIX sh: <http://www.w3.org/ns/shacl#>
             SELECT ?s WHERE {
                 GRAPH <urn:holon:a/boundary> {
@@ -193,7 +197,8 @@ class TestRemovePortal:
                 }
             }
             """
-        ))
+            )
+        )
         assert len(shape_rows) == 1
 
     def test_remove_and_recreate_portal_is_clean(self, ds):
@@ -236,11 +241,11 @@ class TestRemoveHolon:
 
         ds.add_interior(
             "urn:holon:child_a",
-            '<urn:x> a <urn:Thing> .',
+            "<urn:x> a <urn:Thing> .",
         )
         ds.add_interior(
             "urn:holon:child_a",
-            '<urn:y> a <urn:Thing> .',
+            "<urn:y> a <urn:Thing> .",
             graph_iri="urn:holon:child_a/interior/fusion",
         )
         ds.add_boundary(
@@ -255,7 +260,7 @@ class TestRemoveHolon:
 
         ds.add_interior(
             "urn:holon:child_b",
-            '<urn:z> a <urn:Thing> .',
+            "<urn:z> a <urn:Thing> .",
         )
 
         ds.add_portal(
@@ -317,8 +322,9 @@ class TestRemoveHolon:
         assert "urn:holon:child_a" in iris
         assert "urn:holon:child_b" in iris
         # Their memberOf triples are gone
-        rows = list(ds.query(
-            """
+        rows = list(
+            ds.query(
+                """
             PREFIX cga: <urn:holonic:ontology:>
             SELECT ?child WHERE {
                 GRAPH <urn:holarchy:registry> {
@@ -326,7 +332,8 @@ class TestRemoveHolon:
                 }
             }
             """
-        ))
+            )
+        )
         assert rows == []
 
     def test_remove_holon_cascades_portals_outgoing_and_incoming(self, ds):
@@ -345,8 +352,9 @@ class TestRemoveHolon:
         """No hasInterior / hasBoundary / hasContext residue in the registry."""
         self._setup_holarchy(ds)
         ds.remove_holon("urn:holon:child_a")
-        rows = list(ds.query(
-            """
+        rows = list(
+            ds.query(
+                """
             PREFIX cga: <urn:holonic:ontology:>
             SELECT ?p ?o WHERE {
                 GRAPH <urn:holarchy:registry> {
@@ -354,7 +362,8 @@ class TestRemoveHolon:
                 }
             }
             """
-        ))
+            )
+        )
         assert rows == []
 
     def test_remove_and_recreate_holon_is_clean(self, ds):
@@ -362,20 +371,22 @@ class TestRemoveHolon:
         self._setup_holarchy(ds)
         ds.remove_holon("urn:holon:child_a")
         ds.add_holon("urn:holon:child_a", "Child A (reborn)")
-        ds.add_interior("urn:holon:child_a", '<urn:new> a <urn:Thing> .')
+        ds.add_interior("urn:holon:child_a", "<urn:new> a <urn:Thing> .")
 
         # list_holons sees it
         iris = [h.iri for h in ds.list_holons()]
         assert "urn:holon:child_a" in iris
 
         # Only the new triple is in the interior
-        rows = list(ds.query(
-            """
+        rows = list(
+            ds.query(
+                """
             SELECT ?s WHERE {
                 GRAPH <urn:holon:child_a/interior> { ?s a <urn:Thing> }
             }
             """
-        ))
+            )
+        )
         subjects = {str(r["s"]) for r in rows}
         assert subjects == {"urn:new"}
 
@@ -392,13 +403,14 @@ class TestRemoveHolonWithEagerMetadata:
         """After remove_holon with eager updates, registry metadata is consistent."""
         ds = HolonicDataset(RdflibBackend(), metadata_updates="eager")
         ds.add_holon("urn:holon:a", "A")
-        ds.add_interior("urn:holon:a", '<urn:x> a <urn:T> .')
+        ds.add_interior("urn:holon:a", "<urn:x> a <urn:T> .")
         ds.remove_holon("urn:holon:a")
         # Registry metadata should reflect the absence of the layer graph.
         # Query the registry for any metadata records referencing the
         # removed graph — there should be none.
-        rows = list(ds.query(
-            """
+        rows = list(
+            ds.query(
+                """
             PREFIX cga: <urn:holonic:ontology:>
             SELECT ?p ?o WHERE {
                 GRAPH <urn:holarchy:registry> {
@@ -406,5 +418,6 @@ class TestRemoveHolonWithEagerMetadata:
                 }
             }
             """
-        ))
+            )
+        )
         assert rows == []

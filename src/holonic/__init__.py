@@ -25,20 +25,6 @@ from holonic.console_model import (
     ProjectionPipelineStep,
     ProjectionPipelineSummary,
 )
-from holonic.plugins import (
-    TransformNotFoundError,
-    get_registered_transforms,
-    projection_transform,
-    resolve_transform,
-)
-from holonic.scope import (
-    CustomSPARQL,
-    HasClassInInterior,
-    ResolveMatch,
-    ResolveOrder,
-    ResolvePredicate,
-    ScopeResolver,
-)
 from holonic.model import (
     AuditTrail,
     HolonInfo,
@@ -49,6 +35,12 @@ from holonic.model import (
     SurfaceReport,
     TraversalRecord,
     ValidationRecord,
+)
+from holonic.plugins import (
+    TransformNotFoundError,
+    get_registered_transforms,
+    projection_transform,
+    resolve_transform,
 )
 from holonic.projections import (
     CONSTRUCT_COLLAPSE_REIFICATION,
@@ -69,6 +61,14 @@ from holonic.projections import (
     localize_predicates,
     project_to_lpg,
     strip_blank_nodes,
+)
+from holonic.scope import (
+    CustomSPARQL,
+    HasClassInInterior,
+    ResolveMatch,
+    ResolveOrder,
+    ResolvePredicate,
+    ScopeResolver,
 )
 
 __all__ = [
@@ -153,9 +153,7 @@ def __getattr__(name: str):
     global _GRAPHBACKEND_WARNED  # noqa: PLW0603 — load-bearing session flag
 
     if name == "GraphBackend":
-        if not _GRAPHBACKEND_WARNED and not _os.environ.get(
-            "HOLONIC_SILENCE_DEPRECATION"
-        ):
+        if not _GRAPHBACKEND_WARNED and not _os.environ.get("HOLONIC_SILENCE_DEPRECATION"):
             _GRAPHBACKEND_WARNED = True
             _warnings.warn(
                 "holonic.GraphBackend is deprecated; use HolonicStore instead. "

@@ -30,12 +30,12 @@ from holonic.console_model import (
     HolonSummary,
     NeighborhoodEdge,
     NeighborhoodGraph,
-    ProjectionPipelineSpec,
-    ProjectionPipelineStep,
-    ProjectionPipelineSummary,
     NeighborhoodNode,
     PortalDetail,
     PortalSummary,
+    ProjectionPipelineSpec,
+    ProjectionPipelineStep,
+    ProjectionPipelineSummary,
 )
 from holonic.model import (
     AuditTrail,
@@ -63,6 +63,35 @@ _KNOWN_PREFIX_STR = f"""@prefix rdf: <{RDF}> .
 """
 
 
+# ══════════════════════════════════════════════════════════════
+# Module-level helpers for 0.3.5
+# ══════════════════════════════════════════════════════════════
+
+
+def _escape_ttl(s: str) -> str:
+    """Escape a string for use inside a Turtle "..." literal."""
+    return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+
+def _escape_construct(s: str) -> str:
+    """Escape a CONSTRUCT for use inside Turtle triple-quoted literal.
+
+    Triple-quoted literals allow most content, but backslash-escape
+    triple quotes if they appear in the query body.
+    """
+    return s.replace('"""', '\\"\\"\\"')
+
+
+def _run_construct_on_graph(graph: Graph, construct_query: str) -> Graph:
+    """Run a SPARQL CONSTRUCT against an in-memory Graph.
+
+    Used by run_projection when a step carries an inline CONSTRUCT.
+    Isolated from the dataset backend so intermediate results stay
+    ephemeral and don't pollute named-graph state.
+    """
+    return graph.query(construct_query).graph
+
+
 class HolonicDataset:
     """A holonic system backed by an RDF quad store.
 
@@ -83,6 +112,15 @@ class HolonicDataset:
     metadata_updates :
         One of ``"eager"`` (default) or ``"off"``. See § D-0.3.3-2.
     """
+
+    # Map the _register_layer predicate shortcut to the cga:LayerRole
+    # individual for graph typing. Added 0.3.4.
+    _PREDICATE_ROLE_MAP: dict[str, str] = {
+        "hasInterior": "InteriorRole",
+        "hasBoundary": "BoundaryRole",
+        "hasProjection": "ProjectionRole",
+        "hasContext": "ContextRole",
+    }
 
     # ══════════════════════════════════════════════════════════
     # Ontology loading
@@ -135,9 +173,7 @@ class HolonicDataset:
             docs/DECISIONS.md § D-0.3.3-2.
         """
         if metadata_updates not in ("eager", "off"):
-            raise ValueError(
-                f"metadata_updates must be 'eager' or 'off', got {metadata_updates!r}"
-            )
+            raise ValueError(f"metadata_updates must be 'eager' or 'off', got {metadata_updates!r}")
 
         # Handle the 0.3.x -> 0.4.0 registry_graph -> registry_iri rename.
         if registry_graph is not None:
@@ -168,16 +204,12 @@ class HolonicDataset:
         # controls whether it runs automatically, not whether it exists.
         from holonic._metadata import MetadataRefresher
 
-        self._metadata = MetadataRefresher(
-            backend=self.backend, registry_iri=self.registry_iri
-        )
+        self._metadata = MetadataRefresher(backend=self.backend, registry_iri=self.registry_iri)
 
         # Scope resolver (0.3.4). Delegated to by HolonicDataset.resolve().
         from holonic.scope import ScopeResolver
 
-        self._scope = ScopeResolver(
-            backend=self.backend, registry_iri=self.registry_iri
-        )
+        self._scope = ScopeResolver(backend=self.backend, registry_iri=self.registry_iri)
 
     @property
     def registry_graph(self) -> str:
@@ -255,15 +287,6 @@ class HolonicDataset:
                 cga:graphRole cga:{role} .
             """
         self.backend.parse_into(self.registry_iri, ttl, "turtle")
-
-    # Map the _register_layer predicate shortcut to the cga:LayerRole
-    # individual for graph typing. Added 0.3.4.
-    _PREDICATE_ROLE_MAP: dict[str, str] = {
-        "hasInterior": "InteriorRole",
-        "hasBoundary": "BoundaryRole",
-        "hasProjection": "ProjectionRole",
-        "hasContext": "ContextRole",
-    }
 
     def _maybe_refresh(self, graph_iri: str) -> None:
         """Trigger automatic metadata refresh if eager mode is active.
@@ -347,14 +370,14 @@ class HolonicDataset:
         iri :
             The holon's IRI.
 
-        Returns
+        Returns:
         -------
         bool
             ``True`` if the holon existed and was removed. ``False`` if
             the IRI was not found in the registry (idempotent — not an
             error).
 
-        Notes
+        Notes:
         -----
         What is removed:
 
@@ -389,8 +412,9 @@ class HolonicDataset:
         """
         # Existence check. Using SELECT COUNT for backend portability
         # (ASK result handling varies across backends; COUNT is uniform).
-        count_rows = list(self.backend.query(
-            f"""
+        count_rows = list(
+            self.backend.query(
+                f"""
             PREFIX cga: <urn:holonic:ontology:>
             SELECT (COUNT(*) AS ?n) WHERE {{
                 GRAPH <{self.registry_iri}> {{
@@ -398,14 +422,16 @@ class HolonicDataset:
                 }}
             }}
             """
-        ))
+            )
+        )
         exists = bool(count_rows) and int(count_rows[0]["n"]) > 0
         if not exists:
             return False
 
         # 1. Collect layer graph IRIs for this holon
-        layer_rows = list(self.backend.query(
-            f"""
+        layer_rows = list(
+            self.backend.query(
+                f"""
             PREFIX cga: <urn:holonic:ontology:>
             SELECT ?graph WHERE {{
                 GRAPH <{self.registry_iri}> {{
@@ -415,12 +441,14 @@ class HolonicDataset:
                 }}
             }}
             """
-        ))
+            )
+        )
         layer_graphs = [str(r["graph"]) for r in layer_rows]
 
         # 2. Collect portals where this holon is source or target
-        portal_rows = list(self.backend.query(
-            f"""
+        portal_rows = list(
+            self.backend.query(
+                f"""
             PREFIX cga: <urn:holonic:ontology:>
             SELECT DISTINCT ?portal WHERE {{
                 GRAPH ?g {{
@@ -429,7 +457,8 @@ class HolonicDataset:
                 }}
             }}
             """
-        ))
+            )
+        )
         portal_iris = [str(r["portal"]) for r in portal_rows]
 
         # Suppress per-step metadata refresh during cascading cleanup —
@@ -600,12 +629,12 @@ class HolonicDataset:
             Explicit boundary graph IRI. Defaults to
             ``"<source_iri>/boundary"``.
 
-        Returns
+        Returns:
         -------
         str
             The portal's IRI (same as the input, returned for chaining).
 
-        Examples
+        Examples:
         --------
         Minimal TransformPortal with CONSTRUCT (the 0.3.x/0.4.0 form,
         unchanged)::
@@ -693,14 +722,14 @@ class HolonicDataset:
         portal_iri :
             The portal's IRI.
 
-        Returns
+        Returns:
         -------
         bool
             ``True`` if the portal existed and was removed. ``False`` if
             the IRI was not found in any graph (idempotent — not an
             error).
 
-        Notes
+        Notes:
         -----
         Does NOT remove:
 
@@ -713,13 +742,15 @@ class HolonicDataset:
         graph is refreshed after the removal.
         """
         # Find every graph containing triples about this portal
-        rows = list(self.backend.query(
-            f"""
+        rows = list(
+            self.backend.query(
+                f"""
             SELECT DISTINCT ?g WHERE {{
                 GRAPH ?g {{ <{portal_iri}> ?p ?o }}
             }}
             """
-        ))
+            )
+        )
         if not rows:
             return False
 
@@ -1911,42 +1942,7 @@ class HolonicDataset:
             limit=limit,
         )
 
-    # ══════════════════════════════════════════════════════════
-    # Projection pipelines (0.3.5)
-    # ══════════════════════════════════════════════════════════
-
-    def register_pipeline(self, spec: "ProjectionPipelineSpec") -> str:
-        """Register a projection pipeline in the registry.
-
-        Validates that every step's ``transform_name`` (if any) is
-        known to the plugin registry. Raises ``TransformNotFoundError``
-        at registration time rather than later at run time.
-
-        Returns the pipeline's IRI.
-        """
-        from holonic.plugins import resolve_transform
-
-        # Validate named transforms up front
-        for step in spec.steps:
-            if step.transform_name:
-                resolve_transform(step.transform_name)
-
-        # Serialize to Turtle and write to registry
-        ttl = self._pipeline_to_ttl(spec)
-        self.backend.parse_into(self.registry_iri, ttl, "turtle")
-        return spec.iri
-
-    def register_pipeline_ttl(self, ttl: str) -> None:
-        """Escape hatch: register a pipeline from caller-supplied Turtle.
-
-        Parses the Turtle into the registry graph without validation.
-        Caller is responsible for conforming to the
-        ``cga:ProjectionPipelineSpec`` + ``cga:ProjectionPipelineStep``
-        vocabulary and for valid rdf:List ordering.
-        """
-        self.backend.parse_into(self.registry_iri, ttl, "turtle")
-
-    def _pipeline_to_ttl(self, spec: "ProjectionPipelineSpec") -> str:
+    def _pipeline_to_ttl(self, spec: ProjectionPipelineSpec) -> str:
         """Convert a ProjectionPipelineSpec to Turtle for the registry."""
         lines = [
             "@prefix cga:  <urn:holonic:ontology:> .",
@@ -1979,7 +1975,9 @@ class HolonicDataset:
             if step.transform_name:
                 extras.append(f'    cga:transformName "{_escape_ttl(step.transform_name)}"')
             if step.construct_query:
-                extras.append(f'    cga:constructQuery """{_escape_construct(step.construct_query)}"""')
+                extras.append(
+                    f'    cga:constructQuery """{_escape_construct(step.construct_query)}"""'
+                )
             if extras:
                 lines[-1] += " ;"
                 for i, extra in enumerate(extras):
@@ -1989,6 +1987,41 @@ class HolonicDataset:
                 lines[-1] += " ."
             lines.append("")
         return "\n".join(lines)
+
+    # ══════════════════════════════════════════════════════════
+    # Projection pipelines (0.3.5)
+    # ══════════════════════════════════════════════════════════
+
+    def register_pipeline(self, spec: ProjectionPipelineSpec) -> str:
+        """Register a projection pipeline in the registry.
+
+        Validates that every step's ``transform_name`` (if any) is
+        known to the plugin registry. Raises ``TransformNotFoundError``
+        at registration time rather than later at run time.
+
+        Returns the pipeline's IRI.
+        """
+        from holonic.plugins import resolve_transform
+
+        # Validate named transforms up front
+        for step in spec.steps:
+            if step.transform_name:
+                resolve_transform(step.transform_name)
+
+        # Serialize to Turtle and write to registry
+        ttl = self._pipeline_to_ttl(spec)
+        self.backend.parse_into(self.registry_iri, ttl, "turtle")
+        return spec.iri
+
+    def register_pipeline_ttl(self, ttl: str) -> None:
+        """Escape hatch: register a pipeline from caller-supplied Turtle.
+
+        Parses the Turtle into the registry graph without validation.
+        Caller is responsible for conforming to the
+        ``cga:ProjectionPipelineSpec`` + ``cga:ProjectionPipelineStep``
+        vocabulary and for valid rdf:List ordering.
+        """
+        self.backend.parse_into(self.registry_iri, ttl, "turtle")
 
     def attach_pipeline(self, holon_iri: str, spec_iri: str) -> None:
         """Declare that a holon has access to a registered pipeline.
@@ -2006,7 +2039,7 @@ class HolonicDataset:
             "turtle",
         )
 
-    def list_pipelines(self, holon_iri: str) -> list["ProjectionPipelineSummary"]:
+    def list_pipelines(self, holon_iri: str) -> list[ProjectionPipelineSummary]:
         """Return projection pipelines attached to a holon.
 
         Each summary carries just iri, name, description, and step
@@ -2030,48 +2063,27 @@ class HolonicDataset:
             for r in rows
         ]
 
-    def get_pipeline(self, spec_iri: str) -> "ProjectionPipelineSpec | None":
-        """Return the full pipeline spec as a ``ProjectionPipelineSpec``.
-
-        Returns ``None`` if no pipeline with the given IRI is registered.
-        Steps are returned in their declared rdf:List order.
-        """
-        from holonic.console_model import (
-            ProjectionPipelineSpec,
-            ProjectionPipelineStep,
-        )
-
-        detail_rows = self.backend.query(
-            Q.READ_PIPELINE_DETAIL_TEMPLATE.format(
-                registry_iri=self.registry_iri,
-                spec_iri=spec_iri,
-            )
-        )
-        if not detail_rows:
-            return None
-        name = str(detail_rows[0]["name"])
-        description = (
-            str(detail_rows[0]["description"])
-            if detail_rows[0].get("description")
-            else None
-        )
-        # Walk the rdf:List in registered order. We pull it from the
-        # registry graph directly so ordering is canonical.
-        steps = self._read_pipeline_steps_ordered(spec_iri)
-        return ProjectionPipelineSpec(
-            iri=spec_iri,
-            name=name,
-            description=description,
-            steps=steps,
-        )
-
-    def _read_pipeline_steps_ordered(
-        self, spec_iri: str
-    ) -> "list[ProjectionPipelineStep]":
-        """Read pipeline steps preserving rdf:List order."""
-        from rdflib import RDF, URIRef
+    def _step_from_node(self, reg_graph, step_node):
+        """Materialize a ProjectionPipelineStep from its graph node."""
+        from rdflib import URIRef
 
         from holonic.console_model import ProjectionPipelineStep
+
+        cga_stepName = URIRef("urn:holonic:ontology:stepName")
+        cga_transformName = URIRef("urn:holonic:ontology:transformName")
+        cga_constructQuery = URIRef("urn:holonic:ontology:constructQuery")
+        name = reg_graph.value(step_node, cga_stepName)
+        transform = reg_graph.value(step_node, cga_transformName)
+        construct = reg_graph.value(step_node, cga_constructQuery)
+        return ProjectionPipelineStep(
+            name=str(name) if name else "",
+            transform_name=str(transform) if transform else None,
+            construct_query=str(construct) if construct else None,
+        )
+
+    def _read_pipeline_steps_ordered(self, spec_iri: str) -> list[ProjectionPipelineStep]:
+        """Read pipeline steps preserving rdf:List order."""
+        from rdflib import RDF, URIRef
 
         reg = self.backend.get_graph(self.registry_iri)
         spec = URIRef(spec_iri)
@@ -2091,23 +2103,87 @@ class HolonicDataset:
             current = reg.value(current, RDF.rest)
         return steps
 
-    def _step_from_node(self, reg_graph, step_node):
-        """Materialize a ProjectionPipelineStep from its graph node."""
-        from rdflib import URIRef
+    def get_pipeline(self, spec_iri: str) -> ProjectionPipelineSpec | None:
+        """Return the full pipeline spec as a ``ProjectionPipelineSpec``.
 
-        from holonic.console_model import ProjectionPipelineStep
-
-        cga_stepName = URIRef("urn:holonic:ontology:stepName")
-        cga_transformName = URIRef("urn:holonic:ontology:transformName")
-        cga_constructQuery = URIRef("urn:holonic:ontology:constructQuery")
-        name = reg_graph.value(step_node, cga_stepName)
-        transform = reg_graph.value(step_node, cga_transformName)
-        construct = reg_graph.value(step_node, cga_constructQuery)
-        return ProjectionPipelineStep(
-            name=str(name) if name else "",
-            transform_name=str(transform) if transform else None,
-            construct_query=str(construct) if construct else None,
+        Returns ``None`` if no pipeline with the given IRI is registered.
+        Steps are returned in their declared rdf:List order.
+        """
+        from holonic.console_model import (
+            ProjectionPipelineSpec,
         )
+
+        detail_rows = self.backend.query(
+            Q.READ_PIPELINE_DETAIL_TEMPLATE.format(
+                registry_iri=self.registry_iri,
+                spec_iri=spec_iri,
+            )
+        )
+        if not detail_rows:
+            return None
+        name = str(detail_rows[0]["name"])
+        description = (
+            str(detail_rows[0]["description"]) if detail_rows[0].get("description") else None
+        )
+        # Walk the rdf:List in registered order. We pull it from the
+        # registry graph directly so ordering is canonical.
+        steps = self._read_pipeline_steps_ordered(spec_iri)
+        return ProjectionPipelineSpec(
+            iri=spec_iri,
+            name=name,
+            description=description,
+            steps=steps,
+        )
+
+    def _record_projection_activity(
+        self,
+        *,
+        holon_iri: str,
+        spec_iri: str,
+        output_graph_iri: str | None,
+        started: datetime,
+        ended: datetime,
+        agent_iri: str | None,
+        transform_versions: list[str],
+        host_meta: dict[str, str],
+    ) -> str:
+        """Write a prov:Activity for a projection run. Returns activity IRI."""
+        activity_iri = f"urn:activity:projection:{uuid4()}"
+        # Find or default the holon's context graph
+        context_rows = self.backend.query(Q.GET_HOLON_CONTEXTS.replace("?holon", f"<{holon_iri}>"))
+        if context_rows:
+            ctx_graph_iri = str(context_rows[0]["graph"])
+        else:
+            ctx_graph_iri = f"{holon_iri}/context"
+            self._register_layer(holon_iri, ctx_graph_iri, "hasContext")
+
+        ttl_lines = [
+            "@prefix cga:  <urn:holonic:ontology:> .",
+            "@prefix prov: <http://www.w3.org/ns/prov#> .",
+            "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .",
+            "@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .",
+            "",
+            f"<{activity_iri}> a prov:Activity ;",
+            f'    rdfs:label "Projection run: {_escape_ttl(spec_iri)}" ;',
+            f"    prov:used <{spec_iri}> ;",
+            f'    prov:startedAtTime "{started.isoformat()}"^^xsd:dateTime ;',
+            f'    prov:endedAtTime "{ended.isoformat()}"^^xsd:dateTime ;',
+        ]
+        if output_graph_iri:
+            ttl_lines.append(f"    prov:generated <{output_graph_iri}> ;")
+        if agent_iri:
+            ttl_lines.append(f"    prov:wasAssociatedWith <{agent_iri}> ;")
+        for v in transform_versions:
+            ttl_lines.append(f'    cga:transformVersion "{_escape_ttl(v)}" ;')
+        ttl_lines.append(f'    cga:runHost "{_escape_ttl(host_meta["host"])}" ;')
+        ttl_lines.append(f'    cga:runPlatform "{_escape_ttl(host_meta["platform"])}" ;')
+        ttl_lines.append(f'    cga:runPythonVersion "{_escape_ttl(host_meta["python_version"])}" ;')
+        ttl_lines.append(
+            f'    cga:runHolonicVersion "{_escape_ttl(host_meta["holonic_version"])}" .'
+        )
+
+        self.backend.parse_into(ctx_graph_iri, "\n".join(ttl_lines), "turtle")
+        return activity_iri
 
     def run_projection(
         self,
@@ -2196,82 +2272,3 @@ class HolonicDataset:
         )
 
         return current
-
-    def _record_projection_activity(
-        self,
-        *,
-        holon_iri: str,
-        spec_iri: str,
-        output_graph_iri: str | None,
-        started: "datetime",
-        ended: "datetime",
-        agent_iri: str | None,
-        transform_versions: list[str],
-        host_meta: dict[str, str],
-    ) -> str:
-        """Write a prov:Activity for a projection run. Returns activity IRI."""
-        activity_iri = f"urn:activity:projection:{uuid4()}"
-        # Find or default the holon's context graph
-        context_rows = self.backend.query(
-            Q.GET_HOLON_CONTEXTS.replace("?holon", f"<{holon_iri}>")
-        )
-        if context_rows:
-            ctx_graph_iri = str(context_rows[0]["graph"])
-        else:
-            ctx_graph_iri = f"{holon_iri}/context"
-            self._register_layer(holon_iri, ctx_graph_iri, "hasContext")
-
-        ttl_lines = [
-            "@prefix cga:  <urn:holonic:ontology:> .",
-            "@prefix prov: <http://www.w3.org/ns/prov#> .",
-            "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .",
-            "@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .",
-            "",
-            f"<{activity_iri}> a prov:Activity ;",
-            f'    rdfs:label "Projection run: {_escape_ttl(spec_iri)}" ;',
-            f"    prov:used <{spec_iri}> ;",
-            f'    prov:startedAtTime "{started.isoformat()}"^^xsd:dateTime ;',
-            f'    prov:endedAtTime "{ended.isoformat()}"^^xsd:dateTime ;',
-        ]
-        if output_graph_iri:
-            ttl_lines.append(f"    prov:generated <{output_graph_iri}> ;")
-        if agent_iri:
-            ttl_lines.append(f"    prov:wasAssociatedWith <{agent_iri}> ;")
-        for v in transform_versions:
-            ttl_lines.append(f'    cga:transformVersion "{_escape_ttl(v)}" ;')
-        ttl_lines.append(f'    cga:runHost "{_escape_ttl(host_meta["host"])}" ;')
-        ttl_lines.append(f'    cga:runPlatform "{_escape_ttl(host_meta["platform"])}" ;')
-        ttl_lines.append(f'    cga:runPythonVersion "{_escape_ttl(host_meta["python_version"])}" ;')
-        ttl_lines.append(f'    cga:runHolonicVersion "{_escape_ttl(host_meta["holonic_version"])}" .')
-
-        self.backend.parse_into(ctx_graph_iri, "\n".join(ttl_lines), "turtle")
-        return activity_iri
-
-
-# ══════════════════════════════════════════════════════════════
-# Module-level helpers for 0.3.5
-# ══════════════════════════════════════════════════════════════
-
-
-def _escape_ttl(s: str) -> str:
-    """Escape a string for use inside a Turtle "..." literal."""
-    return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
-
-
-def _escape_construct(s: str) -> str:
-    """Escape a CONSTRUCT for use inside Turtle triple-quoted literal.
-
-    Triple-quoted literals allow most content, but backslash-escape
-    triple quotes if they appear in the query body.
-    """
-    return s.replace('"""', '\\"\\"\\"')
-
-
-def _run_construct_on_graph(graph: "Graph", construct_query: str) -> "Graph":
-    """Run a SPARQL CONSTRUCT against an in-memory Graph.
-
-    Used by run_projection when a step carries an inline CONSTRUCT.
-    Isolated from the dataset backend so intermediate results stay
-    ephemeral and don't pollute named-graph state.
-    """
-    return graph.query(construct_query).graph
