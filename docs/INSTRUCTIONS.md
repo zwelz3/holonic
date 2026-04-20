@@ -589,8 +589,8 @@ README roadmap:
 
 R9.19 shipped in 0.4.1: JupyterLite static build of
 `notebooks/01`–`11` (minus 11 which requires local Jupyter for
-yFiles) served at `docs/source/_static/jupyterlite/` by the
-ReadTheDocs build pipeline.
+yFiles) served at `docs/source/_extra/jupyterlite/` via Sphinx's
+`html_extra_path` and the ReadTheDocs build pipeline.
 
 R9.20–R9.22 shipped in 0.4.2: structural lifecycle completion.
 `remove_holon(iri)` with cascading cleanup of layer graphs,

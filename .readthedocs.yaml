@@ -14,13 +14,14 @@ build:
     python: "3.12"
   jobs:
     # Before Sphinx runs, build the JupyterLite site into the Sphinx
-    # _static tree so that html pages under the docs build can link
-    # to /_static/jupyterlite/index.html. Requirements live in
-    # jupyterlite/requirements.txt.
+    # _extra tree so that Sphinx's html_extra_path copies it verbatim
+    # into the output root at /jupyterlite/index.html. Requirements
+    # live in jupyterlite/requirements.txt.
     pre_build:
       - pip install "jupyterlite-core>=0.4" "jupyterlite-pyodide-kernel>=0.4" "jupyterlab>=4,<5" "notebook>=7,<8"
       - python scripts/sync_notebooks_to_jlite.py
-      - cd jupyterlite && jupyter lite build --output-dir ../docs/source/_static/jupyterlite
+      - mkdir -p docs/source/_extra
+      - cd jupyterlite && jupyter lite build --output-dir ../docs/source/_extra/jupyterlite
 
 sphinx:
   configuration: docs/source/conf.py

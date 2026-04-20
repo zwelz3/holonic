@@ -39,7 +39,7 @@ The example notebooks run in your browser via [JupyterLite](https://jupyterlite.
 No installation required — the library and its dependencies load
 into a Pyodide kernel the first time you execute a cell.
 
-[Open the in-browser lab](./_static/jupyterlite/index.html)
+[Open the in-browser lab](./jupyterlite/index.html)
 
 What works: everything that doesn't need external services or
 system extensions — `HolonicDataset`, portal traversal, membrane

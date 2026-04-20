@@ -26,10 +26,19 @@ source_suffix = {
 }
 
 templates_path = ["_templates"]
-exclude_patterns = ["_build"]
+exclude_patterns = ["_build", "_extra"]
 
 html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
+
+# JupyterLite build output goes into _extra/jupyterlite/ via RTD
+# pre_build or `pixi run build_jl`. html_extra_path copies the
+# contents verbatim into the Sphinx output root, so the site is
+# served at /jupyterlite/index.html with no Sphinx processing
+# (no path rewriting, no checksum suffixing). This is the correct
+# mechanism for embedding a pre-built static app alongside
+# Sphinx-generated docs.
+html_extra_path = ["_extra"]
 
 # Autodoc settings
 autodoc_member_order = "bysource"

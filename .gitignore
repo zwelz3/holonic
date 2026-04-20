@@ -47,7 +47,7 @@ docs/source/auto
 # Jupyterlite
 *.doit.db
 _output
-docs/source/_static/jupyterlite/
+docs/source/_extra/
 
 # Other
 rdf_gen/
