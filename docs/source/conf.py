@@ -1,6 +1,7 @@
 """Sphinx configuration for holonic documentation."""
 
 import os
+import pathlib
 import sys
 
 sys.path.insert(0, os.path.abspath(".."))
@@ -29,16 +30,19 @@ templates_path = ["_templates"]
 exclude_patterns = ["_build", "_extra"]
 
 html_theme = "sphinx_rtd_theme"
-html_static_path = ["_static"]
+
+# Conditionally include static/extra paths so Sphinx doesn't warn
+# when they don't exist (e.g. local docs build without a prior
+# JupyterLite build, or no custom static assets).
+_source_dir = pathlib.Path(__file__).parent
+html_static_path = ["_static"] if (_source_dir / "_static").is_dir() else []
 
 # JupyterLite build output goes into _extra/jupyterlite/ via RTD
-# pre_build or `pixi run build_jl`. html_extra_path copies the
-# contents verbatim into the Sphinx output root, so the site is
-# served at /jupyterlite/index.html with no Sphinx processing
-# (no path rewriting, no checksum suffixing). This is the correct
-# mechanism for embedding a pre-built static app alongside
-# Sphinx-generated docs.
-html_extra_path = ["_extra"]
+# pre_build, GitHub Actions CI, or `pixi run build_jl`.
+# html_extra_path copies the contents verbatim into the Sphinx output
+# root, so the site is served at /jupyterlite/index.html with no
+# Sphinx processing (no path rewriting, no checksum suffixing).
+html_extra_path = ["_extra"] if (_source_dir / "_extra").is_dir() else []
 
 # Autodoc settings
 autodoc_member_order = "bysource"
