@@ -155,7 +155,6 @@ class TestPortalSubtypeShapeSemantics:
 
     def _validate_registry(self, ds):
         import pyshacl
-
         registry = ds.backend.get_graph(ds.registry_graph)
         shapes = ds.backend.get_graph(CGA_SHAPES_GRAPH)
         conforms, _report_graph, report_text = pyshacl.validate(

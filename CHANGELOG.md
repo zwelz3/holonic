@@ -150,11 +150,12 @@ No library behavior changes.
   now carries all example notebooks plus a new
   `00_start_here.ipynb` landing notebook that introduces the
   in-browser environment and its constraints. The `build_jl`
-  pixi task outputs to `docs/source/_static/jupyterlite/` so
-  Sphinx picks it up automatically.
+  pixi task outputs to `docs/source/_extra/jupyterlite/` and
+  Sphinx's `html_extra_path` copies it verbatim into the output
+  root at `/jupyterlite/`.
 - **`.readthedocs.yaml`** — new config that runs `jupyter lite
   build` as a pre-build step, so the hosted docs at ReadTheDocs
-  include the in-browser lab under `/_static/jupyterlite/`.
+  include the in-browser lab at `/jupyterlite/`.
 - **"Try in browser" section** in `docs/source/index.md` linking
   to the hosted JupyterLite build.
 - **`scripts/sync_notebooks_to_jlite.py`** — keeps

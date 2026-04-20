@@ -400,9 +400,9 @@ Make it practical to build holarchies for digital engineering, defense C2, enter
 
 ### Shipped in 0.4.1
 
-- R9.19 The library MUST ship a JupyterLite static build of the example notebooks for in-browser exploration without local Python installation. Build integrates with the existing `notebooks/` directory via `scripts/sync_notebooks_to_jlite.py`; output lands in `docs/source/_static/jupyterlite/` so Sphinx (and ReadTheDocs) serve it under the documentation domain. Notebook 11 (yFiles visualization) is excluded from in-browser execution because yFiles requires a Jupyter server extension that Pyodide cannot provide; the landing notebook `00_start_here.ipynb` documents this constraint.
+- R9.19 The library MUST ship a JupyterLite static build of the example notebooks for in-browser exploration without local Python installation. Build integrates with the existing `notebooks/` directory via `scripts/sync_notebooks_to_jlite.py`; output lands in `docs/source/_extra/jupyterlite/` so Sphinx's `html_extra_path` serves it at `/jupyterlite/` alongside the documentation. Notebook 11 (yFiles visualization) is excluded from in-browser execution because yFiles requires a Jupyter server extension that Pyodide cannot provide; the landing notebook `00_start_here.ipynb` documents this constraint.
   - priority: MUST
-  - constrains: jupyterlite/, scripts/sync_notebooks_to_jlite.py, .readthedocs.yaml, pixi.toml (tasks-jlite), docs/source/_static/jupyterlite/
+  - constrains: jupyterlite/, scripts/sync_notebooks_to_jlite.py, .readthedocs.yaml, pixi.toml (tasks-jlite), docs/source/_extra/jupyterlite/
   - acceptance: Given the 0.4.1 release on ReadTheDocs, when a reader opens the docs and follows the "Try in browser" link, then the JupyterLite lab loads and notebooks 01-10 execute against a Pyodide kernel without local Python installation.
   - verifiedBy: docs/source/index.md "Try in browser" section + .readthedocs.yaml pre_build hooks + manual verification during release rehearsal
 
