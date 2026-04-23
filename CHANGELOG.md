@@ -73,9 +73,9 @@ migration path.
 - **`cga:dataClassification` changed from DatatypeProperty to
   ObjectProperty.** Range is now `cga:ClassificationLevel`. Existing
   triples using string literals (`"CUI"`, `"SECRET"`) must be
-  rewritten as IRI references (`cga:CUI`, `cga:Secret`). The shipped
-  individuals are `cga:Public`, `cga:CUI`, `cga:PII`, `cga:Secret`,
-  `cga:TopSecret`. Downstream consumers may add domain-specific
+  rewritten as IRI references (`cga:Internal`, `cga:Confidential`). The shipped
+  individuals are `cga:Public`, `cga:Internal`, `cga:PII`, `cga:Confidential`,
+  `cga:Restricted`) plus government tiers (`cga:CUI`, `cga:Secret`, `cga:TopSecret`). Downstream consumers may add domain-specific
   individuals. SHACL shapes now validate with `sh:class
   cga:ClassificationLevel` instead of `sh:datatype xsd:string`.
 

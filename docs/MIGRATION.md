@@ -54,13 +54,13 @@ One breaking change. All other additions are backward-compatible.
 
 **After (0.4.3):**
 ```turtle
-<urn:holon:x> cga:dataClassification cga:CUI .
+<urn:holon:x> cga:dataClassification cga:Internal .
 ```
 
 The property changed from `owl:DatatypeProperty` (range `xsd:string`)
 to `owl:ObjectProperty` (range `cga:ClassificationLevel`). The CGA
-ontology ships five standard individuals: `cga:Public`, `cga:CUI`,
-`cga:PII`, `cga:Secret`, `cga:TopSecret`.
+ontology ships five standard individuals: `cga:Public`, `cga:Internal`,
+`cga:PII`, `cga:Confidential`, `cga:Restricted`) plus government tiers (`cga:CUI`, `cga:Secret`, `cga:TopSecret`).
 
 **Migration steps:**
 
@@ -75,7 +75,7 @@ ontology ships five standard individuals: `cga:Public`, `cga:CUI`,
 2. Replace each string literal with the corresponding IRI:
    ```sparql
    DELETE { GRAPH ?g { ?h cga:dataClassification "CUI" } }
-   INSERT { GRAPH ?g { ?h cga:dataClassification cga:CUI } }
+   INSERT { GRAPH ?g { ?h cga:dataClassification cga:Internal } }
    WHERE  { GRAPH ?g { ?h cga:dataClassification "CUI" } }
    ```
 3. If you used custom classification values not in the shipped

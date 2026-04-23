@@ -58,22 +58,25 @@ from holonic import HolonicDataset
 ds = HolonicDataset()  # rdflib in-memory backend
 
 # Create a holon with multiple interior graphs
-ds.add_holon("urn:holon:sensor-a", "Sensor A")
-ds.add_interior("urn:holon:sensor-a", '''
-    <urn:track:001> a <urn:type:Track> ;
-        <urn:prop:lat> 34.05 ;
-        <urn:prop:lon> -118.25 .
-''', graph_iri="urn:holon:sensor-a/interior/radar")
+ds.add_holon("urn:holon:acme", "Acme Corp")
+ds.add_interior("urn:holon:acme", '''
+    @prefix schema: <https://schema.org/> .
+    <urn:person:alice> a schema:Person ;
+        schema:name "Alice Chen" ;
+        schema:jobTitle "Engineering Lead" .
+''', graph_iri="urn:holon:acme/interior/people")
 
-ds.add_interior("urn:holon:sensor-a", '''
-    <urn:track:001> <urn:prop:confidence> 0.92 .
-''', graph_iri="urn:holon:sensor-a/interior/fusion")
+ds.add_interior("urn:holon:acme", '''
+    @prefix schema: <https://schema.org/> .
+    <urn:person:alice> schema:workLocation "San Francisco" .
+''', graph_iri="urn:holon:acme/interior/locations")
 
 # Query across all interiors
 rows = ds.query('''
-    SELECT ?track ?lat ?conf WHERE {
-        GRAPH ?g1 { ?track <urn:prop:lat> ?lat }
-        GRAPH ?g2 { ?track <urn:prop:confidence> ?conf }
+    PREFIX schema: <https://schema.org/>
+    SELECT ?person ?name ?location WHERE {
+        GRAPH ?g1 { ?person schema:name ?name }
+        GRAPH ?g2 { ?person schema:workLocation ?location }
     }
 ''')
 ```
@@ -95,9 +98,8 @@ ds = HolonicDataset(
 )
 ```
 
-> Migrating from 0.3.x? `GraphBackend` is now `HolonicStore` (old
-> name kept as a deprecated alias through 0.4.x) and `FusekiBackend`
-> requires `dataset` as a keyword argument. See
+> Migrating from 0.3.x or 0.4.x? The `GraphBackend` alias and
+> `registry_graph` kwarg were removed in 0.5.0. See
 > [`docs/MIGRATION.md`](./docs/MIGRATION.md) for the full checklist.
 
 ## Key Concepts
@@ -107,8 +109,8 @@ ds = HolonicDataset(
 A holon's interior is a *set* of named graphs, not a single graph:
 
 ```python
-ds.add_interior(holon, ttl_a, graph_iri="urn:holon:x/interior/radar")
-ds.add_interior(holon, ttl_b, graph_iri="urn:holon:x/interior/eo-ir")
+ds.add_interior(holon, ttl_a, graph_iri="urn:holon:x/interior/contacts")
+ds.add_interior(holon, ttl_b, graph_iri="urn:holon:x/interior/payroll")
 ```
 
 ### Portals Are RDF, Discovered via SPARQL

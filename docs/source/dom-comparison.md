@@ -111,7 +111,7 @@ Holons have SHACL boundaries. If events cross portals in a DOM-style dispatch mo
 
 In the browser, an unhandled event is silent. The DOM neither records that the event arrived nor that nothing handled it. For a UI framework this is the right default — most events are ignored; logging them would drown out the signal.
 
-For a governed holonic system, silence is a problem. Auditability requires that the system be able to answer "did this event arrive, and if so, what happened to it?" for every event that entered the holarchy. This suggests that a DOM-adapted holonic dispatch model should record even unhandled events — as `prov:Activity` records with `cga:eventLifecycle` of "arrived, considered, no handler" or similar. This preserves the lightweight propagation model the DOM offers while meeting the audit requirements of enterprise and defense deployments.
+For a governed holonic system, silence is a problem. Auditability requires that the system be able to answer "did this event arrive, and if so, what happened to it?" for every event that entered the holarchy. This suggests that a DOM-adapted holonic dispatch model should record even unhandled events — as `prov:Activity` records with `cga:eventLifecycle` of "arrived, considered, no handler" or similar. This preserves the lightweight propagation model the DOM offers while meeting the audit requirements of enterprise deployments.
 
 ### Shadow DOM and membranes
 
