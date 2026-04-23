@@ -2,6 +2,108 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2026-04-23
+
+Breaking cleanup release. Removes the deprecated aliases that have
+been warned about since 0.4.0, adds generator-based iteration for
+large holarchies, and reorganizes the example notebooks into logical
+sections with a landing page.
+
+### Breaking
+
+- **`GraphBackend` alias removed.** Use `HolonicStore` (or
+  `AbstractHolonicStore` as a base class). The alias was deprecated
+  in 0.4.0 and warned through all of 0.4.x.
+- **`registry_graph` constructor kwarg removed.** Use `registry_iri`.
+- **`ds.registry_graph` property removed.** Use `ds.registry_iri`.
+- **`HOLONIC_SILENCE_DEPRECATION` env var is no longer needed.**
+  There are no remaining deprecation warnings to silence.
+
+### Added
+
+- **`add_holon(holon_type=...)` kwarg** for asserting a functional
+  subtype (e.g. `"cga:AgentHolon"`, `"cga:DataHolon"`) at creation
+  time without raw SPARQL UPDATE. The holon always carries
+  `a cga:Holon`; the kwarg adds a second `rdf:type` assertion.
+- **Generator-based iteration with pagination.** New methods yield
+  results lazily so large holarchies avoid full materialization:
+  - `iter_holons(limit=, offset=)` — yields `HolonInfo` one at a time
+  - `iter_portals_from(iri, limit=, offset=)` — yields `PortalInfo`
+  - `iter_portals_to(iri, limit=, offset=)` — yields `PortalInfo`
+  The existing `list_holons()` and `find_portals_from/to()` methods
+  now delegate to the generators and also accept `limit`/`offset`.
+  Pagination threads through to SPARQL LIMIT/OFFSET.
+- **`bulk_load(holons=, portals=)` for batch construction.** Accepts
+  lists of holon and portal specs (dicts matching the `add_holon()`
+  and `add_portal()` parameter names), suppresses per-write metadata
+  refresh during the batch, and fires one consolidated refresh at
+  the end. Significantly faster than N individual `add_holon()` +
+  `add_portal()` calls for initial holarchy construction.
+- **`list_named_graphs()` is already a mandatory protocol method**
+  on `HolonicStore` and implemented in both shipped backends. No
+  change needed; R9.17 was already complete.
+- **Projection method documentation clarified.** `project_holon()`
+  and `run_projection()` are distinct operations, not aliases:
+  `project_holon` is ad-hoc LPG structural collapse with no
+  provenance; `run_projection` is governed pipeline execution with
+  full PROV-O activity recording. Block comment in `client.py`
+  explains the three projection methods and their purposes.
+- **Notebook reorganization.** All 13 notebooks renumbered into
+  logical sections (Foundations 01-03, Governance & Integration
+  04-06, Operations 07-09, Advanced 10-13). Landing page
+  (`00_start_here.ipynb`) rebuilt with sectioned tables and
+  hyperlinks. All cross-references and titles corrected.
+
+### Fixed
+
+- **Latent bug in `COLLECT_HOLONS` query.** Used `cga:classification`
+  (nonexistent) instead of `cga:dataClassification`. Fixed in 0.4.3
+  but included here for completeness.
+
+## [0.4.3] - 2026-04-22
+
+Ontology enrichment and holon subtype shapes. One **breaking change**:
+`cga:dataClassification` is now an ObjectProperty ranging over
+`cga:ClassificationLevel` individuals rather than a DatatypeProperty
+accepting free-text strings. See `docs/MIGRATION.md` for the
+migration path.
+
+### Breaking
+
+- **`cga:dataClassification` changed from DatatypeProperty to
+  ObjectProperty.** Range is now `cga:ClassificationLevel`. Existing
+  triples using string literals (`"CUI"`, `"SECRET"`) must be
+  rewritten as IRI references (`cga:CUI`, `cga:Secret`). The shipped
+  individuals are `cga:Public`, `cga:CUI`, `cga:PII`, `cga:Secret`,
+  `cga:TopSecret`. Downstream consumers may add domain-specific
+  individuals. SHACL shapes now validate with `sh:class
+  cga:ClassificationLevel` instead of `sh:datatype xsd:string`.
+
+### Added
+
+- **New SHACL shapes for holon subtypes:**
+  - `cga:AgentHolonShape` — Info severity: agent holons should have
+    interior (state/memory), boundary (output constraints), and
+    context (execution history) layers populated.
+  - `cga:AggregateHolonShape` — Warning severity via SPARQL: flags
+    aggregate holons that have interior data but no traversal
+    provenance linking that data to a `prov:Activity`. Catches
+    holons misclassified as aggregates.
+- **`notebooks/06_holon_subtypes.ipynb`** — new notebook exercising
+  AgentHolon, AggregateHolon, and ClassificationLevel shapes. Shows
+  well-formed vs. incomplete agent holons, correct vs. suspect
+  aggregates, and the new typed classification values.
+- **OQ10 added to SPEC** — upper-ontology alignment (BFO/CCO, gist)
+  captured as a deferred open question with the alignment-not-import
+  recommendation.
+
+### Fixed
+
+- **Latent bug in `COLLECT_HOLONS` query.** The query used
+  `cga:classification` (nonexistent property) instead of
+  `cga:dataClassification`. Classification values were silently
+  never returned by the console model. Fixed.
+
 ## [0.4.2] - 2026-04-18
 
 Structural lifecycle completion. The library now exposes clean
@@ -57,6 +159,43 @@ subtype (previously hardcoded to `cga:TransformPortal`).
   retains its query definition but surfaces a warning, which is
   the intended behavior — the warning signals intent to
   reclassify back.
+- **Ontology enrichment** — holistic review and improvement of
+  `cga.ttl` and `cga-shapes.ttl`:
+  - Ontology version bumped to 0.4.2 with `dcterms:modified`,
+    `rdfs:seeAlso` (docs site, PROV-O, SHACL), and a `skos:note`
+    about the standalone/alignment strategy (OQ10).
+  - All 68 properties now carry `skos:definition` (29 were bare).
+  - All four `LayerRole` individuals expanded from one-line to
+    multi-line definitions covering what belongs in each layer,
+    what the library writes automatically, and what downstream
+    consumers add.
+  - New `cga:ClassificationLevel` class with five individuals
+    (`Public`, `CUI`, `PII`, `Secret`, `TopSecret`).
+  - `cga:PortalType` individuals (`UnidirectionalPortal`,
+    `BidirectionalPortal`) now have definitions and a note that
+    directionality is orthogonal to subtype, populated by
+    downstream consumers.
+  - `cga:Holon` class gains a `skos:note` documenting the
+    `dcterms:conformsTo` governance pattern.
+  - New shapes: `cga:AlignmentHolonShape` (Warning: should have
+    label and interior), `cga:HolonStewardshipShape` (Info: nudge
+    for stewardship on all holon subtypes),
+    `cga:ProjectionPipelineSpecShape` (Warning: should have label
+    and steps), `cga:ProjectionPipelineStepShape` (Warning: step
+    with neither transformName nor constructQuery does nothing).
+  - Shapes file version bumped to 0.4.2.
+- **`notebooks/04_governed_boundaries.ipynb`** — new notebook
+  demonstrating governed boundary contracts. Exercises
+  `cga:AlignmentHolon`, `cga:DataDomain`, `cga:dataSteward`,
+  `cga:dataClassification`, `cga:usesAlignment`, and
+  `PortalClassificationShape`. Builds a two-department holarchy
+  with CCO and Schema.org ontologies, a governed portal with an
+  alignment holon justification, and queries the full governance
+  chain in a single SPARQL query.
+- **Notebooks renumbered 04→05 through 11→12** to accommodate the
+  new governed-boundaries notebook at position 04. All
+  cross-references within notebooks updated. JupyterLite content
+  and the landing notebook reflect the new numbering.
 - **`src/holonic/test/test_lifecycle.py`** — 19 new tests
   covering the three lifecycle surfaces plus metadata-eager
   behavior during cascade.
@@ -133,14 +272,14 @@ No library behavior changes.
   propagation as a candidate coordination model, with status
   `deferred` and recommendation to verify strain against real use
   cases before committing to implementation.
-- **`notebooks/10_dispatch_patterns.ipynb`** — demonstrates three
+- **`notebooks/11_dispatch_patterns.ipynb`** — demonstrates three
   dispatch patterns against the synchronous HolonicDataset API:
   direct synchronous, event-queue with a single worker, and
   asyncio over a single-worker `ThreadPoolExecutor`. Ties
   directly to the DOM comparison documentation. Includes a
   correctness note about rdflib's SPARQL parser not being
   thread-safe.
-- **`notebooks/11_visualization.ipynb`** — restored yFiles-based
+- **`notebooks/13_visualization.ipynb`** — restored yFiles-based
   visualization example. Uses `HolarchyViz`, `HolonViz`,
   `SPARQLExplorer`, and `ProvenanceViz` from the existing
   `holonic.viz` module. Begins with `%pip install

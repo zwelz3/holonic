@@ -1,7 +1,7 @@
 """Apache Jena Fuseki backend for holonic.
 
 Wraps a FusekiClient (async) with synchronous methods matching the
-GraphBackend protocol.  Uses asyncio.run() for sync callers; for
+HolonicStore protocol.  Uses asyncio.run() for sync callers; for
 async usage, call the underlying client directly.
 
 Requires: aiohttp

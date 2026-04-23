@@ -1,89 +1,35 @@
-"""Tests for 0.4.0 deprecation behavior and native-dispatch hooks."""
+"""Tests for 0.5.0 removal of deprecated names and new deprecations."""
 
-import os
 import warnings
 
 import pytest
 
-from holonic import HolonicDataset, HolonicStore, RdflibBackend
+from holonic import HolonicDataset, RdflibBackend
 from holonic._metadata import MetadataRefresher
 
 # ══════════════════════════════════════════════════════════════
-# GraphBackend deprecation alias
+# GraphBackend alias — REMOVED in 0.5.0
 # ══════════════════════════════════════════════════════════════
 
 
-def test_graphbackend_importable_from_holonic():
-    """Top-level ``from holonic import GraphBackend`` still works."""
+def test_graphbackend_removed_from_holonic():
+    """``holonic.GraphBackend`` was removed in 0.5.0."""
     import holonic
 
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        # Force cache reset so we see the warning
-        holonic._GRAPHBACKEND_WARNED = False
-        old_env = os.environ.pop("HOLONIC_SILENCE_DEPRECATION", None)
-        try:
-            alias = holonic.GraphBackend
-        finally:
-            if old_env is not None:
-                os.environ["HOLONIC_SILENCE_DEPRECATION"] = old_env
-
-    assert alias is HolonicStore
-    assert any(issubclass(warning.category, DeprecationWarning) for warning in w)
+    with pytest.raises(AttributeError, match="GraphBackend"):
+        _ = holonic.GraphBackend
 
 
-def test_graphbackend_importable_from_backends_protocol():
-    """Legacy ``from holonic.backends.protocol import GraphBackend`` works."""
+def test_graphbackend_removed_from_backends_protocol():
+    """``holonic.backends.protocol.GraphBackend`` was removed in 0.5.0."""
     import holonic.backends.protocol as legacy
 
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        legacy._WARNED = False
-        old_env = os.environ.pop("HOLONIC_SILENCE_DEPRECATION", None)
-        try:
-            alias = legacy.GraphBackend
-        finally:
-            if old_env is not None:
-                os.environ["HOLONIC_SILENCE_DEPRECATION"] = old_env
-
-    assert alias is HolonicStore
-    assert any(issubclass(warning.category, DeprecationWarning) for warning in w)
-
-
-def test_graphbackend_suppression_env_var():
-    """HOLONIC_SILENCE_DEPRECATION=1 suppresses the warning."""
-    import holonic
-
-    holonic._GRAPHBACKEND_WARNED = False
-    os.environ["HOLONIC_SILENCE_DEPRECATION"] = "1"
-    try:
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            _ = holonic.GraphBackend
-        dep_warnings = [
-            warning for warning in w if issubclass(warning.category, DeprecationWarning)
-        ]
-        assert dep_warnings == []
-    finally:
-        os.environ.pop("HOLONIC_SILENCE_DEPRECATION", None)
-
-
-def test_graphbackend_still_usable_for_isinstance():
-    """``isinstance(backend, GraphBackend)`` still works as an alias."""
-    import holonic
-
-    holonic._GRAPHBACKEND_WARNED = False
-    os.environ["HOLONIC_SILENCE_DEPRECATION"] = "1"
-    try:
-        GraphBackend = holonic.GraphBackend
-        backend = RdflibBackend()
-        assert isinstance(backend, GraphBackend)
-    finally:
-        os.environ.pop("HOLONIC_SILENCE_DEPRECATION", None)
+    with pytest.raises(AttributeError, match="GraphBackend"):
+        _ = legacy.GraphBackend
 
 
 def test_unknown_attribute_raises_attribute_error():
-    """The __getattr__ shim doesn't swallow real AttributeErrors."""
+    """Module __getattr__ doesn't swallow real AttributeErrors."""
     import holonic
 
     with pytest.raises(AttributeError, match="NoSuchThing"):
@@ -91,26 +37,25 @@ def test_unknown_attribute_raises_attribute_error():
 
 
 # ══════════════════════════════════════════════════════════════
-# registry_graph -> registry_iri deprecation
+# registry_graph — REMOVED in 0.5.0
 # ══════════════════════════════════════════════════════════════
 
 
-def test_registry_graph_kwarg_still_works():
-    """Old ``registry_graph=`` parameter still works with a warning."""
-    os.environ.pop("HOLONIC_SILENCE_DEPRECATION", None)
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        ds = HolonicDataset(registry_graph="urn:custom:reg")
-    assert ds.registry_iri == "urn:custom:reg"
-    assert any(
-        issubclass(warning.category, DeprecationWarning)
-        and "registry_graph" in str(warning.message)
-        for warning in w
-    )
+def test_registry_graph_kwarg_removed():
+    """``registry_graph=`` kwarg was removed in 0.5.0."""
+    with pytest.raises(TypeError):
+        HolonicDataset(registry_graph="urn:custom:reg")
+
+
+def test_registry_graph_property_removed():
+    """``ds.registry_graph`` property was removed in 0.5.0."""
+    ds = HolonicDataset()
+    with pytest.raises(AttributeError):
+        _ = ds.registry_graph
 
 
 def test_registry_iri_is_canonical_name():
-    """The new ``registry_iri=`` parameter does not warn."""
+    """The canonical ``registry_iri=`` parameter works without warnings."""
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         ds = HolonicDataset(registry_iri="urn:custom:reg")
@@ -122,23 +67,78 @@ def test_registry_iri_is_canonical_name():
     )
 
 
-def test_registry_graph_property_alias_no_warning():
-    """Reading ``ds.registry_graph`` is silent (attribute access, not kwarg)."""
-    ds = HolonicDataset(registry_iri="urn:custom:reg")
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        value = ds.registry_graph
-    assert value == "urn:custom:reg"
-    assert not any(issubclass(warning.category, DeprecationWarning) for warning in w)
+# ══════════════════════════════════════════════════════════════
+# holon_type kwarg (new in 0.5.0)
+# ══════════════════════════════════════════════════════════════
 
 
-def test_registry_conflict_raises():
-    """Passing both names is an error."""
-    with pytest.raises(ValueError, match="Cannot pass both"):
-        HolonicDataset(
-            registry_iri="urn:a",
-            registry_graph="urn:b",
-        )
+def test_add_holon_with_holon_type():
+    """``add_holon(holon_type=...)`` asserts the subtype in the registry."""
+    ds = HolonicDataset()
+    ds.add_holon("urn:holon:agent", "Agent", holon_type="cga:AgentHolon")
+
+    result = ds.backend.ask("""
+        ASK {
+            GRAPH ?g {
+                <urn:holon:agent> a <urn:holonic:ontology:AgentHolon> .
+            }
+        }
+    """)
+    assert result
+
+
+def test_add_holon_without_holon_type():
+    """Without ``holon_type``, only ``cga:Holon`` is asserted."""
+    ds = HolonicDataset()
+    ds.add_holon("urn:holon:plain", "Plain")
+
+    types = ds.backend.query("""
+        SELECT ?type WHERE {
+            GRAPH ?g {
+                <urn:holon:plain> a ?type .
+            }
+        }
+    """)
+    type_iris = [r["type"] for r in types]
+    assert "urn:holonic:ontology:Holon" in type_iris
+    assert "urn:holonic:ontology:AgentHolon" not in type_iris
+
+
+# ══════════════════════════════════════════════════════════════
+# iter_* generators (new in 0.5.0)
+# ══════════════════════════════════════════════════════════════
+
+
+def test_iter_holons_yields_same_as_list_holons():
+    """``iter_holons()`` yields the same results as ``list_holons()``."""
+    ds = HolonicDataset()
+    ds.add_holon("urn:holon:a", "A")
+    ds.add_holon("urn:holon:b", "B")
+
+    from_list = ds.list_holons()
+    from_iter = list(ds.iter_holons())
+
+    assert len(from_list) == len(from_iter) == 2
+    assert {h.iri for h in from_list} == {h.iri for h in from_iter}
+
+
+def test_iter_portals_from_yields_same_as_find():
+    """``iter_portals_from()`` yields same results as ``find_portals_from()``."""
+    ds = HolonicDataset()
+    ds.add_holon("urn:holon:a", "A")
+    ds.add_holon("urn:holon:b", "B")
+    ds.add_portal(
+        "urn:portal:ab",
+        "urn:holon:a",
+        "urn:holon:b",
+        "CONSTRUCT { ?s ?p ?o } WHERE { GRAPH ?g { ?s ?p ?o } }",
+    )
+
+    from_find = ds.find_portals_from("urn:holon:a")
+    from_iter = list(ds.iter_portals_from("urn:holon:a"))
+
+    assert len(from_find) == len(from_iter) == 1
+    assert from_find[0].iri == from_iter[0].iri
 
 
 # ══════════════════════════════════════════════════════════════
@@ -222,3 +222,122 @@ def test_metadata_refresher_falls_back_without_native():
     md = refresher.refresh_graph("urn:test:g")
     assert md.triple_count == 1
     assert md.last_modified is not None
+
+
+# ══════════════════════════════════════════════════════════════
+# Pagination (0.5.0)
+# ══════════════════════════════════════════════════════════════
+
+
+def test_list_holons_pagination():
+    """limit and offset work on list_holons."""
+    ds = HolonicDataset()
+    for i in range(5):
+        ds.add_holon(f"urn:holon:{i}", f"H{i}")
+
+    all_holons = ds.list_holons()
+    assert len(all_holons) == 5
+
+    page1 = ds.list_holons(limit=2)
+    assert len(page1) == 2
+
+    page2 = ds.list_holons(limit=2, offset=2)
+    assert len(page2) == 2
+
+    page3 = ds.list_holons(limit=2, offset=4)
+    assert len(page3) == 1
+
+    # All IRIs covered across pages
+    paged_iris = {h.iri for h in page1 + page2 + page3}
+    all_iris = {h.iri for h in all_holons}
+    assert paged_iris == all_iris
+
+
+def test_iter_holons_pagination():
+    """limit and offset work on iter_holons generator."""
+    ds = HolonicDataset()
+    for i in range(5):
+        ds.add_holon(f"urn:holon:{i}", f"H{i}")
+
+    from_iter = list(ds.iter_holons(limit=3))
+    assert len(from_iter) == 3
+
+
+def test_find_portals_from_pagination():
+    """limit works on find_portals_from."""
+    ds = HolonicDataset()
+    ds.add_holon("urn:holon:src", "Source")
+    for i in range(4):
+        ds.add_holon(f"urn:holon:tgt{i}", f"T{i}")
+        ds.add_portal(
+            f"urn:portal:{i}",
+            "urn:holon:src",
+            f"urn:holon:tgt{i}",
+            "CONSTRUCT { ?s ?p ?o } WHERE { GRAPH ?g { ?s ?p ?o } }",
+        )
+
+    all_portals = ds.find_portals_from("urn:holon:src")
+    assert len(all_portals) == 4
+
+    page = ds.find_portals_from("urn:holon:src", limit=2)
+    assert len(page) == 2
+
+
+# ══════════════════════════════════════════════════════════════
+# Bulk load (0.5.0)
+# ══════════════════════════════════════════════════════════════
+
+
+def test_bulk_load_holons():
+    """bulk_load creates multiple holons in one batch."""
+    ds = HolonicDataset()
+    n_holons, n_portals = ds.bulk_load(
+        holons=[
+            {"iri": "urn:holon:a", "label": "A"},
+            {"iri": "urn:holon:b", "label": "B", "member_of": "urn:holon:a"},
+            {"iri": "urn:holon:c", "label": "C", "holon_type": "cga:DataHolon"},
+        ],
+    )
+    assert n_holons == 3
+    assert n_portals == 0
+    assert len(ds.list_holons()) == 3
+
+    # holon_type was applied
+    result = ds.backend.ask("""
+        ASK {
+            GRAPH ?g {
+                <urn:holon:c> a <urn:holonic:ontology:DataHolon> .
+            }
+        }
+    """)
+    assert result
+
+
+def test_bulk_load_holons_and_portals():
+    """bulk_load creates holons and portals together."""
+    ds = HolonicDataset()
+    n_holons, n_portals = ds.bulk_load(
+        holons=[
+            {"iri": "urn:holon:x", "label": "X"},
+            {"iri": "urn:holon:y", "label": "Y"},
+        ],
+        portals=[
+            {
+                "iri": "urn:portal:xy",
+                "source_iri": "urn:holon:x",
+                "target_iri": "urn:holon:y",
+                "construct_query": "CONSTRUCT { ?s ?p ?o } WHERE { GRAPH ?g { ?s ?p ?o } }",
+            },
+        ],
+    )
+    assert n_holons == 2
+    assert n_portals == 1
+    assert len(ds.find_portals_from("urn:holon:x")) == 1
+
+
+def test_bulk_load_empty():
+    """bulk_load with no arguments is a no-op."""
+    ds = HolonicDataset()
+    n_holons, n_portals = ds.bulk_load()
+    assert n_holons == 0
+    assert n_portals == 0

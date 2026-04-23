@@ -336,17 +336,17 @@ Make it practical to build holarchies for digital engineering, defense C2, enter
   - acceptance: Given a store with a refresh_graph_metadata method, when MetadataRefresher.refresh_graph runs, then the native method is invoked; given a store without it, the Python fallback runs instead.
   - verifiedBy: src/holonic/test/test_deprecation_and_dispatch.py::test_metadata_refresher_dispatches_to_native
 
-- R9.9 The library MUST preserve `GraphBackend` as a deprecated alias through the 0.4.x series and provide a migration guide (`docs/MIGRATION.md`). Deprecation warnings are suppressible via `HOLONIC_SILENCE_DEPRECATION=1`.
+- R9.9 The library MUST preserve `GraphBackend` as a deprecated alias through the 0.4.x series and provide a migration guide (`docs/MIGRATION.md`). Deprecation warnings are suppressible via `HOLONIC_SILENCE_DEPRECATION=1`. Superseded by R9.18 in 0.5.0: the alias was removed as planned.
   - priority: MUST
   - constrains: holonic/__init__.py, holonic/backends/__init__.py, holonic/backends/protocol.py
-  - acceptance: Given `from holonic import GraphBackend`, when executed without HOLONIC_SILENCE_DEPRECATION, then a DeprecationWarning is emitted and the alias resolves to HolonicStore.
-  - verifiedBy: src/holonic/test/test_deprecation_and_dispatch.py::test_graphbackend_importable_from_holonic
+  - acceptance: Given holonic 0.5.0, when code imports GraphBackend, then an AttributeError is raised (alias removed per R9.18).
+  - verifiedBy: src/holonic/test/test_deprecation_and_dispatch.py::test_graphbackend_removed_from_holonic
 
-- R9.10 The `HolonicDataset` constructor parameter previously named `registry_graph` MUST be renamed to `registry_iri` for consistency with internal usage. The old name remains as a deprecated alias through 0.4.x.
+- R9.10 The `HolonicDataset` constructor parameter previously named `registry_graph` MUST be renamed to `registry_iri` for consistency with internal usage. The old name was a deprecated alias through 0.4.x and was removed in 0.5.0 per R9.18.
   - priority: MUST
   - constrains: HolonicDataset.__init__
-  - acceptance: Given HolonicDataset(registry_graph="urn:r"), when the constructor runs, then a DeprecationWarning is emitted AND ds.registry_iri equals "urn:r".
-  - verifiedBy: src/holonic/test/test_deprecation_and_dispatch.py::test_registry_graph_kwarg_still_works
+  - acceptance: Given holonic 0.5.0, when code passes registry_graph= to HolonicDataset, then a TypeError is raised (kwarg removed per R9.18). registry_iri= is the canonical parameter.
+  - verifiedBy: src/holonic/test/test_deprecation_and_dispatch.py::test_registry_graph_kwarg_removed
 
 ### Remaining for 0.4.x / 0.5.0
 
@@ -396,14 +396,14 @@ Make it practical to build holarchies for digital engineering, defense C2, enter
   - priority: MUST
   - constrains: holonic/__init__.py, holonic/backends/__init__.py, holonic/backends/protocol.py, HolonicDataset
   - acceptance: Given holonic 0.5.0 installed, when code imports GraphBackend or passes registry_graph=, then an ImportError or TypeError is raised respectively.
-  - verifiedBy: (pending 0.5.0 release; test added at removal time)
+  - verifiedBy: src/holonic/test/test_deprecation_and_dispatch.py::test_graphbackend_removed_from_holonic, test_graphbackend_removed_from_backends_protocol, test_registry_graph_kwarg_removed, test_registry_graph_property_removed
 
 ### Shipped in 0.4.1
 
-- R9.19 The library MUST ship a JupyterLite static build of the example notebooks for in-browser exploration without local Python installation. Build integrates with the existing `notebooks/` directory via `scripts/sync_notebooks_to_jlite.py`; output lands in `docs/source/_extra/jupyterlite/` so Sphinx's `html_extra_path` serves it at `/jupyterlite/` alongside the documentation. Notebook 11 (yFiles visualization) is excluded from in-browser execution because yFiles requires a Jupyter server extension that Pyodide cannot provide; the landing notebook `00_start_here.ipynb` documents this constraint.
+- R9.19 The library MUST ship a JupyterLite static build of the example notebooks for in-browser exploration without local Python installation. Build integrates with the existing `notebooks/` directory via `scripts/sync_notebooks_to_jlite.py`; output lands in `docs/source/_extra/jupyterlite/` so Sphinx's `html_extra_path` serves it at `/jupyterlite/` alongside the documentation. Notebook 13 (yFiles visualization) is excluded from in-browser execution because yFiles requires a Jupyter server extension that Pyodide cannot provide; the landing notebook `00_start_here.ipynb` documents this constraint.
   - priority: MUST
   - constrains: jupyterlite/, scripts/sync_notebooks_to_jlite.py, .readthedocs.yaml, pixi.toml (tasks-jlite), docs/source/_extra/jupyterlite/
-  - acceptance: Given the 0.4.1 release on ReadTheDocs, when a reader opens the docs and follows the "Try in browser" link, then the JupyterLite lab loads and notebooks 01-10 execute against a Pyodide kernel without local Python installation.
+  - acceptance: Given the hosted documentation, when a reader opens the docs and follows the "Try in browser" link, then the JupyterLite lab loads and notebooks 01-12 execute against a Pyodide kernel without local Python installation.
   - verifiedBy: docs/source/index.md "Try in browser" section + .readthedocs.yaml pre_build hooks + manual verification during release rehearsal
 
 ### Shipped in 0.4.2
@@ -526,6 +526,11 @@ Make it practical to build holarchies for digital engineering, defense C2, enter
 - OQ9 DOM-style event propagation as a coordination model. Cagle proposes (LinkedIn thread, April 2026) that plural-orchestrator coordination can be resolved by treating the holarchy as a structure over which events propagate in the W3C Document Object Model's capture/target/bubble pattern. Under this framing: the containing holon makes no expectations on child interiors (opacity is first-class); external events arrive at a holon and are either consumed, delegated to children via portals, or ignored after propagation completes; "eventually ignored" is a legitimate outcome rather than a failure mode. This is distinct from OQ8's tick proposal — event propagation is structural (who receives an event depends on the containment topology) rather than clock-triggered. The library today implements something DOM-adjacent via portal traversal and multi-hop path finding, but does not expose explicit event-dispatch semantics. Open questions surface immediately when mapping DOM to holons: DOM events are synchronous and the DOM is a strict tree, whereas a federated holarchy is asynchronous and a containment graph may have multiple portal paths between two holons. Whether to adopt the DOM framing as library architecture, as a mental model for explaining existing capabilities, or neither, remains open.
   - owner: zwelz3
   - recommendation: Before any implementation, verify whether the existing portal-traversal API strains under real use cases that DOM-style event dispatch would address more naturally. If strain emerges, the design question becomes: extend existing portal semantics with explicit event-phase hooks (capture/target/bubble), add a dedicated `dispatch_event` API parallel to `traverse`, or adopt the DOM model as framing while keeping the current API unchanged. The documentation at `docs/source/dom-comparison.md` establishes the mental-model mapping without committing to implementation. No release slot assigned; this may or may not be implemented.
+  - status: deferred
+
+- OQ10 Upper-ontology alignment (BFO/CCO, gist). The CGA ontology's structural core (Holon, Portal, LayerGraph) is genuinely novel and does not reduce cleanly to existing upper-ontology categories. A holon is not a BFO Continuant, not an Occurrent, not a gist Content — it is a structural container with an inside/outside distinction, layer-scoped named graphs, and a membrane. Forcing it into an upper-ontology branch would misrepresent what it is. The governance vocabulary (DataDomain, BusinessProcess, ExternalSystem, Capability) maps more naturally to established categories (CCO Agent, CCO InformationBearingEntity, gist Organization). The recommended approach is alignment-not-import: ship optional alignment modules (`cga-bfo-alignment.ttl`, `cga-gist-alignment.ttl`) that downstream consumers load when interoperability with a specific upper ontology is required. The core ontology stays standalone, reasoner-free, and philosophically uncommitted. BFO/CCO alignment is higher priority for defense consumers (ISO 21838-2, DARPA/DOD ontology ecosystem); gist alignment is higher priority for commercial enterprise consumers. Both can be developed in parallel without affecting the core.
+  - owner: zwelz3
+  - recommendation: Develop alignment modules as separate Turtle files under `src/holonic/ontology/`. Use `skos:broadMatch` / `skos:closeMatch` in the core ontology for lightweight cross-referencing without owl:imports. Document the alignment rationale in `docs/source/ontology.md`. Target 0.6.0 or later; gated on a concrete downstream consumer requesting BFO or gist compatibility.
   - status: deferred
 
 # Appendix A: Suggested Namespaces

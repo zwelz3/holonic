@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import logging
 import uuid
-import warnings
 from collections import deque
 from datetime import UTC, datetime
 from pathlib import Path
@@ -105,7 +104,7 @@ class HolonicDataset:
     registry_iri :
         IRI of the named graph holding holon/portal declarations and
         graph-level metadata. Default: ``urn:holarchy:registry``.
-        ``registry_graph`` is accepted as a deprecated alias.
+        ``registry_iri`` parameter configures the registry graph IRI.
     load_ontology :
         If True (default), load the CGA ontology and shapes into
         the dataset on construction.
@@ -145,7 +144,6 @@ class HolonicDataset:
         backend: HolonicStore | None = None,
         *,
         registry_iri: str = REGISTRY_GRAPH,
-        registry_graph: str | None = None,
         load_ontology: bool = True,
         metadata_updates: str = "eager",
     ):
@@ -158,11 +156,6 @@ class HolonicDataset:
         registry_iri :
             IRI of the registry graph (holon/portal declarations
             and graph-level metadata). Default: urn:holarchy:registry.
-            In 0.3.x this parameter was ``registry_graph``; the old
-            name is still accepted with a DeprecationWarning and will
-            be removed in 0.5.0.
-        registry_graph :
-            Deprecated alias for ``registry_iri``. Do not use both.
         load_ontology :
             Whether to auto-load the CGA ontology into the store.
         metadata_updates :
@@ -174,24 +167,6 @@ class HolonicDataset:
         """
         if metadata_updates not in ("eager", "off"):
             raise ValueError(f"metadata_updates must be 'eager' or 'off', got {metadata_updates!r}")
-
-        # Handle the 0.3.x -> 0.4.0 registry_graph -> registry_iri rename.
-        if registry_graph is not None:
-            import os
-
-            if registry_iri != REGISTRY_GRAPH:
-                raise ValueError(
-                    "Cannot pass both registry_iri and registry_graph; "
-                    "the latter is a deprecated alias for the former."
-                )
-            if not os.environ.get("HOLONIC_SILENCE_DEPRECATION"):
-                warnings.warn(
-                    "registry_graph is deprecated; use registry_iri instead. "
-                    "The registry_graph parameter will be removed in 0.5.0.",
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-            registry_iri = registry_graph
 
         self.backend: HolonicStore = backend or RdflibBackend()
         self.registry_iri = registry_iri
@@ -211,16 +186,6 @@ class HolonicDataset:
 
         self._scope = ScopeResolver(backend=self.backend, registry_iri=self.registry_iri)
 
-    @property
-    def registry_graph(self) -> str:
-        """Deprecated alias for ``registry_iri``. Read-only.
-
-        Kept for 0.3.x compatibility; access does NOT emit a warning
-        (too noisy for existing code). The constructor parameter by
-        the same name DOES warn. Scheduled for removal in 0.5.0.
-        """
-        return self.registry_iri
-
     # ══════════════════════════════════════════════════════════
     # Holon management
     # ══════════════════════════════════════════════════════════
@@ -231,6 +196,7 @@ class HolonicDataset:
         label: str,
         *,
         member_of: str | None = None,
+        holon_type: str | None = None,
     ) -> str:
         """Declare a holon in the registry.  Returns the holon IRI.
 
@@ -242,6 +208,11 @@ class HolonicDataset:
             Human-readable label.
         member_of :
             IRI of the parent holon (holarchy containment).
+        holon_type :
+            Functional subtype to assert (e.g. ``"cga:DataHolon"``,
+            ``"cga:AgentHolon"``). Must be a prefixed CGA name or a
+            full IRI. The holon always carries ``a cga:Holon``; this
+            adds a second ``rdf:type`` assertion.
 
         Note:
         ----
@@ -257,6 +228,11 @@ class HolonicDataset:
         """
         if member_of:
             ttl += f"    <{iri}> cga:memberOf <{member_of}> .\n"
+        if holon_type:
+            if holon_type.startswith("cga:") or ":" in holon_type:
+                ttl += f"    <{iri}> a {holon_type} .\n"
+            else:
+                ttl += f"    <{iri}> a <{holon_type}> .\n"
 
         ttl = _KNOWN_PREFIX_STR + ttl
         self.backend.parse_into(self.registry_iri, ttl, "turtle")
@@ -533,13 +509,131 @@ class HolonicDataset:
         return True
 
     # ══════════════════════════════════════════════════════════
+    # Bulk loading
+    # ══════════════════════════════════════════════════════════
+
+    def bulk_load(
+        self,
+        holons: list[dict] | None = None,
+        portals: list[dict] | None = None,
+    ) -> tuple[int, int]:
+        """Create multiple holons and portals in a single batch.
+
+        Suppresses per-write metadata refresh during the batch and
+        fires one consolidated refresh at the end.  For holarchies
+        with hundreds of holons, this is significantly faster than
+        calling ``add_holon`` and ``add_portal`` in a loop.
+
+        Parameters
+        ----------
+        holons :
+            List of dicts, each with keys matching ``add_holon()``
+            parameters: ``iri`` (required), ``label`` (required),
+            and optionally ``member_of``, ``holon_type``.
+        portals :
+            List of dicts, each with keys matching ``add_portal()``
+            parameters: ``iri`` (required), ``source_iri`` (required),
+            ``target_iri`` (required), and optionally
+            ``construct_query``, ``portal_type``, ``extra_ttl``,
+            ``label``.
+
+        Returns:
+        -------
+        tuple[int, int]
+            (holons_added, portals_added)
+
+        Example:
+        -------
+        ::
+
+            ds.bulk_load(
+                holons=[
+                    {"iri": "urn:holon:a", "label": "A",
+                     "holon_type": "cga:DataHolon"},
+                    {"iri": "urn:holon:b", "label": "B",
+                     "member_of": "urn:holon:a"},
+                ],
+                portals=[
+                    {"iri": "urn:portal:ab",
+                     "source_iri": "urn:holon:a",
+                     "target_iri": "urn:holon:b",
+                     "construct_query": "CONSTRUCT ..."},
+                ],
+            )
+
+        .. versionadded:: 0.5.0
+        """
+        holons = holons or []
+        portals = portals or []
+
+        # Suppress per-write metadata refresh during the batch.
+        original_mode = self._metadata_updates
+        self._metadata_updates = "off"
+
+        try:
+            for h in holons:
+                self.add_holon(
+                    h["iri"],
+                    h["label"],
+                    member_of=h.get("member_of"),
+                    holon_type=h.get("holon_type"),
+                )
+
+            for p in portals:
+                self.add_portal(
+                    p["iri"],
+                    p["source_iri"],
+                    p["target_iri"],
+                    p.get("construct_query"),
+                    portal_type=p.get("portal_type", "cga:TransformPortal"),
+                    extra_ttl=p.get("extra_ttl"),
+                    label=p.get("label"),
+                )
+        finally:
+            self._metadata_updates = original_mode
+
+        # One consolidated refresh for the entire batch.
+        if self._metadata_updates == "eager":
+            self._metadata.refresh_graph(self.registry_iri)
+
+        return len(holons), len(portals)
+
+    # ══════════════════════════════════════════════════════════
     # Holon discovery (SPARQL-driven)
     # ══════════════════════════════════════════════════════════
 
-    def list_holons(self) -> list[HolonInfo]:
-        """Discover all holons via SPARQL against the registry."""
-        rows = self.backend.query(Q.LIST_HOLONS)
-        holons = []
+    def iter_holons(
+        self,
+        *,
+        limit: int | None = None,
+        offset: int | None = None,
+    ):
+        """Yield holons via SPARQL against the registry.
+
+        Each holon is a fully-populated :class:`HolonInfo` with layer
+        graph IRIs resolved. Use this instead of ``list_holons()`` when
+        iterating over large holarchies to avoid materializing the full
+        list in memory.
+
+        Parameters
+        ----------
+        limit :
+            Maximum number of holons to yield. None means no limit.
+        offset :
+            Number of holons to skip before yielding. None means 0.
+
+        Yields:
+        ------
+        HolonInfo
+
+        .. versionadded:: 0.5.0
+        """
+        q = Q.LIST_HOLONS
+        if limit is not None:
+            q += f"\nLIMIT {int(limit)}"
+        if offset is not None:
+            q += f"\nOFFSET {int(offset)}"
+        rows = self.backend.query(q)
         for row in rows:
             info = HolonInfo(
                 iri=row["holon"],
@@ -565,12 +659,31 @@ class HolonicDataset:
                 Q.GET_HOLON_CONTEXTS.replace("?holon", f"<{info.iri}>")
             )
             info.context_graphs = [r["graph"] for r in context_rows]
-            holons.append(info)
-        return holons
+            yield info
+
+    def list_holons(
+        self,
+        *,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> list[HolonInfo]:
+        """Discover holons via SPARQL against the registry.
+
+        Returns a materialized list. For lazy iteration over large
+        holarchies, use :meth:`iter_holons` instead.
+
+        Parameters
+        ----------
+        limit :
+            Maximum number of holons to return. None means all.
+        offset :
+            Number of holons to skip. None means 0.
+        """
+        return list(self.iter_holons(limit=limit, offset=offset))
 
     def get_holon(self, holon_iri: str) -> HolonInfo | None:
         """Get info for a single holon, or None if not found."""
-        for h in self.list_holons():
+        for h in self.iter_holons():
             if h.iri == holon_iri:
                 return h
         return None
@@ -789,36 +902,105 @@ class HolonicDataset:
     # Portal discovery (SPARQL-driven)
     # ══════════════════════════════════════════════════════════
 
-    def find_portals_from(self, source_iri: str) -> list[PortalInfo]:
-        """Discover all portals originating from a holon.  Pure SPARQL."""
-        # TODO investigate templates instead of string replace
+    def iter_portals_from(
+        self,
+        source_iri: str,
+        *,
+        limit: int | None = None,
+        offset: int | None = None,
+    ):
+        """Yield portals originating from a holon.
+
+        Parameters
+        ----------
+        limit :
+            Maximum number of portals to yield.
+        offset :
+            Number of portals to skip.
+
+        Yields:
+        ------
+        PortalInfo
+
+        .. versionadded:: 0.5.0
+        """
         q = Q.FIND_PORTALS_FROM.replace("?source", f"<{source_iri}>")
-        rows = self.backend.query(q)
-        return [
-            PortalInfo(
+        if limit is not None:
+            q += f"\nLIMIT {int(limit)}"
+        if offset is not None:
+            q += f"\nOFFSET {int(offset)}"
+        for r in self.backend.query(q):
+            yield PortalInfo(
                 iri=r["portal"],
                 source_iri=source_iri,
                 target_iri=r["target"],
                 label=r.get("label"),
                 construct_query=r.get("query"),
             )
-            for r in rows
-        ]
 
-    def find_portals_to(self, target_iri: str) -> list[PortalInfo]:
-        """Discover all portals targeting a holon.  Pure SPARQL."""
+    def find_portals_from(
+        self,
+        source_iri: str,
+        *,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> list[PortalInfo]:
+        """Discover portals originating from a holon.  Pure SPARQL.
+
+        Returns a materialized list. For lazy iteration, use
+        :meth:`iter_portals_from`.
+        """
+        return list(self.iter_portals_from(source_iri, limit=limit, offset=offset))
+
+    def iter_portals_to(
+        self,
+        target_iri: str,
+        *,
+        limit: int | None = None,
+        offset: int | None = None,
+    ):
+        """Yield portals targeting a holon.
+
+        Parameters
+        ----------
+        limit :
+            Maximum number of portals to yield.
+        offset :
+            Number of portals to skip.
+
+        Yields:
+        ------
+        PortalInfo
+
+        .. versionadded:: 0.5.0
+        """
         q = Q.FIND_PORTALS_TO.replace("?target", f"<{target_iri}>")
-        rows = self.backend.query(q)
-        return [
-            PortalInfo(
+        if limit is not None:
+            q += f"\nLIMIT {int(limit)}"
+        if offset is not None:
+            q += f"\nOFFSET {int(offset)}"
+        for r in self.backend.query(q):
+            yield PortalInfo(
                 iri=r["portal"],
                 source_iri=r["source"],
                 target_iri=target_iri,
                 label=r.get("label"),
                 construct_query=r.get("query"),
             )
-            for r in rows
-        ]
+
+    def find_portals_to(
+        self,
+        target_iri: str,
+        *,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> list[PortalInfo]:
+        """Discover portals targeting a holon.  Pure SPARQL.
+
+        Returns a materialized list. For lazy iteration, use
+        :meth:`iter_portals_to`.
+        """
+        return list(self.iter_portals_to(target_iri, limit=limit, offset=offset))
 
     def find_portal(self, source_iri: str, target_iri: str) -> PortalInfo | None:
         """Find a direct portal between two holons.  Returns None if none exists."""
@@ -1289,6 +1471,32 @@ class HolonicDataset:
 
     # ══════════════════════════════════════════════════════════
     # Projections
+    #
+    # Three projection methods serve different purposes:
+    #
+    #   project_holon(holon_iri)
+    #       Ad-hoc LPG projection of a single holon's interiors.
+    #       Merges interior graphs, runs structural collapse
+    #       (types, literals, blank nodes), returns a ProjectedGraph.
+    #       No pipeline, no provenance, no PROV-O activity recorded.
+    #       Use for interactive exploration and visualization.
+    #
+    #   project_holarchy()
+    #       Topology projection of the entire holarchy. Nodes are
+    #       holons; edges are cga:memberOf and portal connections.
+    #       Returns a ProjectedGraph for NetworkX/graphology export.
+    #
+    #   run_projection(holon_iri, spec_iri)
+    #       Execute a registered ProjectionPipelineSpec against a
+    #       holon.  Runs each step in declared order (Python
+    #       transforms + inline CONSTRUCT). Records a full PROV-O
+    #       activity in the context graph with transform versions,
+    #       host metadata, and timing. Use for governed, auditable
+    #       projection workflows.
+    #
+    # Despite the similar names, project_holon and run_projection
+    # are not aliases.  project_holon is a quick structural tool;
+    # run_projection is a governed pipeline executor with provenance.
     # ══════════════════════════════════════════════════════════
 
     def project_holon(
@@ -1300,9 +1508,14 @@ class HolonicDataset:
     ):
         """Project a holon's interior(s) into an LPG-style structure.
 
-        Collects all cga:hasInterior graphs, merges them, and runs
-        project_to_lpg().  Optionally stores the projection result
-        as a named graph in the dataset.
+        Ad-hoc structural projection: merges all interior graphs, runs
+        ``project_to_lpg()`` for type/literal/blank-node collapse, and
+        returns a :class:`ProjectedGraph`. No pipeline spec is needed
+        and no PROV-O activity is recorded.
+
+        For governed, auditable projections with provenance, use
+        :meth:`run_projection` with a registered
+        :class:`ProjectionPipelineSpec` instead.
 
         Parameters
         ----------
@@ -1312,7 +1525,7 @@ class HolonicDataset:
             If provided, serialize the LPG back to triples and store
             in this named graph (registered as a projection layer).
         **lpg_kwargs :
-            Forwarded to project_to_lpg() — collapse_types, resolve_blanks, etc.
+            Forwarded to project_to_lpg() -- collapse_types, resolve_blanks, etc.
 
         Returns:
         -------
@@ -2195,14 +2408,32 @@ class HolonicDataset:
     ) -> Graph:
         """Execute a registered pipeline against a holon's interiors.
 
-        Merges the holon's interior graphs, runs each step in
-        declared order (transform first, then inline CONSTRUCT if
-        present), and optionally stores the result as a named graph
-        registered as a projection layer.
+        Governed projection: merges the holon's interior graphs, runs
+        each step of the referenced :class:`ProjectionPipelineSpec` in
+        declared order (Python transform first, then inline CONSTRUCT
+        if present), and optionally stores the result as a named graph
+        registered as a projection layer. Records a full ``prov:Activity``
+        in the holon's context graph with transform versions, host
+        metadata, and timing.
 
-        Records a ``prov:Activity`` in the holon's context graph
-        with:
+        This is distinct from :meth:`project_holon`, which is an ad-hoc
+        structural projection with no pipeline spec and no provenance.
+        Use ``project_holon`` for quick interactive exploration; use
+        ``run_projection`` for governed, auditable workflows.
 
+        Parameters
+        ----------
+        holon_iri :
+            The holon whose interiors are projected.
+        spec_iri :
+            IRI of a registered ``ProjectionPipelineSpec``.
+        store_as :
+            Named graph IRI to store the projection result in.
+        agent_iri :
+            Agent to associate with the provenance activity.
+
+        Provenance recorded
+        -------------------
         - ``prov:used <spec_iri>``
         - ``prov:generated <output_graph_iri>`` (if ``store_as``)
         - ``prov:startedAtTime`` / ``prov:endedAtTime``
@@ -2211,9 +2442,12 @@ class HolonicDataset:
         - ``cga:runHost``, ``cga:runPlatform``, ``cga:runPythonVersion``,
           ``cga:runHolonicVersion``
 
-        Raises ``ValueError`` if the spec is not registered, or
-        ``TransformNotFoundError`` if a step references an unknown
-        transform.
+        Raises:
+        ------
+        ValueError
+            If ``spec_iri`` is not registered.
+        TransformNotFoundError
+            If a step references an unknown transform.
         """
         from holonic.plugins import (
             host_metadata,

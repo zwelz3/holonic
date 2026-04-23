@@ -1,193 +1,137 @@
 # Migration Guide
 
 One place to find every breaking or deprecated change the library
-introduces. Updated at each release that introduces any.
+introduces. Sections are newest-first.
 
 ---
 
-## 0.3.x → 0.4.0
+## 0.4.3 → 0.5.0
 
-0.4.0 is the first release labeled as breaking. The changes are
-small in code volume, large in naming. Mechanical search-and-replace
-covers almost everything.
+Three breaking removals. All were deprecated in 0.4.0 with warnings
+through the entire 0.4.x series.
 
-### Summary
+| Removed | Replacement | Was deprecated since |
+|---------|-------------|---------------------|
+| `GraphBackend` (class alias) | `HolonicStore` | 0.4.0 |
+| `HolonicDataset(registry_graph=...)` | `HolonicDataset(registry_iri=...)` | 0.4.0 |
+| `ds.registry_graph` (property) | `ds.registry_iri` | 0.4.0 |
 
-| Change | Required? | Scope |
-|--------|-----------|-------|
-| `GraphBackend` → `HolonicStore` | Recommended; alias remains through 0.4.x | Imports, type annotations |
-| `registry_graph=` → `registry_iri=` | Recommended; alias remains through 0.4.x | `HolonicDataset` constructor |
-| `FusekiBackend(url, ds)` → `FusekiBackend(url, dataset=ds)` | **Required** | Every `FusekiBackend` construction |
-| `AbstractHolonicStore` as recommended base | Optional | New backend implementations |
+**Migration steps:**
 
-### Silence deprecation warnings
+1. Find and replace `GraphBackend` with `HolonicStore` in imports
+   and type annotations.
+2. Replace `registry_graph=` with `registry_iri=` in constructor
+   calls.
+3. Replace `ds.registry_graph` with `ds.registry_iri` in attribute
+   access.
+4. Remove `HOLONIC_SILENCE_DEPRECATION=1` from your environment.
 
-While you migrate, suppress the new `DeprecationWarning`s:
+### New features (no migration required)
 
-```bash
-export HOLONIC_SILENCE_DEPRECATION=1
+| Feature | Description |
+|---------|-------------|
+| `add_holon(holon_type=...)` | Assert a functional subtype at creation time |
+| `iter_holons(limit=, offset=)` | Generator-based lazy iteration with pagination |
+| `iter_portals_from(iri, limit=, offset=)` | Generator-based portal iteration with pagination |
+| `iter_portals_to(iri, limit=, offset=)` | Generator-based portal iteration with pagination |
+| `list_holons(limit=, offset=)` | Existing method now accepts pagination kwargs |
+| `find_portals_from(iri, limit=, offset=)` | Existing method now accepts pagination kwargs |
+| `find_portals_to(iri, limit=, offset=)` | Existing method now accepts pagination kwargs |
+| `bulk_load(holons=, portals=)` | Batch construction with one metadata refresh at the end |
+
+---
+
+## 0.4.2 → 0.4.3
+
+One breaking change. All other additions are backward-compatible.
+
+### Breaking: `cga:dataClassification` is now an ObjectProperty
+
+**Before (0.4.2 and earlier):**
+```turtle
+<urn:holon:x> cga:dataClassification "CUI" .
 ```
 
-Or in Python:
-
-```python
-import os
-os.environ["HOLONIC_SILENCE_DEPRECATION"] = "1"
-import holonic  # before any holonic imports
+**After (0.4.3):**
+```turtle
+<urn:holon:x> cga:dataClassification cga:CUI .
 ```
 
-Warnings still appear in CI output if you don't set this. That's
-intentional — you should see them once per session so you can track
-migration progress. Remove the env var once you've updated.
+The property changed from `owl:DatatypeProperty` (range `xsd:string`)
+to `owl:ObjectProperty` (range `cga:ClassificationLevel`). The CGA
+ontology ships five standard individuals: `cga:Public`, `cga:CUI`,
+`cga:PII`, `cga:Secret`, `cga:TopSecret`.
 
-### Step 1 — Rename protocol imports
+**Migration steps:**
 
-Search for `GraphBackend`, replace with `HolonicStore`.
+1. Find all triples using string-valued `cga:dataClassification`
+   in your holarchy:
+   ```sparql
+   SELECT ?holon ?val WHERE {
+       ?holon cga:dataClassification ?val .
+       FILTER(isLiteral(?val))
+   }
+   ```
+2. Replace each string literal with the corresponding IRI:
+   ```sparql
+   DELETE { GRAPH ?g { ?h cga:dataClassification "CUI" } }
+   INSERT { GRAPH ?g { ?h cga:dataClassification cga:CUI } }
+   WHERE  { GRAPH ?g { ?h cga:dataClassification "CUI" } }
+   ```
+3. If you used custom classification values not in the shipped
+   enumeration, declare your own individuals:
+   ```turtle
+   ex:FOUO a cga:ClassificationLevel ; rdfs:label "FOUO" .
+   ```
 
-```diff
--from holonic import GraphBackend
-+from holonic import HolonicStore
+### New shapes (no migration required)
 
--from holonic.backends import GraphBackend
-+from holonic.backends import HolonicStore
-
--from holonic.backends.protocol import GraphBackend
-+from holonic.backends.store import HolonicStore
-
--def make_dataset(backend: GraphBackend) -> HolonicDataset:
-+def make_dataset(backend: HolonicStore) -> HolonicDataset:
-     return HolonicDataset(backend=backend)
-
--class MyBackend(GraphBackend):
-+class MyBackend(AbstractHolonicStore):
-     ...
-```
-
-The deprecated aliases still resolve to the same object (`HolonicStore`
-is the Protocol that `GraphBackend` aliased), so existing
-`isinstance(x, GraphBackend)` checks still pass. The alias is
-scheduled for removal in 0.5.0.
-
-### Step 2 — Rename `registry_graph` kwarg
-
-```diff
- ds = HolonicDataset(
-     backend,
--    registry_graph="urn:my:registry",
-+    registry_iri="urn:my:registry",
- )
-```
-
-Attribute reads of `ds.registry_graph` continue to work silently
-(they return the same value as `ds.registry_iri`). Only the
-constructor kwarg warns.
-
-### Step 3 — `FusekiBackend` keyword-only dataset
-
-This is the one unavoidable change:
-
-```diff
--backend = FusekiBackend("http://localhost:3030", "holarchy")
-+backend = FusekiBackend("http://localhost:3030", dataset="holarchy")
-```
-
-No compat shim. If you miss a call site, you get a clear
-`TypeError` from Python — not a silent behavior change.
-
-### Step 4 — Consider adopting `AbstractHolonicStore` for new backends
-
-For new backend implementations, inherit the ABC:
-
-```python
-from holonic.backends import AbstractHolonicStore
-
-class MyBackend(AbstractHolonicStore):
-    def graph_exists(self, graph_iri: str) -> bool: ...
-    # ... other mandatory methods
-    # Optional methods can be added (e.g. refresh_graph_metadata)
-    # or left as Python fallbacks via the library helpers.
-```
-
-The ABC marks mandatory methods as `@abstractmethod`, so Python
-will refuse to instantiate a subclass that forgets one. Backends
-that prefer pure-Protocol duck-typing still work — the ABC is
-recommended, not required.
-
-### Step 5 — (Optional) Implement `refresh_graph_metadata` natively
-
-If your backend can compute graph metadata faster than the generic
-Python `MetadataRefresher` (e.g. via a native count query or
-server-side stored procedure), add the optional method:
-
-```python
-class MyBackend(AbstractHolonicStore):
-    # ... mandatory methods ...
-
-    def refresh_graph_metadata(
-        self,
-        graph_iri: str,
-        registry_iri: str,
-    ) -> GraphMetadata | None:
-        # Your fast path: compute counts + inventory + write to registry
-        # Return GraphMetadata, or None to let the library re-read via read()
-        ...
-```
-
-`MetadataRefresher.refresh_graph` discovers the method via
-`hasattr` and dispatches to it automatically. If absent, the
-generic Python implementation runs. No registration required.
-
-### Timeline
-
-- **0.4.0**: aliases land, warnings introduced, `FusekiBackend`
-  positional form removed
-- **0.4.1**: documentation/hygiene release; no migration required
-- **0.4.2**: structural lifecycle completion (`remove_holon`,
-  `remove_portal`, extensible `add_portal`); no migration
-  required — all additions are backward-compatible. See the 0.4.2
-  section below for two behavioral changes worth knowing about.
-- **0.4.x beyond**: warnings continue unchanged
-- **0.5.0**: `GraphBackend` alias removed, `registry_graph` kwarg
-  removed, `ds.registry_graph` property removed
+| Shape | Targets | Severity | What it checks |
+|-------|---------|----------|----------------|
+| `cga:AgentHolonShape` | `cga:AgentHolon` | Info | Should have interior, boundary, and context layers |
+| `cga:AggregateHolonShape` | `cga:AggregateHolon` | Warning | Interior data without traversal provenance |
 
 ---
 
 ## 0.4.1 → 0.4.2
 
-Zero required changes. All three additions are backward-compatible:
-
-| Change | Required? | Notes |
-|--------|-----------|-------|
-| `remove_holon` / `remove_portal` | Optional (new surface) | Adopt when structural evolution (split, merge, prune) enters your use case |
-| `add_portal(construct_query=None, portal_type=..., extra_ttl=...)` | Optional (new kwargs) | Existing positional `add_portal(iri, source, target, query)` calls keep working |
-| `cga:IconPortal` class added to ontology | None | Previously referenced but undeclared; now available |
-| `cga:IconPortalShape`, `cga:SealedPortalShape` | None | Warn (not Violate) if an Icon/Sealed portal carries a constructQuery |
+Zero required changes. All additions are backward-compatible.
 
 ### Behavioral changes in portal discovery
 
-Two latent bugs were fixed as side effects of 0.4.2's work on
-portal subtype support. Both are behavioral changes rather than
+Two latent bugs were fixed. Both are behavioral changes rather than
 API changes, so no code needs to move, but downstream consumers
 should know about them.
 
 **`find_portals_from/to/direct` no longer return duplicates.**
 Pre-0.4.2 queries matched portal triples in every graph where the
-portal appeared (typically the boundary graph AND the registry
-mirror), so each portal came back twice. Consumers that de-duped
-on their side can now skip that step. Consumers that relied on
-the count of returned rows for any reason must update their
-expectations.
+portal appeared, so each portal came back twice.
 
 **`find_portals_from/to/direct` now return all portal subtypes,
 not just `cga:TransformPortal`.** Pre-0.4.2 queries hardcoded a
-type filter that silently omitted any portal whose type was not
-`cga:TransformPortal`. This was inconsistent with the ontology,
-which always declared `cga:SealedPortal` as a valid subclass. The
-new queries match any node with `cga:sourceHolon` and
-`cga:targetHolon`, regardless of specific subtype. If a downstream
-consumer actually wanted the old filter, it can re-add a type
-check at the consumer level by filtering the returned
-`PortalInfo` list.
+type filter that silently omitted non-TransformPortal subtypes.
+
+---
+
+## 0.3.x → 0.4.0
+
+0.4.0 was the first release labeled as breaking. The changes are
+small in code volume, large in naming.
+
+### Summary
+
+| Change | Scope |
+|--------|-------|
+| `GraphBackend` → `HolonicStore` | Imports, type annotations |
+| `registry_graph=` → `registry_iri=` | `HolonicDataset` constructor |
+| `FusekiBackend(url, ds)` → `FusekiBackend(url, dataset=ds)` | Every `FusekiBackend` construction |
+
+The `GraphBackend` and `registry_graph` aliases were kept through
+0.4.x with deprecation warnings, then removed in 0.5.0 (see above).
+The `FusekiBackend` positional form was removed immediately in 0.4.0
+with no compatibility shim.
+
+---
 
 ### Getting help
 

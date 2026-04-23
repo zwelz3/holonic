@@ -151,7 +151,7 @@ class CustomSPARQL:
             PREFIX cga: <urn:holonic:ontology:>
             ASK WHERE {
                 GRAPH ?g {
-                    <{holon_iri}> cga:dataClassification "CUI" .
+                    <{holon_iri}> cga:dataClassification cga:CUI .
                 }
             }
         ''')

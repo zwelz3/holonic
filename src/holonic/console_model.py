@@ -54,7 +54,7 @@ class HolonSummary:
     interior_triple_count: int | None = None
     health: str | None = None
     """The most-specific rdf:type other than cga:Holon, or 'Holon' if none."""
-    """Optional cga:classification value (governance label)."""
+    """Optional cga:dataClassification value (a cga:ClassificationLevel IRI)."""
     """Parent holon IRI, if any."""
     """Sum of triples across all interior graphs. None if not computed."""
     """Latest membrane health (intact|weakened|compromised), or None."""

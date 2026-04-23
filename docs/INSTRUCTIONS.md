@@ -102,7 +102,7 @@ Practical consequences:
 - **SPARQL queries are always graph-aware.** SELECT and CONSTRUCT
   use `GRAPH <iri> { ... }` to scope access. Queries that do not
   specify a graph are a code smell.
-- **The `GraphBackend` protocol is quad-native.** All CRUD ops
+- **The `HolonicStore` protocol is quad-native.** All CRUD ops
   take a `graph_iri` parameter. No default-graph operations.
 - **Portals are hyperedge traversals.** A portal's CONSTRUCT reads
   from a source holon's interior and writes into a target's. The
@@ -146,7 +146,7 @@ src/holonic/
 │                          (0.4.0) via hasattr(store, 'refresh_graph_metadata')
 ├── backends/
 │   ├── store.py           (0.4.0) HolonicStore Protocol + AbstractHolonicStore ABC
-│   ├── protocol.py        (0.4.0) deprecation shim re-exporting as GraphBackend
+│   ├── protocol.py        re-exports HolonicStore (GraphBackend alias removed in 0.5.0)
 │   ├── __init__.py        exports HolonicStore, AbstractHolonicStore, RdflibBackend
 │   ├── rdflib_backend.py  in-memory rdflib.Dataset backend (inherits ABC)
 │   ├── fuseki_backend.py  Apache Jena Fuseki HTTP backend (inherits ABC)
@@ -173,7 +173,7 @@ src/holonic/
 ### 3.2 The `HolonicStore` protocol and `AbstractHolonicStore` ABC
 
 ```python
-# Mandatory surface (unchanged from 0.3.x GraphBackend)
+# Mandatory surface (HolonicStore protocol)
 @runtime_checkable
 class HolonicStore(Protocol):
     # Named-graph CRUD
@@ -209,9 +209,9 @@ unchanged.
 graph_iri, registry_iri)`. Backends implementing it natively get a
 fast path; `MetadataRefresher` discovers the method via `hasattr`
 and falls back to generic Python otherwise. The optional surface
-grows additively through 0.4.x.
+grows additively.
 
-**`GraphBackend` deprecated alias** kept through all of 0.4.x. See
+**`GraphBackend` alias** was removed in 0.5.0. See
 `MIGRATION.md`. Removal scheduled for 0.5.0 per SPEC R9.18.
 
 Design constraints (unchanged):
@@ -275,7 +275,7 @@ Added in 0.3.5 (projection plugin system):
 Added in 0.4.0 (protocol rename):
 - No new methods. `backend` parameter type annotation is
   `HolonicStore`. Constructor kwarg renamed `registry_graph` →
-  `registry_iri` (old name aliased through 0.4.x).
+  `registry_iri` (old name removed in 0.5.0).
 
 ### 3.4 SPARQL query patterns
 
@@ -353,7 +353,7 @@ returned graph.
 ### 4.6 No async in the core
 
 Sync-only protocol. Async consumers wrap in `asyncio.to_thread()`.
-Any future `AsyncGraphBackend` should be a separate protocol.
+Any future `AsyncHolonicStore` should be a separate protocol.
 
 ### 4.7 Spec-driven development via specl
 
@@ -369,7 +369,7 @@ follows. The `spec-translate`, `spec-validate`, `spec-score`, and
 
 ### 5.1 Adding a new backend
 
-Implement `GraphBackend`, add tests matching
+Implement `HolonicStore`, add tests matching
 `test_backend.py` scenarios. Do not modify the protocol unless
 genuinely required.
 
@@ -409,7 +409,7 @@ follow `R<group>.<index>` under an `H2` group header. Run
 ### 6.1 holonic-console
 
 Operator web application (FastAPI + React). Depends on
-`HolonicDataset` query methods and `GraphBackend` for constructing
+`HolonicDataset` query methods and `HolonicStore` for constructing
 backends from registered service URLs. Stage 2 is the functional
 proof for the 0.3.1 console_model additions.
 
@@ -588,7 +588,7 @@ README roadmap:
   async protocol, OQ8 tick semantics, OQ9 DOM event propagation.
 
 R9.19 shipped in 0.4.1: JupyterLite static build of
-`notebooks/01`–`11` (minus 11 which requires local Jupyter for
+`notebooks/01`–`12` (minus 12 which requires local Jupyter for
 yFiles) served at `docs/source/_extra/jupyterlite/` via Sphinx's
 `html_extra_path` and the ReadTheDocs build pipeline.
 

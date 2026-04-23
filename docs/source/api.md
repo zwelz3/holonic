@@ -55,8 +55,8 @@ shapes: `cga:TransformPortal` requires one, `cga:IconPortal` and
    :show-inheritance:
 ```
 
-> In 0.3.x this was `GraphBackend`. The old name is a deprecated
-> alias through all of 0.4.x. See `docs/MIGRATION.md`.
+> The `GraphBackend` alias was removed in 0.5.0. Use `HolonicStore`.
+> See `docs/MIGRATION.md`.
 
 ## Model Types
 

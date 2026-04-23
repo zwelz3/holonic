@@ -1,0 +1,12 @@
+# Dependencies installed into the JupyterLite pyodide kernel.
+# These wheels must be pure-python or have pyodide builds available.
+#
+# holonic is unpinned here because JupyterLite pulls the latest from
+# PyPI at build time. Rebuild the JupyterLite site after each holonic
+# release to pick up changes.
+
+holonic
+rdflib>=7.0.0
+pyshacl>=0.26.0
+pydantic>=2.0.0
+jinja2>=3.1.0

@@ -4,10 +4,7 @@ A lightweight Python client for building holonic knowledge graphs
 backed by rdflib, Apache Jena Fuseki, or any SPARQL-compliant store.
 """
 
-import os as _os
-import warnings as _warnings
-
-__version__ = "0.4.2"
+__version__ = "0.5.0"
 
 from holonic.backends import AbstractHolonicStore, HolonicStore, RdflibBackend
 from holonic.client import HolonicDataset
@@ -97,7 +94,7 @@ __all__ = [
     "ProjectionPipelineSpec",
     "ProjectionPipelineStep",
     "ProjectionPipelineSummary",
-    # Backends (0.4.0: renamed GraphBackend -> HolonicStore)
+    # Backends
     "AbstractHolonicStore",
     "HolonicStore",
     "RdflibBackend",
@@ -138,30 +135,3 @@ __all__ = [
 # ══════════════════════════════════════════════════════════════
 # 0.4.0 deprecation shims
 # ══════════════════════════════════════════════════════════════
-
-_GRAPHBACKEND_WARNED = False
-
-
-def __getattr__(name: str):
-    """Handle deprecated legacy names with a one-shot warning.
-
-    Triggered when code does ``from holonic import GraphBackend`` or
-    ``holonic.GraphBackend``. The alias resolves to ``HolonicStore``.
-    Removal scheduled for 0.5.0. Set
-    ``HOLONIC_SILENCE_DEPRECATION=1`` in the environment to suppress.
-    """
-    global _GRAPHBACKEND_WARNED  # noqa: PLW0603 — load-bearing session flag
-
-    if name == "GraphBackend":
-        if not _GRAPHBACKEND_WARNED and not _os.environ.get("HOLONIC_SILENCE_DEPRECATION"):
-            _GRAPHBACKEND_WARNED = True
-            _warnings.warn(
-                "holonic.GraphBackend is deprecated; use HolonicStore instead. "
-                "The alias will be removed in 0.5.0. "
-                "Set HOLONIC_SILENCE_DEPRECATION=1 to suppress this warning.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-        return HolonicStore
-
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -6,7 +6,7 @@ requires = [
 
 [project]
 name = "holonic"
-version = "0.4.2"
+version = "0.5.0"
 description = "Graph-native holonic RDF systems"
 readme = "README.md"
 license = { file = "LICENSE" }

@@ -8,7 +8,7 @@ spec:holonic-001 a ekga:Specification ;
     dct:title "Holonic Library — Graph-Native Holonic RDF Systems" ;
     dct:hasVersion "0.4.0" ;
     ekga:status "prototype" ;
-    dct:created "2026-04-19"^^xsd:date ;
+    dct:created "2026-04-23"^^xsd:date ;
     ekga:intent """Provide a Python library that implements Cagel's four-graph holon model on top of RDF named graphs, enabling distributed knowledge systems to expose genuine inside/outside distinction, governed traversal, and event-level provenance without inventing new query languages or wire protocols. The library is a client-side coordination layer in front of any quad-aware graph store (rdflib, Apache Jena Fuseki, Oxigraph, GraphDB) — not a graph database itself.""" ;
     ekga:purpose """Make it practical to build holarchies for digital engineering, defense C2, enterprise knowledge graphs, and agentic memory systems. A holon is a named IRI whose four layers (interior, boundary, projection, context) live as named graphs in the quad store; portals are RDF entities carrying SPARQL CONSTRUCT queries; membranes are SHACL shapes. All state lives in the graph. Python is a thin convenience layer over SPARQL and PROV-O.""" .
 
@@ -441,21 +441,21 @@ spec:R9.8 a ekga:Requirement ;
 
 spec:R9.9 a ekga:Requirement ;
     ekga:partOf spec:holonic-001 ;
-    dct:description "The library MUST preserve `GraphBackend` as a deprecated alias through the 0.4.x series and provide a migration guide (`docs/MIGRATION.md`). Deprecation warnings are suppressible via `HOLONIC_SILENCE_DEPRECATION=1`." ;
+    dct:description "The library MUST preserve `GraphBackend` as a deprecated alias through the 0.4.x series and provide a migration guide (`docs/MIGRATION.md`). Deprecation warnings are suppressible via `HOLONIC_SILENCE_DEPRECATION=1`. Superseded by R9.18 in 0.5.0: the alias was removed as planned." ;
     ekga:priority "MUST" ;
     ekga:constrains "holonic/__init__.py" ;
     ekga:constrains "holonic/backends/__init__.py" ;
     ekga:constrains "holonic/backends/protocol.py" ;
-    ekga:acceptanceCriterion "Given `from holonic import GraphBackend`, when executed without HOLONIC_SILENCE_DEPRECATION, then a DeprecationWarning is emitted and the alias resolves to HolonicStore." ;
-    ekga:verifiedBy "src/holonic/test/test_deprecation_and_dispatch.py::test_graphbackend_importable_from_holonic" .
+    ekga:acceptanceCriterion "Given holonic 0.5.0, when code imports GraphBackend, then an AttributeError is raised (alias removed per R9.18)." ;
+    ekga:verifiedBy "src/holonic/test/test_deprecation_and_dispatch.py::test_graphbackend_removed_from_holonic" .
 
 spec:R9.10 a ekga:Requirement ;
     ekga:partOf spec:holonic-001 ;
-    dct:description "The `HolonicDataset` constructor parameter previously named `registry_graph` MUST be renamed to `registry_iri` for consistency with internal usage. The old name remains as a deprecated alias through 0.4.x." ;
+    dct:description "The `HolonicDataset` constructor parameter previously named `registry_graph` MUST be renamed to `registry_iri` for consistency with internal usage. The old name was a deprecated alias through 0.4.x and was removed in 0.5.0 per R9.18." ;
     ekga:priority "MUST" ;
     ekga:constrains "HolonicDataset.__init__" ;
-    ekga:acceptanceCriterion "Given HolonicDataset(registry_graph=\"urn:r\"), when the constructor runs, then a DeprecationWarning is emitted AND ds.registry_iri equals \"urn:r\"." ;
-    ekga:verifiedBy "src/holonic/test/test_deprecation_and_dispatch.py::test_registry_graph_kwarg_still_works" .
+    ekga:acceptanceCriterion "Given holonic 0.5.0, when code passes registry_graph= to HolonicDataset, then a TypeError is raised (kwarg removed per R9.18). registry_iri= is the canonical parameter." ;
+    ekga:verifiedBy "src/holonic/test/test_deprecation_and_dispatch.py::test_registry_graph_kwarg_removed" .
 
 spec:R9.11 a ekga:Requirement ;
     ekga:partOf spec:holonic-001 ;
@@ -527,18 +527,18 @@ spec:R9.18 a ekga:Requirement ;
     ekga:constrains "holonic/backends/protocol.py" ;
     ekga:constrains "HolonicDataset" ;
     ekga:acceptanceCriterion "Given holonic 0.5.0 installed, when code imports GraphBackend or passes registry_graph=, then an ImportError or TypeError is raised respectively." ;
-    ekga:verifiedBy "(pending 0.5.0 release; test added at removal time)" .
+    ekga:verifiedBy "src/holonic/test/test_deprecation_and_dispatch.py::test_graphbackend_removed_from_holonic, test_graphbackend_removed_from_backends_protocol, test_registry_graph_kwarg_removed, test_registry_graph_property_removed" .
 
 spec:R9.19 a ekga:Requirement ;
     ekga:partOf spec:holonic-001 ;
-    dct:description "The library MUST ship a JupyterLite static build of the example notebooks for in-browser exploration without local Python installation. Build integrates with the existing `notebooks/` directory via `scripts/sync_notebooks_to_jlite.py`; output lands in `docs/source/_extra/jupyterlite/` so Sphinx's `html_extra_path` serves it at `/jupyterlite/` alongside the documentation. Notebook 11 (yFiles visualization) is excluded from in-browser execution because yFiles requires a Jupyter server extension that Pyodide cannot provide; the landing notebook `00_start_here.ipynb` documents this constraint." ;
+    dct:description "The library MUST ship a JupyterLite static build of the example notebooks for in-browser exploration without local Python installation. Build integrates with the existing `notebooks/` directory via `scripts/sync_notebooks_to_jlite.py`; output lands in `docs/source/_extra/jupyterlite/` so Sphinx's `html_extra_path` serves it at `/jupyterlite/` alongside the documentation. Notebook 13 (yFiles visualization) is excluded from in-browser execution because yFiles requires a Jupyter server extension that Pyodide cannot provide; the landing notebook `00_start_here.ipynb` documents this constraint." ;
     ekga:priority "MUST" ;
     ekga:constrains "jupyterlite/" ;
     ekga:constrains "scripts/sync_notebooks_to_jlite.py" ;
     ekga:constrains ".readthedocs.yaml" ;
     ekga:constrains "pixi.toml (tasks-jlite)" ;
     ekga:constrains "docs/source/_extra/jupyterlite/" ;
-    ekga:acceptanceCriterion "Given the 0.4.1 release on ReadTheDocs, when a reader opens the docs and follows the \"Try in browser\" link, then the JupyterLite lab loads and notebooks 01-10 execute against a Pyodide kernel without local Python installation." ;
+    ekga:acceptanceCriterion "Given the hosted documentation, when a reader opens the docs and follows the \"Try in browser\" link, then the JupyterLite lab loads and notebooks 01-12 execute against a Pyodide kernel without local Python installation." ;
     ekga:verifiedBy "docs/source/index.md \"Try in browser\" section + .readthedocs.yaml pre_build hooks + manual verification during release rehearsal" .
 
 spec:R9.20 a ekga:Requirement ;
@@ -684,6 +684,13 @@ spec:OQ9 a ekga:OpenIssue ;
     dct:description "DOM-style event propagation as a coordination model. Cagle proposes (LinkedIn thread, April 2026) that plural-orchestrator coordination can be resolved by treating the holarchy as a structure over which events propagate in the W3C Document Object Model's capture/target/bubble pattern. Under this framing: the containing holon makes no expectations on child interiors (opacity is first-class); external events arrive at a holon and are either consumed, delegated to children via portals, or ignored after propagation completes; \"eventually ignored\" is a legitimate outcome rather than a failure mode. This is distinct from OQ8's tick proposal — event propagation is structural (who receives an event depends on the containment topology) rather than clock-triggered. The library today implements something DOM-adjacent via portal traversal and multi-hop path finding, but does not expose explicit event-dispatch semantics. Open questions surface immediately when mapping DOM to holons: DOM events are synchronous and the DOM is a strict tree, whereas a federated holarchy is asynchronous and a containment graph may have multiple portal paths between two holons. Whether to adopt the DOM framing as library architecture, as a mental model for explaining existing capabilities, or neither, remains open." ;
     ekga:owner "zwelz3" ;
     ekga:recommendation "Before any implementation, verify whether the existing portal-traversal API strains under real use cases that DOM-style event dispatch would address more naturally. If strain emerges, the design question becomes: extend existing portal semantics with explicit event-phase hooks (capture/target/bubble), add a dedicated `dispatch_event` API parallel to `traverse`, or adopt the DOM model as framing while keeping the current API unchanged. The documentation at `docs/source/dom-comparison.md` establishes the mental-model mapping without committing to implementation. No release slot assigned; this may or may not be implemented." ;
+    ekga:resolutionStatus "deferred" .
+
+spec:OQ10 a ekga:OpenIssue ;
+    ekga:partOf spec:holonic-001 ;
+    dct:description "Upper-ontology alignment (BFO/CCO, gist). The CGA ontology's structural core (Holon, Portal, LayerGraph) is genuinely novel and does not reduce cleanly to existing upper-ontology categories. A holon is not a BFO Continuant, not an Occurrent, not a gist Content — it is a structural container with an inside/outside distinction, layer-scoped named graphs, and a membrane. Forcing it into an upper-ontology branch would misrepresent what it is. The governance vocabulary (DataDomain, BusinessProcess, ExternalSystem, Capability) maps more naturally to established categories (CCO Agent, CCO InformationBearingEntity, gist Organization). The recommended approach is alignment-not-import: ship optional alignment modules (`cga-bfo-alignment.ttl`, `cga-gist-alignment.ttl`) that downstream consumers load when interoperability with a specific upper ontology is required. The core ontology stays standalone, reasoner-free, and philosophically uncommitted. BFO/CCO alignment is higher priority for defense consumers (ISO 21838-2, DARPA/DOD ontology ecosystem); gist alignment is higher priority for commercial enterprise consumers. Both can be developed in parallel without affecting the core." ;
+    ekga:owner "zwelz3" ;
+    ekga:recommendation "Develop alignment modules as separate Turtle files under `src/holonic/ontology/`. Use `skos:broadMatch` / `skos:closeMatch` in the core ontology for lightweight cross-referencing without owl:imports. Document the alignment rationale in `docs/source/ontology.md`. Target 0.6.0 or later; gated on a concrete downstream consumer requesting BFO or gist compatibility." ;
     ekga:resolutionStatus "deferred" .
 
 spec:designnote-3efeb2da a ekga:DesignNote ;

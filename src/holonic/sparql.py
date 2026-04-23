@@ -302,7 +302,7 @@ WHERE {
         ?holon a cga:Holon .
         OPTIONAL { ?holon rdfs:label        ?label }
         OPTIONAL { ?holon cga:memberOf      ?member_of }
-        OPTIONAL { ?holon cga:classification ?classification }
+        OPTIONAL { ?holon cga:dataClassification ?classification }
         OPTIONAL {
             ?holon a ?kind .
             FILTER(?kind != cga:Holon)
