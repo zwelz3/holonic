@@ -2,8 +2,33 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import Enum
+from typing import Any
+
+
+class _DictMixin:
+    """Adds ``to_dict()`` for JSON-ready serialization.
+
+    All holonic dataclasses inherit this mixin so downstream
+    consumers (web APIs, dashboards, serialization layers) can
+    convert results to plain dicts without importing
+    ``dataclasses.asdict`` themselves.
+    """
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a plain-dict copy of this dataclass.
+
+        Enum values are converted to their ``.value`` string.
+        Nested dataclasses are recursively converted.
+        """
+
+        def _convert(obj: Any) -> Any:
+            if isinstance(obj, Enum):
+                return obj.value
+            return obj
+
+        return asdict(self, dict_factory=lambda pairs: {k: _convert(v) for k, v in pairs})
 
 
 class MembraneHealth(Enum):
@@ -15,7 +40,7 @@ class MembraneHealth(Enum):
 
 
 @dataclass
-class MembraneResult:
+class MembraneResult(_DictMixin):
     """Result of SHACL membrane validation."""
 
     holon_iri: str
@@ -42,7 +67,7 @@ class MembraneResult:
 
 
 @dataclass
-class PortalInfo:
+class PortalInfo(_DictMixin):
     """Descriptor for a discovered portal."""
 
     iri: str
@@ -57,7 +82,7 @@ class PortalInfo:
 
 
 @dataclass
-class HolonInfo:
+class HolonInfo(_DictMixin):
     """Descriptor for a discovered holon."""
 
     iri: str
@@ -69,7 +94,7 @@ class HolonInfo:
 
 
 @dataclass
-class HolarchyTree:
+class HolarchyTree(_DictMixin):
     """Holarchy structure with depth, parentage, and labels.
 
     Returned by ``HolonicDataset.compute_depth()``.  Can be used
@@ -160,7 +185,7 @@ class MembraneBreachError(Exception):
 
 
 @dataclass
-class TraversalRecord:
+class TraversalRecord(_DictMixin):
     """A single portal traversal event from the provenance trail."""
 
     activity_iri: str
@@ -182,7 +207,7 @@ class TraversalRecord:
 
 
 @dataclass
-class ValidationRecord:
+class ValidationRecord(_DictMixin):
     """A membrane validation event from the provenance trail."""
 
     activity_iri: str
@@ -204,7 +229,7 @@ class ValidationRecord:
 
 
 @dataclass
-class SurfaceReport:
+class SurfaceReport(_DictMixin):
     """Summary of what a holon's boundary requires (from SHACL shapes)."""
 
     holon_iri: str
@@ -216,7 +241,7 @@ class SurfaceReport:
 
 
 @dataclass
-class AuditTrail:
+class AuditTrail(_DictMixin):
     """Complete provenance audit of all traversals and validations."""
 
     traversals: list[TraversalRecord] = field(default_factory=list)

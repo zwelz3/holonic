@@ -3,7 +3,7 @@
 Computes per-graph triple counts, last-modified timestamps, and
 class inventories, and materializes them in the registry graph
 (``urn:holarchy:registry`` by default, configurable via
-``HolonicDataset(registry_graph_iri=...)``).
+``HolonicDataset(registry_iri=...)``).
 
 This is an internal module. The public API is exposed through
 ``HolonicDataset.refresh_metadata()``, ``refresh_all_metadata()``,
@@ -22,7 +22,7 @@ Design notes
   IRI and a URL-safe slug of the class IRI. The slug includes a
   short hash suffix so two classes with identical local names do
   not collide.
-- Backend-agnostic. Uses only the ``GraphBackend`` protocol
+- Backend-agnostic. Uses only the ``HolonicStore`` protocol
   (``query``, ``update``, ``list_named_graphs``, ``graph_exists``).
 """
 
@@ -39,7 +39,7 @@ from holonic import sparql
 from holonic.console_model import ClassInstanceCount, GraphMetadata
 
 if TYPE_CHECKING:
-    from holonic.backends.protocol import GraphBackend
+    from holonic.backends.store import HolonicStore
 
 
 DEFAULT_REGISTRY_IRI = "urn:holarchy:registry"
@@ -116,7 +116,7 @@ class MetadataRefresher:
 
     def __init__(
         self,
-        backend: GraphBackend,
+        backend: HolonicStore,
         registry_iri: str = DEFAULT_REGISTRY_IRI,
     ) -> None:
         self._backend = backend

@@ -6,7 +6,7 @@
 @prefix schema: <https://schema.org/> .
 
 # ══════════════════════════════════════════════════════════════
-# SHACL Shapes for the CGA Ontology  v0.3.0
+# SHACL Shapes for the CGA Ontology  v0.4.3
 #
 # Validates holarchy registry graphs.  Organized by concern:
 #   1. Core structural shapes (holon, portal)
@@ -14,6 +14,7 @@
 #   3. Operational shapes (freshness, sizing)
 #   4. Lifecycle shapes (split/merge validity)
 #   5. Cross-holon constraints (referential integrity)
+#   6. Pipeline shapes (projection pipeline structure)
 # ══════════════════════════════════════════════════════════════
 
 
@@ -144,9 +145,10 @@ cga:DataHolonGovernanceShape a sh:NodeShape ;
     sh:property [
         sh:path     cga:dataClassification ;
         sh:maxCount 1 ;
-        sh:datatype xsd:string ;
+        sh:nodeKind sh:IRI ;
+        sh:class    cga:ClassificationLevel ;
         sh:severity sh:Warning ;
-        sh:message  "Data holon should declare a classification."
+        sh:message  "Data holon should declare a classification (a cga:ClassificationLevel individual)."
     ] ;
     .
 
@@ -197,6 +199,103 @@ cga:BusinessProcessShape a sh:NodeShape ;
         sh:minCount 1 ;
         sh:severity sh:Violation ;
         sh:message  "BusinessProcess must have a label."
+    ] ;
+    .
+
+# Stewardship recommendation for ALL holon subtypes, not just DataHolon.
+# Info severity — a gentle nudge rather than a governance requirement.
+cga:HolonStewardshipShape a sh:NodeShape ;
+    sh:targetClass cga:Holon ;
+    sh:property [
+        sh:path     cga:dataSteward ;
+        sh:maxCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:severity sh:Info ;
+        sh:message  "Consider declaring a dataSteward for accountability."
+    ] ;
+    sh:property [
+        sh:path     cga:dataClassification ;
+        sh:maxCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:class    cga:ClassificationLevel ;
+        sh:severity sh:Info ;
+        sh:message  "Consider declaring a dataClassification (a cga:ClassificationLevel individual) for governance."
+    ] ;
+    .
+
+# Alignment holons carry vocabulary mappings and should have provenance.
+cga:AlignmentHolonShape a sh:NodeShape ;
+    sh:targetClass cga:AlignmentHolon ;
+    sh:property [
+        sh:path     rdfs:label ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message  "AlignmentHolon should have a label describing the mapping."
+    ] ;
+    sh:property [
+        sh:path     cga:hasInterior ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message  "AlignmentHolon should have at least one interior graph containing the vocabulary mapping."
+    ] ;
+    .
+
+# Agent holons represent active computational agents. Their four-layer
+# structure has specific semantics: interior = agent state/memory,
+# boundary = output constraints, context = execution history,
+# projection = capability interface.
+cga:AgentHolonShape a sh:NodeShape ;
+    sh:targetClass cga:AgentHolon ;
+    sh:property [
+        sh:path     rdfs:label ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message  "AgentHolon should have a label identifying the agent."
+    ] ;
+    sh:property [
+        sh:path     cga:hasInterior ;
+        sh:minCount 1 ;
+        sh:severity sh:Info ;
+        sh:message  "AgentHolon should have an interior graph for agent state or memory."
+    ] ;
+    sh:property [
+        sh:path     cga:hasBoundary ;
+        sh:minCount 1 ;
+        sh:severity sh:Info ;
+        sh:message  "AgentHolon should have a boundary graph defining output constraints."
+    ] ;
+    sh:property [
+        sh:path     cga:hasContext ;
+        sh:minCount 1 ;
+        sh:severity sh:Info ;
+        sh:message  "AgentHolon should have a context graph for execution history."
+    ] ;
+    .
+
+# Aggregate holons contain no original data — their interiors are
+# populated entirely by portal traversals (materialized views).
+# Warn if an AggregateHolon has interior data but no provenance
+# linking that data to a traversal activity.
+cga:AggregateHolonShape a sh:NodeShape ;
+    sh:targetClass cga:AggregateHolon ;
+    sh:property [
+        sh:path     rdfs:label ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message  "AggregateHolon should have a label."
+    ] ;
+    sh:sparql [
+        sh:message  "AggregateHolon has interior data but no traversal provenance. Aggregate interiors should be populated by portal traversals, not direct writes." ;
+        sh:severity sh:Warning ;
+        sh:select """
+            SELECT $this WHERE {
+                $this cga:hasInterior ?interior .
+                FILTER NOT EXISTS {
+                    ?activity a prov:Activity ;
+                        prov:generated ?interior .
+                }
+            }
+        """
     ] ;
     .
 
@@ -414,6 +513,45 @@ cga:SelfMembershipShape a sh:NodeShape ;
         sh:select """
             SELECT $this WHERE {
                 $this cga:memberOf $this .
+            }
+        """
+    ] ;
+    .
+
+
+# ──────────────────────────────────────────────────────────────
+# 6. PIPELINE SHAPES
+# ──────────────────────────────────────────────────────────────
+
+# A pipeline spec must have a label and at least one step.
+cga:ProjectionPipelineSpecShape a sh:NodeShape ;
+    sh:targetClass cga:ProjectionPipelineSpec ;
+    sh:property [
+        sh:path     rdfs:label ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message  "ProjectionPipelineSpec should have a label."
+    ] ;
+    sh:property [
+        sh:path     cga:hasStep ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message  "ProjectionPipelineSpec should have at least one step (cga:hasStep)."
+    ] ;
+    .
+
+# A pipeline step must have either a transformName or a constructQuery.
+# A step with neither does nothing.
+cga:ProjectionPipelineStepShape a sh:NodeShape ;
+    sh:targetClass cga:ProjectionPipelineStep ;
+    sh:sparql [
+        sh:message  "ProjectionPipelineStep has neither cga:transformName nor cga:constructQuery. A step with no transform does nothing." ;
+        sh:severity sh:Warning ;
+        sh:select """
+            SELECT $this WHERE {
+                $this a cga:ProjectionPipelineStep .
+                FILTER NOT EXISTS { $this cga:transformName ?t }
+                FILTER NOT EXISTS { $this cga:constructQuery ?q }
             }
         """
     ] ;

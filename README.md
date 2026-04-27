@@ -1,7 +1,11 @@
 ![holonic](./static/holonic_banner.png)
 
 [![PyPI](https://img.shields.io/pypi/v/holonic.svg)](https://pypi.org/project/holonic/)
+[![Try on JupyterLite](./static/jlite-badge.svg)](https://zwelz3.github.io/holonic/jupyterlite/index.html)
 ![spec maturity](./static/spec-badge.svg)
+
+
+> **[Try holonic in your browser](https://zwelz3.github.io/holonic/jupyterlite/index.html)** -- 13 example notebooks running on JupyterLite. No install required.
 
 A lightweight Python client for building holonic knowledge graphs (based on Cagel's four-graph holonic RDF model) backed by rdflib, Apache Jena Fuseki, or any SPARQL-compliant quad store.
 
@@ -54,22 +58,25 @@ from holonic import HolonicDataset
 ds = HolonicDataset()  # rdflib in-memory backend
 
 # Create a holon with multiple interior graphs
-ds.add_holon("urn:holon:sensor-a", "Sensor A")
-ds.add_interior("urn:holon:sensor-a", '''
-    <urn:track:001> a <urn:type:Track> ;
-        <urn:prop:lat> 34.05 ;
-        <urn:prop:lon> -118.25 .
-''', graph_iri="urn:holon:sensor-a/interior/radar")
+ds.add_holon("urn:holon:acme", "Acme Corp")
+ds.add_interior("urn:holon:acme", '''
+    @prefix schema: <https://schema.org/> .
+    <urn:person:alice> a schema:Person ;
+        schema:name "Alice Chen" ;
+        schema:jobTitle "Engineering Lead" .
+''', graph_iri="urn:holon:acme/interior/people")
 
-ds.add_interior("urn:holon:sensor-a", '''
-    <urn:track:001> <urn:prop:confidence> 0.92 .
-''', graph_iri="urn:holon:sensor-a/interior/fusion")
+ds.add_interior("urn:holon:acme", '''
+    @prefix schema: <https://schema.org/> .
+    <urn:person:alice> schema:workLocation "San Francisco" .
+''', graph_iri="urn:holon:acme/interior/locations")
 
 # Query across all interiors
 rows = ds.query('''
-    SELECT ?track ?lat ?conf WHERE {
-        GRAPH ?g1 { ?track <urn:prop:lat> ?lat }
-        GRAPH ?g2 { ?track <urn:prop:confidence> ?conf }
+    PREFIX schema: <https://schema.org/>
+    SELECT ?person ?name ?location WHERE {
+        GRAPH ?g1 { ?person schema:name ?name }
+        GRAPH ?g2 { ?person schema:workLocation ?location }
     }
 ''')
 ```
@@ -91,9 +98,8 @@ ds = HolonicDataset(
 )
 ```
 
-> Migrating from 0.3.x? `GraphBackend` is now `HolonicStore` (old
-> name kept as a deprecated alias through 0.4.x) and `FusekiBackend`
-> requires `dataset` as a keyword argument. See
+> Migrating from 0.3.x or 0.4.x? The `GraphBackend` alias and
+> `registry_graph` kwarg were removed in 0.5.0. See
 > [`docs/MIGRATION.md`](./docs/MIGRATION.md) for the full checklist.
 
 ## Key Concepts
@@ -103,8 +109,8 @@ ds = HolonicDataset(
 A holon's interior is a *set* of named graphs, not a single graph:
 
 ```python
-ds.add_interior(holon, ttl_a, graph_iri="urn:holon:x/interior/radar")
-ds.add_interior(holon, ttl_b, graph_iri="urn:holon:x/interior/eo-ir")
+ds.add_interior(holon, ttl_a, graph_iri="urn:holon:x/interior/contacts")
+ds.add_interior(holon, ttl_b, graph_iri="urn:holon:x/interior/payroll")
 ```
 
 ### Portals Are RDF, Discovered via SPARQL
@@ -178,23 +184,25 @@ The package includes a lightweight OWL 2 RL vocabulary (`holonic/ontology/cga.tt
 
 ## Example Notebooks
 
-| Example | Description |
-| ------- | ----------- |
-| `notebooks/01_holon_basics.ipynb` | Holon creation, multi-interior, membrane validation |
-| `notebooks/02_portal_traversal.ipynb` | Portal discovery, multi-hop paths, provenance |
-| `notebooks/03_cco_to_schemaorg.ipynb` | Cross-standard data translation (CCO → Schema.org) |
-| `notebooks/04_projections.ipynb` | Type/literal/blank-node collapse, pipelines, holarchy projection |
-| `notebooks/05_holarchy_viz.ipynb` | Holarchy topology (data-structure view, no optional deps) |
-| `notebooks/06_console_views.ipynb` | Console dataclasses, neighborhood graphs, graphology export (0.3.1) |
-| `notebooks/07_graph_metadata.ipynb` | Graph-level metadata, eager/off modes, refresh policies (0.3.3) |
-| `notebooks/08_scope_resolution.ipynb` | BFS scope resolution, predicates, ordering modes (0.3.4) |
-| `notebooks/09_projection_plugins.ipynb` | Projection plugin system, pipeline registration, provenance (0.3.5) |
-| `notebooks/10_dispatch_patterns.ipynb` | Synchronous, event-queue, and asyncio dispatch patterns (0.4.1; ties to `docs/source/dom-comparison.md`) |
-| `notebooks/11_visualization.ipynb` | Interactive yFiles widgets for holons, holarchies, provenance (requires `holonic[viz]`) |
+| Example                                  | Description                                                                             |
+| ---------------------------------------- | --------------------------------------------------------------------------------------- |
+| `notebooks/01_holon_basics.ipynb`        | Holon creation, multi-interior, membrane validation                                     |
+| `notebooks/02_portal_traversal.ipynb`    | Portal discovery, multi-hop paths, provenance                                           |
+| `notebooks/03_projections.ipynb`         | Type/literal/blank-node collapse, pipelines, holarchy projection                        |
+| `notebooks/04_cco_to_schemaorg.ipynb`    | Cross-standard data translation (CCO → Schema.org)                                      |
+| `notebooks/05_governed_boundaries.ipynb` | Governed boundary contracts: alignment holons, stewardship, classification enforcement  |
+| `notebooks/06_holon_subtypes.ipynb`      | AgentHolon, AggregateHolon subtypes, SHACL shapes, ClassificationLevel enum             |
+| `notebooks/07_graph_metadata.ipynb`      | Graph-level metadata, eager/off modes, refresh policies                                 |
+| `notebooks/08_scope_resolution.ipynb`    | BFS scope resolution, predicates, ordering modes                                        |
+| `notebooks/09_console_views.ipynb`       | Console dataclasses, neighborhood graphs, graphology export                             |
+| `notebooks/10_projection_plugins.ipynb`  | Projection plugin system, pipeline registration, provenance                             |
+| `notebooks/11_dispatch_patterns.ipynb`   | Synchronous, event-queue, and asyncio dispatch patterns                                 |
+| `notebooks/12_holarchy_viz.ipynb`        | Holarchy topology (data-structure view, no optional deps)                               |
+| `notebooks/13_visualization.ipynb`       | Interactive yFiles widgets for holons, holarchies, provenance (requires `holonic[viz]`) |
 
-Notebooks 01–10 run with the base install. Notebook 11 requires the optional `viz` extra (`pip install holonic[viz]`) for the yFiles-based widgets.
+Notebooks 01-12 run with the base install. Notebook 13 requires the optional `viz` extra (`pip install holonic[viz]`) for the yFiles-based widgets.
 
-**Try in browser:** The [hosted documentation](https://holonic.readthedocs.io/) includes a JupyterLite build that runs notebooks 01–10 in your browser without any local installation. Notebook 11 requires a local Jupyter install because yFiles widgets depend on a Jupyter server extension that Pyodide can't provide.
+**Try in browser:** The [hosted documentation](https://zwelz3.github.io/holonic/) includes a JupyterLite build that runs notebooks 01-12 in your browser without any local installation. Notebook 13 requires a local Jupyter install because yFiles widgets depend on a Jupyter server extension that Pyodide can't provide.
 
 Notebooks are committed with outputs stripped; execute them locally with `pixi run serve` or run the lint check (`pixi run check-notebooks`) to confirm your working copy stays clean before committing.
 
@@ -249,48 +257,29 @@ Backends inherit `AbstractHolonicStore` for the recommended path (abstract-metho
 
 ## Roadmap
 
-The roadmap is tracked as `R9.*` requirements in [`docs/SPEC.md`](./docs/SPEC.md) and open questions as `OQ1`–`OQ9`. Each iteration below names its theme; implementation order within an iteration is fluid.
+The roadmap is tracked as `R9.*` requirements in [`docs/SPEC.md`](./docs/SPEC.md) and open questions as `OQ1`–`OQ10`. Each iteration below names its theme; implementation order within an iteration is fluid.
 
 ### Shipped
 
-- **0.4.2** — Structural lifecycle completion: `remove_holon`, `remove_portal`, extensible `add_portal` supporting all CGA portal subtypes plus downstream subclasses (R9.20, R9.21, R9.22).
-- **0.4.1** — JupyterLite in-browser docs, dispatch-patterns notebook, DOM comparison framing, visualization notebook restored (R9.19).
-- **0.4.0** — `HolonicStore` protocol (renamed from `GraphBackend`), ABC split, optional native-dispatch hook (R9.8 – R9.10).
-- **0.3.x** — Typed graphs, scope resolution, graph-level metadata, projection plugin system (R9.1 – R9.7).
+- **0.5.0** -- Breaking cleanup: removed `GraphBackend` alias, `registry_graph` kwarg/property (R9.18). Added `holon_type` kwarg, `iter_holons/iter_portals_*` generators with `limit`/`offset` pagination (R9.11). `bulk_load()` for batch holarchy construction. `list_named_graphs()` confirmed mandatory (R9.17). Notebook reorganization with sectioned landing page.
+- **0.4.3** -- Ontology enrichment: all 68 properties defined, holon subtype shapes (AgentHolon, AggregateHolon), ClassificationLevel enum (**breaking**: `dataClassification` is now an ObjectProperty), OQ10 upper-ontology alignment strategy.
+- **0.4.2** -- Structural lifecycle completion: `remove_holon`, `remove_portal`, extensible `add_portal` supporting all CGA portal subtypes plus downstream subclasses (R9.20, R9.21, R9.22).
+- **0.4.1** -- JupyterLite in-browser docs, dispatch-patterns notebook, DOM comparison framing, visualization notebook restored (R9.19).
+- **0.4.0** -- `HolonicStore` protocol (renamed from `GraphBackend`), ABC split, optional native-dispatch hook (R9.8 -- R9.10).
+- **0.3.x** -- Typed graphs, scope resolution, graph-level metadata, projection plugin system (R9.1 -- R9.7).
 
-### 0.5.0 — Breaking cleanup with a soft landing
+### 0.6.0 -- Scope and registry expansion
 
-The primary deliverable is the deprecation removals users were warned about through 0.4.x. Paired with ergonomics additions that make migrating easier, so the breaking release doesn't feel purely subtractive.
-
-- Remove `GraphBackend` alias, `registry_graph` kwarg, `ds.registry_graph` property (R9.18)
-- Ship `holonic.generators` module — formalized company, research-lab, and random holarchy generators promoted from `examples/` (R9.11)
-- Projection migration pass — synthesize minimal `cga:ProjectionPipelineSpec` resources for pre-0.3.5 projections so historical data gets consistent provenance (R9.15)
-- `MIGRATION.md` updated with the 0.4.x→0.5.0 checklist covering both the removals and the new generator surface
-
-### 0.5.x — Protocol surface growth
-
-Purely additive work in the 0.5 series. No breaking changes; each item is a native hook or extension that lets backends optimize paths the core library currently handles in Python.
-
-- Optional protocol methods for scope walking, bulk load, and pipeline execution — backends can implement these natively; library falls back to Python when absent (R9.17)
-- `metadata_updates="lazy"` mode with dirty tracking and explicit `flush_metadata()` — third policy alongside eager and off, gated on evidence that the two-mode split leaves a real gap (R9.12)
-- Per-step pipeline arguments via `cga:stepArguments` JSON literal or structured argument record (R9.16)
-
-### 0.6.0 — Scope and registry expansion
-
-Semantically meaningful extensions to the scope resolver and the registry graph's role as a cross-cutting observability surface. Version bumps to 0.6 because these change what queries mean, not just how they execute.
-
-- Aggregated membrane health in the registry — fast dashboards and health predicates for scope resolution (R9.13)
-- Additional scope predicate classes: `HasPortalProducing`, `HasShapeFor`, `LabelMatches` — reduces reliance on `CustomSPARQL` as an escape hatch (R9.14)
-- Sharpened console dataclasses reflecting the registry's richer semantic surface
+- Aggregated membrane health in the registry (R9.13)
+- Additional scope predicate classes: `HasPortalProducing`, `HasShapeFor`, `LabelMatches` (R9.14)
+- Optional BFO/CCO and gist alignment modules if downstream consumers request them (OQ10)
 
 ### 0.7.0+ — Contingent on evidence and community signal
 
-The items below are drawn from the open-questions pool in SPEC. Each has a recommendation to wait for external signal before committing to a primitive. They may or may not land in 0.7; if they do, the 0.7 iteration will be shaped around whichever of them proves most tractable first.
-
-- **Federation semantics across multiple registries** — `cga:federatesWith`, cross-registry discovery, partial-failure semantics (OQ7)
-- **Async variant of `HolonicStore`** as a separate protocol if demand emerges from async consumers of the library — sync protocol remains canonical either way (R2.5)
-- **Graph-level tick semantics** in a `holonic.contrib` experimental module, contingent on Part 2 of Cagle's *Inference Engineer* series clarifying which dynamic (active inference, energy minimization, something finer-grained) the tick should drive (OQ8)
-- **DOM-style event propagation as coordination primitive** — only if the current portal-traversal API shows strain against real use cases that explicit capture/target/bubble would address more naturally (OQ9)
+- Federation semantics across multiple registries (OQ7)
+- Async variant of `HolonicStore` if demand emerges from async consumers (R2.5)
+- Graph-level tick semantics (OQ8)
+- DOM-style event propagation as coordination primitive (OQ9)
 
 See [`docs/source/dom-comparison.md`](./docs/source/dom-comparison.md) for the framing of how the current synchronous API already maps onto DOM concepts; the open question is whether explicit machinery is warranted.
 

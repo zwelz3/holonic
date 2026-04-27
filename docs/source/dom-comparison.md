@@ -12,9 +12,9 @@ That said, the mapping is not exact. The DOM is synchronous; a federated holarch
 
 ## Concept mapping
 
-The table shows how DOM concepts correspond to the current holonic library (0.4.0). Some correspond directly; some would require additional machinery the library does not currently provide.
+The table shows how DOM concepts correspond to the current holonic library. Some correspond directly; some would require additional machinery the library does not currently provide.
 
-| DOM concept | Holonic counterpart | Status in 0.4.0 |
+| DOM concept | Holonic counterpart | Status |
 |-------------|---------------------|-----------------|
 | Document | HolonicDataset | Direct correspondence |
 | Element | Holon | Direct correspondence |
@@ -49,7 +49,7 @@ The event then enters the **bubble phase**: it propagates back up through the co
 
 **Unhandled events** — events that neither capture nor bubble phases react to — are legitimate. They arrived, they were considered, they were not acted on. The framework logs a minimal PROV-O record of the event's lifecycle ("arrived, considered, no handler") to preserve auditability. This is the main extension over the browser DOM, which silently discards unhandled events; a governed holonic system cannot be silent about what it chose not to do.
 
-This model is **not currently implemented** in 0.4.0. Portal traversal today is a targeted operation — the caller knows the portal and invokes it directly. There is no capture phase, no bubble phase, no explicit event object, no propagation semantics. Adopting the full DOM-style dispatch model would require new library machinery that is captured as OQ9 in `docs/SPEC.md`.
+This model is **not currently implemented**. Portal traversal today is a targeted operation — the caller knows the portal and invokes it directly. There is no capture phase, no bubble phase, no explicit event object, no propagation semantics. Adopting the full DOM-style dispatch model would require new library machinery that is captured as OQ9 in `docs/SPEC.md`.
 
 ## Where the mapping diverges
 
@@ -111,7 +111,7 @@ Holons have SHACL boundaries. If events cross portals in a DOM-style dispatch mo
 
 In the browser, an unhandled event is silent. The DOM neither records that the event arrived nor that nothing handled it. For a UI framework this is the right default — most events are ignored; logging them would drown out the signal.
 
-For a governed holonic system, silence is a problem. Auditability requires that the system be able to answer "did this event arrive, and if so, what happened to it?" for every event that entered the holarchy. This suggests that a DOM-adapted holonic dispatch model should record even unhandled events — as `prov:Activity` records with `cga:eventLifecycle` of "arrived, considered, no handler" or similar. This preserves the lightweight propagation model the DOM offers while meeting the audit requirements of enterprise and defense deployments.
+For a governed holonic system, silence is a problem. Auditability requires that the system be able to answer "did this event arrive, and if so, what happened to it?" for every event that entered the holarchy. This suggests that a DOM-adapted holonic dispatch model should record even unhandled events — as `prov:Activity` records with `cga:eventLifecycle` of "arrived, considered, no handler" or similar. This preserves the lightweight propagation model the DOM offers while meeting the audit requirements of enterprise deployments.
 
 ### Shadow DOM and membranes
 
@@ -121,7 +121,7 @@ A holonic membrane, under the DOM mapping, is a Shadow DOM boundary with validat
 
 ## What the library provides today
 
-The current library (0.4.0) implements several DOM-like concepts natively and leaves others to caller discipline.
+The current library implements several DOM-like concepts natively and leaves others to caller discipline.
 
 **Provided natively:**
 - Containment structure via `cga:memberOf` and registry queries

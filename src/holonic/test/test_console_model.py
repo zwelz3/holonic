@@ -43,7 +43,7 @@ class TestHolonSummary:
             iri="urn:holon:x",
             label="X",
             kind="urn:holonic:ontology:DataHolon",
-            classification="public",
+            classification="urn:holonic:ontology:Public",
             member_of="urn:holon:parent",
             interior_triple_count=42,
             health="intact",

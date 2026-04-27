@@ -9,7 +9,7 @@
 @prefix schema:  <https://schema.org/> .
 
 # ══════════════════════════════════════════════════════════════
-# Context-Graph Architecture (CGA) Ontology  v0.3.0
+# Context-Graph Architecture (CGA) Ontology  v0.4.3
 #
 # Six concerns:
 #   1. Structure    — holons, layers, portals, holarchies
@@ -28,8 +28,17 @@ cga: a owl:Ontology ;
         holarchies (nested holon systems).  Extended with governance,
         process binding, lifecycle management, and operational metadata
         for enterprise deployment.""" ;
-    owl:versionInfo "0.3.0" ;
-    dcterms:created "2026-04-03"^^xsd:date .
+    owl:versionInfo "0.4.3" ;
+    dcterms:created  "2026-04-03"^^xsd:date ;
+    dcterms:modified "2026-04-22"^^xsd:date ;
+    rdfs:seeAlso <https://zwelz3.github.io/holonic/> ;
+    rdfs:seeAlso <http://www.w3.org/ns/prov#> ;
+    rdfs:seeAlso <http://www.w3.org/ns/shacl#> ;
+    skos:note """The CGA ontology is standalone and does not owl:imports any
+        upper ontology.  Optional alignment modules (BFO/CCO, gist) may be
+        shipped separately for downstream consumers who need interoperability
+        with a specific upper-ontology ecosystem.  See OQ10 in docs/SPEC.md
+        for the alignment strategy.""" .
 
 
 # ══════════════════════════════════════════════════════════════
@@ -41,7 +50,13 @@ cga:Holon a owl:Class ;
     skos:definition """A knowledge-graph entity with genuine inside/outside
         distinction, comprising one or more named graphs per layer
         (interior, boundary, projection, context) and an IRI that
-        anchors all layers as a coherent identity.""" .
+        anchors all layers as a coherent identity.""" ;
+    skos:note """Governance pattern: declare dcterms:conformsTo on a
+        holon's interior to identify which ontology governs its data.
+        Declare cga:dataSteward and cga:dataOwner for accountability.
+        Declare cga:dataClassification for sensitivity level.  See
+        the governed-boundaries example notebook for the full pattern
+        including alignment holons and classification boundary shapes.""" .
 
 cga:Portal a owl:Class ;
     rdfs:label "Portal" ;
@@ -94,25 +109,59 @@ cga:LayerRole a owl:Class ;
 
 cga:InteriorRole a cga:LayerRole ;
     rdfs:label "Interior" ;
-    skos:definition "Epistemically grounded assertions and domain data." .
+    skos:definition """Epistemically grounded assertions and domain data.
+        The interior is the holon's 'what is true inside' layer.  A holon
+        may have multiple interior graphs (e.g. one per data source or
+        vocabulary); operations that read the interior treat them as a union.
+        The library writes interior triples via add_interior() and portal
+        injection.  Downstream consumers add domain data directly.
+        Provenance activities and membrane health do NOT belong here;
+        those live in the context layer.""" .
 
 cga:BoundaryRole a cga:LayerRole ;
     rdfs:label "Boundary" ;
-    skos:definition "SHACL shapes and portal definitions — the membrane." .
+    skos:definition """SHACL shapes and portal definitions — the membrane.
+        The boundary layer serves two distinct roles: (1) SHACL node shapes
+        that validate what data is allowed to cross into the interior
+        (the membrane), and (2) portal declarations (cga:TransformPortal,
+        cga:IconPortal, cga:SealedPortal) that govern traversal to other
+        holons.  Both are first-class RDF in the same named graph(s).
+        The library writes portal triples via add_portal() and validates
+        the membrane via validate_membrane().""" .
 
 cga:ProjectionRole a cga:LayerRole ;
     rdfs:label "Projection" ;
-    skos:definition "External bindings, vocabulary alignments, realization declarations." .
+    skos:definition """External bindings, vocabulary alignments, and
+        realization declarations.  The projection layer is 'what outsiders
+        see' — data reshaped for consumption by other holons or external
+        systems.  Projection graphs are populated by the projection
+        pipeline system (ProjectionPipelineSpec, run_projection) or by
+        direct CONSTRUCT queries.  project_holon() writes output to a
+        projection graph when store_as is specified.""" .
 
 cga:ContextRole a cga:LayerRole ;
     rdfs:label "Context" ;
-    skos:definition "Provenance, temporal annotations, operational history." .
+    skos:definition """Provenance, temporal annotations, and operational
+        history.  The library writes prov:Activity records to the context
+        layer automatically during governed traversals (traverse()) and
+        membrane validations.  Each activity carries prov:wasAssociatedWith,
+        prov:used, prov:generated, prov:startedAtTime, and
+        cga:membraneHealth.  Downstream consumers may add additional
+        context triples (temporal validity, lineage annotations) via
+        add_context().""" .
 
 # ── Portal directionality ──
 
-cga:PortalType a owl:Class .
-cga:UnidirectionalPortal a cga:PortalType ; rdfs:label "Unidirectional" .
-cga:BidirectionalPortal  a cga:PortalType ; rdfs:label "Bidirectional" .
+cga:PortalType a owl:Class ;
+    rdfs:label "Portal Type" ;
+    skos:definition """Classification of portal directionality, orthogonal
+        to the portal subclass hierarchy (TransformPortal, IconPortal,
+        SealedPortal).  Populated by downstream consumers via
+        cga:portalType; the library does not set this automatically.""" .
+cga:UnidirectionalPortal a cga:PortalType ; rdfs:label "Unidirectional" ;
+    skos:definition "Data flows in one direction only (source → target)." .
+cga:BidirectionalPortal  a cga:PortalType ; rdfs:label "Bidirectional" ;
+    skos:definition "Data flows in both directions; two transform queries may be involved." .
 
 # ── Membrane health ──
 
@@ -205,6 +254,36 @@ cga:Capability a owl:Class ;
     skos:definition """Service a holon offers, declared with input/output
         SHACL shapes for structural compatibility checking.""" .
 
+cga:ClassificationLevel a owl:Class ;
+    rdfs:label "Classification Level" ;
+    skos:definition """Data sensitivity classification.  Holons declare their
+        classification via cga:dataClassification.  The shipped individuals
+        cover both enterprise sensitivity levels and US government
+        classification tiers.  Downstream consumers may add
+        domain-specific individuals for other regulatory frameworks.""" .
+
+# ── Enterprise sensitivity levels ──
+
+cga:Public       a cga:ClassificationLevel ; rdfs:label "Public" ;
+    skos:definition "No sensitivity restrictions. Freely shareable." .
+cga:Internal     a cga:ClassificationLevel ; rdfs:label "Internal" ;
+    skos:definition "Organization-internal. Not for external distribution." .
+cga:PII          a cga:ClassificationLevel ; rdfs:label "PII" ;
+    skos:definition "Personally Identifiable Information. Subject to privacy regulations (GDPR, CCPA, etc.)." .
+cga:Confidential a cga:ClassificationLevel ; rdfs:label "Confidential" ;
+    skos:definition "Sensitive business or personal data requiring access controls and audit trails." .
+cga:Restricted   a cga:ClassificationLevel ; rdfs:label "Restricted" ;
+    skos:definition "Highest enterprise sensitivity. Access limited to named individuals with explicit authorization." .
+
+# ── US government classification tiers ──
+
+cga:CUI       a cga:ClassificationLevel ; rdfs:label "CUI" ;
+    skos:definition "Controlled Unclassified Information per NIST SP 800-171." .
+cga:Secret    a cga:ClassificationLevel ; rdfs:label "Secret" ;
+    skos:definition "US government Secret classification (EO 13526)." .
+cga:TopSecret a cga:ClassificationLevel ; rdfs:label "Top Secret" ;
+    skos:definition "US government Top Secret classification (EO 13526)." .
+
 
 # ══════════════════════════════════════════════════════════════
 # 4. LIFECYCLE CLASSES
@@ -241,29 +320,42 @@ cga:HolonMerge a owl:Class ;
 # ══════════════════════════════════════════════════════════════
 
 # ── Layer bindings ──
-cga:hasLayer      a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:LayerGraph .
-cga:hasInterior   a owl:ObjectProperty ; rdfs:subPropertyOf cga:hasLayer ; rdfs:domain cga:Holon .
-cga:hasBoundary   a owl:ObjectProperty ; rdfs:subPropertyOf cga:hasLayer ; rdfs:domain cga:Holon .
-cga:hasProjection a owl:ObjectProperty ; rdfs:subPropertyOf cga:hasLayer ; rdfs:domain cga:Holon .
-cga:hasContext    a owl:ObjectProperty ; rdfs:subPropertyOf cga:hasLayer ; rdfs:domain cga:Holon .
-cga:layerRole     a owl:ObjectProperty ; rdfs:domain cga:LayerGraph ; rdfs:range cga:LayerRole .
+cga:hasLayer      a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:LayerGraph ;
+    skos:definition "Associates a holon with one of its layer graphs. Superclass of hasInterior, hasBoundary, hasProjection, hasContext." .
+cga:hasInterior   a owl:ObjectProperty ; rdfs:subPropertyOf cga:hasLayer ; rdfs:domain cga:Holon ;
+    skos:definition "Associates a holon with an interior layer graph containing domain data." .
+cga:hasBoundary   a owl:ObjectProperty ; rdfs:subPropertyOf cga:hasLayer ; rdfs:domain cga:Holon ;
+    skos:definition "Associates a holon with a boundary layer graph containing SHACL shapes and portal definitions." .
+cga:hasProjection a owl:ObjectProperty ; rdfs:subPropertyOf cga:hasLayer ; rdfs:domain cga:Holon ;
+    skos:definition "Associates a holon with a projection layer graph containing external-facing data." .
+cga:hasContext    a owl:ObjectProperty ; rdfs:subPropertyOf cga:hasLayer ; rdfs:domain cga:Holon ;
+    skos:definition "Associates a holon with a context layer graph containing provenance and operational history." .
+cga:layerRole     a owl:ObjectProperty ; rdfs:domain cga:LayerGraph ; rdfs:range cga:LayerRole ;
+    skos:definition "Declares which role (interior, boundary, projection, context) a named graph plays for its holon." .
 
 # ── Portal ──
-cga:sourceHolon    a owl:ObjectProperty ; rdfs:domain cga:Portal ; rdfs:range cga:Holon .
-cga:targetHolon    a owl:ObjectProperty ; rdfs:domain cga:Portal ; rdfs:range cga:Holon .
-cga:portalType     a owl:ObjectProperty ; rdfs:domain cga:Portal ; rdfs:range cga:PortalType .
+cga:sourceHolon    a owl:ObjectProperty ; rdfs:domain cga:Portal ; rdfs:range cga:Holon ;
+    skos:definition "The holon that data flows from during traversal." .
+cga:targetHolon    a owl:ObjectProperty ; rdfs:domain cga:Portal ; rdfs:range cga:Holon ;
+    skos:definition "The holon that data flows to during traversal." .
+cga:portalType     a owl:ObjectProperty ; rdfs:domain cga:Portal ; rdfs:range cga:PortalType ;
+    skos:definition "Directionality of the portal (unidirectional or bidirectional). Orthogonal to the portal subclass." .
 cga:usesAlignment  a owl:ObjectProperty ; rdfs:domain cga:Portal ; rdfs:range cga:AlignmentHolon ;
-    skos:definition "Alignment holon justifying this portal's transformation." .
+    skos:definition "Alignment holon justifying this portal's transformation. The alignment holon contains the vocabulary mapping and its provenance." .
 cga:sourceRealizes a owl:ObjectProperty ; rdfs:domain cga:Portal ;
-    skos:definition "Logical entity the source platform type realizes." .
+    skos:definition "Logical entity the source platform type realizes. Links the portal to a conceptual model independent of the source holon's specific ontology." .
 cga:targetRealizes a owl:ObjectProperty ; rdfs:domain cga:Portal ;
-    skos:definition "Logical entity the target platform type realizes." .
+    skos:definition "Logical entity the target platform type realizes. Links the portal to a conceptual model independent of the target holon's specific ontology." .
 
 # ── Holarchy structure ──
-cga:memberOf     a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:Holon .
-cga:adjacentTo   a owl:ObjectProperty, owl:SymmetricProperty ; rdfs:domain cga:Holon ; rdfs:range cga:Holon .
-cga:bindsTo      a owl:ObjectProperty ; rdfs:domain cga:Holon .
-cga:exposesPortal a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:Portal .
+cga:memberOf     a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:Holon ;
+    skos:definition "Declares containment: this holon is a member of the object holon. The object is the parent; the subject is the child. A holon should have at most one parent (tree structure)." .
+cga:adjacentTo   a owl:ObjectProperty, owl:SymmetricProperty ; rdfs:domain cga:Holon ; rdfs:range cga:Holon ;
+    skos:definition "Declares peer-level adjacency between two holons without containment. Useful for holonic networks (holonets) where holons relate as peers through portal topology without a parent-child hierarchy." .
+cga:bindsTo      a owl:ObjectProperty ; rdfs:domain cga:Holon ;
+    skos:definition "Links a holon to an external concept, resource, or system that the holon represents or is bound to. Range is intentionally unspecified to accommodate diverse binding targets." .
+cga:exposesPortal a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:Portal ;
+    skos:definition "Declares that a holon offers this portal as part of its public interface. Note: portal discovery via find_portals_from/to already discovers portals through cga:sourceHolon/targetHolon; this property is an explicit declaration of intent that may not cover all discoverable portals." .
 
 # ── Authority ──
 cga:sourceOfTruthFor     a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:DataDomain ;
@@ -288,26 +380,38 @@ cga:derivedFrom          a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:ran
     rdfs:seeAlso prov:wasDerivedFrom .
 
 # ── Stewardship ──
-cga:dataSteward a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range schema:Person .
-cga:dataOwner   a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range schema:Person .
+cga:dataSteward a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range schema:Person ;
+    skos:definition "The person accountable for the quality and governance of data within this holon's interiors." .
+cga:dataOwner   a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range schema:Person ;
+    skos:definition "The person with ultimate authority over this holon's data, including decisions about access, retention, and disposal." .
 
 # ── Process ──
-cga:producedByProcess a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:BusinessProcess .
-cga:consumedByProcess a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:BusinessProcess .
-cga:governedByProcess a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:BusinessProcess .
-cga:processStage      a owl:ObjectProperty ; rdfs:domain cga:BusinessProcess .
+cga:producedByProcess a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:BusinessProcess ;
+    skos:definition "Business process that produces or populates data within this holon." .
+cga:consumedByProcess a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:BusinessProcess ;
+    skos:definition "Business process that consumes or reads data from this holon." .
+cga:governedByProcess a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:BusinessProcess ;
+    skos:definition "Business process that governs (approves changes to, audits, or reviews) this holon's data." .
+cga:processStage      a owl:ObjectProperty ; rdfs:domain cga:BusinessProcess ;
+    skos:definition "Named stage or phase within a multi-step business process. Range is intentionally unspecified." .
 
 # ── External system ──
-cga:backedBySystem a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:ExternalSystem .
+cga:backedBySystem a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:ExternalSystem ;
+    skos:definition "External system whose data this holon represents or synchronizes with." .
 
 # ── Capability ──
-cga:providesCapability a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:Capability .
-cga:requiresInput      a owl:ObjectProperty ; rdfs:domain cga:Capability .
-cga:producesOutput     a owl:ObjectProperty ; rdfs:domain cga:Capability .
+cga:providesCapability a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:Capability ;
+    skos:definition "Service or function this holon offers to other holons or external consumers." .
+cga:requiresInput      a owl:ObjectProperty ; rdfs:domain cga:Capability ;
+    skos:definition "Input shape or resource required by this capability. Range is intentionally unspecified (typically a SHACL shape IRI or a class IRI)." .
+cga:producesOutput     a owl:ObjectProperty ; rdfs:domain cga:Capability ;
+    skos:definition "Output shape or resource produced by this capability. Range is intentionally unspecified." .
 
 # ── Lifecycle ──
-cga:holonStatus  a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:HolonStatus .
-cga:supersededBy a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:Holon .
+cga:holonStatus  a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:HolonStatus ;
+    skos:definition "Current lifecycle status of the holon (Active, Archived, Proposed)." .
+cga:supersededBy a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:Holon ;
+    skos:definition "The successor holon that replaces this one after archival or restructuring." .
 cga:splitTarget  a owl:ObjectProperty ; rdfs:domain cga:HolonSplit ; rdfs:range cga:Holon .
 
 # ── Discovery index ──
@@ -315,11 +419,14 @@ cga:containsType a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range rdfs:
     skos:definition "This holon's interiors contain instances of this rdf:type." .
 
 # ── Data domain governance ──
-cga:domainSteward a owl:ObjectProperty ; rdfs:domain cga:DataDomain ; rdfs:range schema:Person .
-cga:domainPolicy  a owl:ObjectProperty ; rdfs:domain cga:DataDomain .
+cga:domainSteward a owl:ObjectProperty ; rdfs:domain cga:DataDomain ; rdfs:range schema:Person ;
+    skos:definition "Person accountable for governance of this data domain across all holons that participate in it." .
+cga:domainPolicy  a owl:ObjectProperty ; rdfs:domain cga:DataDomain ;
+    skos:definition "Policy document or resource governing data handling within this domain. Range is intentionally unspecified." .
 
 # ── Membrane health (on provenance activities) ──
-cga:membraneHealth a owl:ObjectProperty ; rdfs:domain prov:Activity ; rdfs:range cga:MembraneHealth .
+cga:membraneHealth a owl:ObjectProperty ; rdfs:domain prov:Activity ; rdfs:range cga:MembraneHealth ;
+    skos:definition "Outcome of membrane validation during a traversal or validation activity. One of cga:Intact, cga:Weakened, or cga:Compromised." .
 
 
 # ══════════════════════════════════════════════════════════════
@@ -329,14 +436,25 @@ cga:membraneHealth a owl:ObjectProperty ; rdfs:domain prov:Activity ; rdfs:range
 # ── Structural ──
 cga:holonDepth      a owl:DatatypeProperty ; rdfs:domain cga:Holon ; rdfs:range xsd:integer ;
     skos:definition "Optional. Derivable from cga:memberOf chain." .
-cga:constructQuery  a owl:DatatypeProperty ; rdfs:domain cga:TransformPortal ; rdfs:range xsd:string .
-cga:isTraversable   a owl:DatatypeProperty ; rdfs:domain cga:Portal ; rdfs:range xsd:boolean .
-cga:activationEvent a owl:DatatypeProperty ; rdfs:domain cga:Portal ; rdfs:range xsd:string .
+cga:constructQuery  a owl:DatatypeProperty ; rdfs:domain cga:TransformPortal ; rdfs:range xsd:string ;
+    skos:definition "SPARQL CONSTRUCT query that reshapes source data during portal traversal. Required on TransformPortal; forbidden on IconPortal and SealedPortal." .
+cga:isTraversable   a owl:DatatypeProperty ; rdfs:domain cga:Portal ; rdfs:range xsd:boolean ;
+    skos:definition "Whether this portal is currently open for traversal. False on SealedPortal. Downstream consumers may set this independently of portal subtype." .
+cga:activationEvent a owl:DatatypeProperty ; rdfs:domain cga:Portal ; rdfs:range xsd:string ;
+    skos:definition "Name of the event that triggers traversal of this portal. Populated by downstream consumers implementing event-driven dispatch." .
 
 # ── Governance ──
-cga:dataClassification a owl:DatatypeProperty ; rdfs:domain cga:Holon ; rdfs:range xsd:string ;
-    skos:definition "Data sensitivity: PUBLIC, CUI, PII, SECRET, etc." .
-cga:gateCondition      a owl:DatatypeProperty ; rdfs:domain cga:BusinessProcess ; rdfs:range xsd:string .
+cga:dataClassification a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:ClassificationLevel ;
+    skos:definition """Data sensitivity level for this holon's content.  Value must be a
+        cga:ClassificationLevel individual (enterprise: cga:Public,
+        cga:Internal, cga:PII, cga:Confidential, cga:Restricted;
+        government: cga:CUI, cga:Secret, cga:TopSecret) or a
+        downstream-defined individual.
+        PortalClassificationShape warns when a portal crosses a classification
+        boundary.  Changed from DatatypeProperty (xsd:string) to ObjectProperty
+        in 0.4.3.""" .
+cga:gateCondition      a owl:DatatypeProperty ; rdfs:domain cga:BusinessProcess ; rdfs:range xsd:string ;
+    skos:definition "Human-readable condition that must be met before this process stage can proceed. Evaluated by downstream consumers, not by the library." .
 
 # ── Operational ──
 cga:lastIngestion       a owl:DatatypeProperty ; rdfs:domain cga:Holon ; rdfs:range xsd:dateTime .
@@ -353,8 +471,10 @@ cga:splitCriteria  a owl:DatatypeProperty ; rdfs:domain cga:HolonSplit ; rdfs:ra
     skos:definition "SPARQL CONSTRUCT determining which triples went to which successor." .
 
 # ── External system ──
-cga:systemType     a owl:DatatypeProperty ; rdfs:domain cga:ExternalSystem ; rdfs:range xsd:string .
-cga:systemEndpoint a owl:DatatypeProperty ; rdfs:domain cga:ExternalSystem ; rdfs:range xsd:anyURI .
+cga:systemType     a owl:DatatypeProperty ; rdfs:domain cga:ExternalSystem ; rdfs:range xsd:string ;
+    skos:definition "Category of external system: REST API, RDBMS, document store, message queue, etc." .
+cga:systemEndpoint a owl:DatatypeProperty ; rdfs:domain cga:ExternalSystem ; rdfs:range xsd:anyURI ;
+    skos:definition "Network endpoint (URL) for connecting to this external system." .
 
 
 # ══════════════════════════════════════════════════════════════
@@ -362,7 +482,7 @@ cga:systemEndpoint a owl:DatatypeProperty ; rdfs:domain cga:ExternalSystem ; rdf
 #
 # Per-graph operational metadata lives in the registry graph
 # (urn:holarchy:registry by default, configurable via
-# HolonicDataset(registry_graph_iri=...)). Subjects are LayerGraph
+# HolonicDataset(registry_iri=...)). Subjects are LayerGraph
 # IRIs; objects are counts, timestamps, or ClassInstanceCount
 # records.
 #

@@ -276,7 +276,7 @@ def test_limit_clamped_to_one_floor(star_topology):
 
 def test_scope_resolver_standalone(linear_chain):
     ds = linear_chain
-    resolver = ScopeResolver(backend=ds.backend, registry_iri=ds.registry_graph)
+    resolver = ScopeResolver(backend=ds.backend, registry_iri=ds.registry_iri)
     matches = resolver.resolve(
         HasClassInInterior("urn:ex:Beta"),
         from_holon="urn:holon:a",

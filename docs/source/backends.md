@@ -92,8 +92,6 @@ across the 0.4.x series.
 
 ## Migrating from `GraphBackend` (0.3.x)
 
-`GraphBackend` is a deprecated alias for `HolonicStore` kept through
-all of 0.4.x. New code should import `HolonicStore` from
-`holonic.backends.store` (or from the top-level `holonic` package).
-See `docs/MIGRATION.md` for the full 0.3.x → 0.4.0 migration
-checklist.
+The `GraphBackend` alias was removed in 0.5.0. Import `HolonicStore`
+from `holonic.backends.store` (or from the top-level `holonic`
+package). See `docs/MIGRATION.md` for the full migration checklist.

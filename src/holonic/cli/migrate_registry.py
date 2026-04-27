@@ -59,7 +59,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 def _make_dataset(backend_spec: str, registry_graph: str) -> HolonicDataset:
     """Build a HolonicDataset for the given backend spec."""
     if backend_spec == "rdflib":
-        return HolonicDataset(RdflibBackend(), registry_graph=registry_graph)
+        return HolonicDataset(RdflibBackend(), registry_iri=registry_graph)
     if backend_spec.startswith("http://") or backend_spec.startswith("https://"):
         from holonic.backends.fuseki_backend import FusekiBackend
 
@@ -72,7 +72,7 @@ def _make_dataset(backend_spec: str, registry_graph: str) -> HolonicDataset:
         endpoint, dataset = parts
         return HolonicDataset(
             FusekiBackend(endpoint, dataset=dataset),
-            registry_graph=registry_graph,
+            registry_iri=registry_graph,
             load_ontology=False,
         )
     raise ValueError(f"Unknown backend spec: {backend_spec!r}")
@@ -81,7 +81,7 @@ def _make_dataset(backend_spec: str, registry_graph: str) -> HolonicDataset:
 def _plan(ds: HolonicDataset) -> list[tuple[str, str]]:
     """Return the list of (graph_iri, role_local_name) pairs needing typing."""
     rows = ds.backend.query(
-        Q.LIST_UNTYPED_LAYER_GRAPHS_TEMPLATE.format(registry_iri=ds.registry_graph)
+        Q.LIST_UNTYPED_LAYER_GRAPHS_TEMPLATE.format(registry_iri=ds.registry_iri)
     )
     plan: list[tuple[str, str]] = []
     for r in rows:
@@ -98,7 +98,7 @@ def _apply(ds: HolonicDataset, plan: list[tuple[str, str]]) -> int:
     for graph_iri, role_local in plan:
         ds.backend.update(
             Q.TYPE_GRAPH_TEMPLATE.format(
-                registry_iri=ds.registry_graph,
+                registry_iri=ds.registry_iri,
                 graph_iri=graph_iri,
                 role=role_local,
             )

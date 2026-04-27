@@ -173,7 +173,7 @@ check("R3.1", cga_path.exists() and cga_shapes_path.exists(),
       f"missing: cga.ttl={cga_path.exists()} cga-shapes.ttl={cga_shapes_path.exists()}")
 
 # R3.2: ontology declares required classes
-cga_content = cga_path.read_text(encoding="utf-8")
+cga_content = cga_path.read_text()
 required_classes = ["cga:Holon", "cga:DataHolon", "cga:AlignmentHolon",
                     "cga:AgentHolon", "cga:GovernanceHolon", "cga:AggregateHolon",
                     "cga:IndexHolon", "cga:Portal", "cga:TransformPortal",
@@ -485,7 +485,7 @@ check("R8.2", marked_correctly,
 parse_into_count = 0
 graph_constructor_count = 0
 for f in test_files:
-    src = f.read_text(encoding="utf-8")
+    src = f.read_text()
     parse_into_count += src.count(".parse_into(")
     # heuristic: direct rdflib.Graph() construction in tests
     graph_constructor_count += src.count("rdflib.Graph()") + src.count("Graph()")
@@ -584,49 +584,58 @@ check("R9.8", HolonicStore is not None and AbstractHolonicStore is not None,
       "HolonicStore (Protocol) and AbstractHolonicStore (ABC) both present",
       "ABC split incomplete")
 
-# R9.9: GraphBackend deprecated alias + MIGRATION.md
+# R9.9: GraphBackend alias — removed in 0.5.0
 migration_path = pathlib.Path("docs/MIGRATION.md")
 try:
-    # Import should work with deprecation warning
-    import warnings
-    with warnings.catch_warnings(record=True):
-        warnings.simplefilter("always")
-        from holonic import GraphBackend
-    has_alias = GraphBackend is not None
-except ImportError:
-    has_alias = False
-check("R9.9", has_alias and migration_path.exists(),
-      f"GraphBackend alias present + MIGRATION.md exists",
-      f"alias={has_alias} migration_doc={migration_path.exists()}")
+    import holonic as _h
+    _ = _h.GraphBackend
+    alias_removed = False
+except AttributeError:
+    alias_removed = True
+check("R9.9", alias_removed and migration_path.exists(),
+      "GraphBackend alias removed in 0.5.0 + MIGRATION.md documents the removal",
+      f"alias_removed={alias_removed} migration_doc={migration_path.exists()}")
 
-# R9.10: registry_iri is canonical, registry_graph deprecated
+# R9.10: registry_iri is canonical, registry_graph removed
 sig = inspect.signature(HolonicDataset.__init__)
 has_registry_iri = "registry_iri" in sig.parameters
 has_registry_graph = "registry_graph" in sig.parameters
-check("R9.10", has_registry_iri,
-      f"registry_iri in HolonicDataset constructor (registry_graph alias: {has_registry_graph})",
-      "registry_iri parameter missing")
+check("R9.10", has_registry_iri and not has_registry_graph,
+      "registry_iri is canonical; registry_graph kwarg removed in 0.5.0",
+      f"registry_iri={has_registry_iri} registry_graph={has_registry_graph}")
 
-# R9.11: SHOULD — holonic.generators module
-try:
-    from holonic import generators
-    has_gens = True
-except ImportError:
-    has_gens = False
-manual("R9.11", f"holonic.generators module present: {has_gens} (SHOULD, not required for compliance)")
+# R9.11: holon_type kwarg + iter_holons generator
+has_holon_type = "holon_type" in inspect.signature(HolonicDataset.add_holon).parameters
+has_iter_holons = hasattr(HolonicDataset, "iter_holons")
+has_iter_portals_from = hasattr(HolonicDataset, "iter_portals_from")
+check("R9.11", has_holon_type and has_iter_holons and has_iter_portals_from,
+      f"holon_type kwarg + iter_holons + iter_portals_from generators present",
+      f"holon_type={has_holon_type} iter_holons={has_iter_holons} iter_portals_from={has_iter_portals_from}")
 
 # R9.12: SHOULD — lazy metadata mode
-# Check if "lazy" is accepted as a value (not required for pass)
 manual("R9.12", "metadata_updates='lazy' mode deferred to future release (SHOULD, evidence-gated)")
 
 # R9.13-R9.17: SHOULD/roadmap items, deferred
 for req in ["R9.13", "R9.14", "R9.15", "R9.16", "R9.17"]:
     manual(req, "SHOULD item deferred pending evidence; see SPEC for details")
 
-# R9.18: removal scheduled for 0.5.0 — alias still present in 0.4.x
-check("R9.18", has_alias,
-      "GraphBackend alias still present in 0.4.x (per plan; removal in 0.5.0)",
-      "alias removed early?")
+# ── 0.5.0 features (not yet formalized as SPEC requirements) ──
+has_bulk = hasattr(HolonicDataset, "bulk_load")
+check("R9.11+bulk", has_bulk,
+      "bulk_load() method present for batch holarchy construction",
+      "bulk_load method missing")
+
+import inspect as _insp
+_iter_sig = _insp.signature(HolonicDataset.iter_holons)
+has_pagination = "limit" in _iter_sig.parameters and "offset" in _iter_sig.parameters
+check("R9.11+page", has_pagination,
+      "iter_holons() supports limit/offset pagination",
+      "pagination kwargs missing")
+
+# R9.18: removal completed in 0.5.0
+check("R9.18", alias_removed and not has_registry_graph,
+      "0.4.x deprecation removals complete: GraphBackend alias + registry_graph kwarg both removed",
+      f"alias_removed={alias_removed} registry_graph_removed={not has_registry_graph}")
 
 # R9.19: JupyterLite build
 jlite_content = pathlib.Path("jupyterlite/content")

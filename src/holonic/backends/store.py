@@ -37,7 +37,7 @@ for those operations.
 Backward compatibility
 ----------------------
 
-``holonic.backends.protocol.GraphBackend`` is a deprecated alias for
+``holonic.backends.protocol`` re-exports
 ``HolonicStore`` kept through all of 0.4.x. Removal scheduled for
 0.5.0. See ``docs/MIGRATION.md``.
 """

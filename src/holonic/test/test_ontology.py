@@ -128,19 +128,18 @@ class TestShapesValidateRegistry:
     def test_conformant_holon_passes_cga_shapes(self, loaded_ds):
         import pyshacl
 
-        # HolonShape has two property rules:
-        #   - exactly one rdfs:label (Violation severity)
-        #   - at least one cga:hasInterior (Warning severity)
-        # pyshacl's `conforms` flips False on *any* reported result,
-        # warning or violation, so a fully-conformant holon needs both.
         loaded_ds.add_holon("urn:holon:ok", "OK")
         loaded_ds.add_interior("urn:holon:ok", "<urn:x> a <urn:T> .")
-        registry = loaded_ds.backend.get_graph(loaded_ds.registry_graph)
+        registry = loaded_ds.backend.get_graph(loaded_ds.registry_iri)
         shapes = loaded_ds.backend.get_graph(CGA_SHAPES_GRAPH)
 
+        # allow_infos=True so advisory shapes (HolonStewardshipShape)
+        # don't cause conforms=False.  Info severity is intentionally
+        # non-blocking — it nudges, it doesn't constrain.
         conforms, _, _ = pyshacl.validate(
             registry,
             shacl_graph=shapes,
+            allow_infos=True,
         )
         assert conforms
 
@@ -156,11 +155,12 @@ class TestPortalSubtypeShapeSemantics:
     def _validate_registry(self, ds):
         import pyshacl
 
-        registry = ds.backend.get_graph(ds.registry_graph)
+        registry = ds.backend.get_graph(ds.registry_iri)
         shapes = ds.backend.get_graph(CGA_SHAPES_GRAPH)
         conforms, _report_graph, report_text = pyshacl.validate(
             registry,
             shacl_graph=shapes,
+            allow_infos=True,
         )
         return conforms, report_text
 

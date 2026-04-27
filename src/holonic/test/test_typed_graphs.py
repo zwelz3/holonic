@@ -44,7 +44,7 @@ def test_add_interior_types_graph():
         f"""
         PREFIX cga: <urn:holonic:ontology:>
         SELECT ?role WHERE {{
-            GRAPH <{ds.registry_graph}> {{
+            GRAPH <{ds.registry_iri}> {{
                 <{gi}> a cga:HolonicGraph ;
                        cga:graphRole ?role .
             }}
@@ -75,7 +75,7 @@ def test_all_layer_methods_write_typing(method, expected_role):
         f"""
         PREFIX cga: <urn:holonic:ontology:>
         SELECT ?role WHERE {{
-            GRAPH <{ds.registry_graph}> {{
+            GRAPH <{ds.registry_iri}> {{
                 <{graph_iri}> cga:graphRole ?role .
             }}
         }}
@@ -102,8 +102,8 @@ def test_registry_types_itself_on_first_refresh():
         f"""
         PREFIX cga: <urn:holonic:ontology:>
         SELECT ?role WHERE {{
-            GRAPH <{ds.registry_graph}> {{
-                <{ds.registry_graph}> a cga:HolonicGraph ;
+            GRAPH <{ds.registry_iri}> {{
+                <{ds.registry_iri}> a cga:HolonicGraph ;
                     cga:graphRole ?role .
             }}
         }}
@@ -136,7 +136,7 @@ def test_migration_plan_finds_untyped_graphs():
     # graph-type triples. We do this by bypassing _register_layer and
     # writing the binding directly.
     ds.backend.parse_into(
-        ds.registry_graph,
+        ds.registry_iri,
         """
         @prefix cga: <urn:holonic:ontology:> .
         <urn:holon:h1> cga:hasInterior <urn:legacy:interior> .
@@ -152,7 +152,7 @@ def test_migration_is_idempotent():
     ds = HolonicDataset(RdflibBackend())
     ds.add_holon("urn:holon:h1", "H1")
     ds.backend.parse_into(
-        ds.registry_graph,
+        ds.registry_iri,
         """
         @prefix cga: <urn:holonic:ontology:> .
         <urn:holon:h1> cga:hasInterior <urn:legacy:a> ;
@@ -173,7 +173,7 @@ def test_migration_main_dry_run(capsys):
     ds = HolonicDataset(RdflibBackend())
     ds.add_holon("urn:holon:h1", "H1")
     ds.backend.parse_into(
-        ds.registry_graph,
+        ds.registry_iri,
         """
         @prefix cga: <urn:holonic:ontology:> .
         <urn:holon:h1> cga:hasProjection <urn:legacy:p> .

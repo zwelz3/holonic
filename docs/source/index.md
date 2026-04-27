@@ -33,22 +33,17 @@ dataset. The dataset IS the holarchy — no separate registry
 object. Portals are RDF triples discoverable via SPARQL; membranes
 are SHACL shapes; all state lives in the graph.
 
-## Try in Browser
+## ✨ Try it in your browser ✨
 
-The example notebooks run in your browser via [JupyterLite](https://jupyterlite.readthedocs.io/).
-No installation required — the library and its dependencies load
-into a Pyodide kernel the first time you execute a cell.
+[![Try on JupyterLite](./static/jlite-badge.svg)](https://zwelz3.github.io/holonic/jupyterlite/index.html)
 
-<a href="jupyterlite/index.html">Open the in-browser lab</a>
+No installation required. The example notebooks run entirely in your browser via JupyterLite and Pyodide.
 
-What works: everything that doesn't need external services or
-system extensions — `HolonicDataset`, portal traversal, membrane
-validation via SHACL, projections, scope resolution, the projection
-plugin system. What doesn't work: `FusekiBackend` (no HTTP in the
-browser sandbox) and the `yfiles-jupyter-graphs` widgets from
-notebook 11 (requires a Jupyter server extension). See the
-`00_start_here.ipynb` notebook once you open the lab for the full
-caveats.
+13 notebooks covering holons, portals, projections, governance,
+scope resolution, and dispatch patterns. Notebooks 01-12 run in
+the browser; notebook 13 (yFiles visualization) requires a local
+Jupyter install. See `00_start_here.ipynb` inside the lab for the
+full guide.
 
 ## Quick Start
 
@@ -110,7 +105,7 @@ sphinx-build -b html . _build/html
 pixi run serve
 ```
 
-This launches JupyterLab with the eleven example notebooks in `notebooks/` available. Notebooks are committed with outputs stripped; executing them locally populates output cells without affecting the committed state. Run `pixi run check-notebooks` before committing to confirm no outputs leaked in.
+This launches JupyterLab with the thirteen example notebooks in `notebooks/` available. Notebooks are committed with outputs stripped; executing them locally populates output cells without affecting the committed state. Run `pixi run check-notebooks` before committing to confirm no outputs leaked in.
 
 ## Roadmap
 
