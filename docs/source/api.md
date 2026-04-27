@@ -44,6 +44,32 @@ the per-subtype `cga:constructQuery` expectations enforced by SHACL
 shapes: `cga:TransformPortal` requires one, `cga:IconPortal` and
 `cga:SealedPortal` must not carry one.
 
+## Ergonomics (0.5.0)
+
+**Subtype assertion.** `add_holon(iri, label, holon_type="cga:DataHolon")`
+asserts the functional subtype at creation time without raw SPARQL.
+
+**Generators with pagination.** `iter_holons(limit=, offset=)`,
+`iter_portals_from(iri, limit=, offset=)`, and
+`iter_portals_to(iri, limit=, offset=)` yield results lazily.
+The `list_holons()` and `find_portals_*()` methods delegate to these
+generators and also accept `limit`/`offset`.
+
+**Bulk load.** `bulk_load(holons=[...], portals=[...])` creates
+multiple holons and portals in a single batch with one metadata
+refresh at the end.
+
+**Export.** `export_graph(iri, format='turtle')` serializes a single
+named graph; `export(format='trig')` serializes the entire dataset.
+Common formats: `turtle`, `trig`, `nquads`, `json-ld`, `xml`.
+
+**Serialization.** All model and console-model dataclasses provide
+`to_dict()` for JSON-ready serialization. Enum values are
+automatically converted to their string value.
+
+**Typing.** The library ships a `py.typed` marker file. Downstream
+consumers using mypy or pyright get full type-checking support.
+
 ## Store Protocol (0.4.0)
 
 ```{eval-rst}

@@ -25,6 +25,9 @@ def main() -> int:
 
     copied = 0
     for nb in sorted(source.glob("*.ipynb")):
+        # Skip landing pages — each directory has its own
+        if nb.name.startswith("00_"):
+            continue
         shutil.copy2(nb, target / nb.name)
         copied += 1
         print(f"  {nb.name}")

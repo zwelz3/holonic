@@ -1657,6 +1657,83 @@ class HolonicDataset:
         return result
 
     # ══════════════════════════════════════════════════════════
+    # Export / serialization
+    # ══════════════════════════════════════════════════════════
+
+    def export_graph(
+        self,
+        graph_iri: str,
+        format: str = "turtle",
+    ) -> str:
+        """Serialize a single named graph to a string.
+
+        Parameters
+        ----------
+        graph_iri :
+            IRI of the named graph to export.
+        format :
+            RDF serialization format. Common values: ``"turtle"``,
+            ``"xml"``, ``"json-ld"``, ``"nt"`` (N-Triples).
+            Passed directly to rdflib's ``Graph.serialize()``.
+
+        Returns:
+        -------
+        str
+            The serialized graph content.
+
+        Raises:
+        ------
+        ValueError
+            If the graph does not exist.
+
+        .. versionadded:: 0.5.0
+        """
+        if not self.backend.graph_exists(graph_iri):
+            raise ValueError(f"Graph {graph_iri!r} does not exist")
+        g = self.backend.get_graph(graph_iri)
+        return g.serialize(format=format)
+
+    def export(self, format: str = "trig") -> str:
+        """Serialize the entire dataset (all named graphs) to a string.
+
+        Parameters
+        ----------
+        format :
+            RDF serialization format that supports named graphs.
+            Common values: ``"trig"`` (default), ``"nquads"``.
+            Single-graph formats like ``"turtle"`` will lose graph
+            boundaries.
+
+        Returns:
+        -------
+        str
+            The serialized dataset content.
+
+        Example:
+        -------
+        ::
+
+            # Save to file
+            with open("holarchy.trig", "w") as f:
+                f.write(ds.export())
+
+            # Or export as N-Quads
+            nquads = ds.export(format="nquads")
+
+        .. versionadded:: 0.5.0
+        """
+        from rdflib import Dataset as RdflibDataset
+        from rdflib import URIRef
+
+        ds = RdflibDataset()
+        for graph_iri in self.backend.list_named_graphs():
+            g = self.backend.get_graph(graph_iri)
+            ctx = ds.graph(URIRef(graph_iri))
+            for s, p, o in g:
+                ctx.add((s, p, o))
+        return ds.serialize(format=format)
+
+    # ══════════════════════════════════════════════════════════
     # Summary / inspection
     # ══════════════════════════════════════════════════════════
 
@@ -1680,8 +1757,13 @@ class HolonicDataset:
 
         lines.append(f"  Portals: {len(portals_rows)}")
         for r in portals_rows:
-            lbl = r.get("label", r["portal"].rsplit(":", 1)[-1])
-            lines.append(f"    {lbl}: {r['source']} → {r['target']}")
+            src = r["source"].rsplit("/", 1)[-1].rsplit(":", 1)[-1]
+            tgt = r["target"].rsplit("/", 1)[-1].rsplit(":", 1)[-1]
+            lbl = r.get("label")
+            if lbl:
+                lines.append(f"    {lbl} ({src} → {tgt})")
+            else:
+                lines.append(f"    {src} → {tgt}")
 
         return "\n".join(lines)
 
@@ -2506,3 +2588,19 @@ class HolonicDataset:
         )
 
         return current
+
+    def __repr__(self) -> str:
+        backend_name = type(self.backend).__name__
+        try:
+            rows = self.backend.query(
+                "SELECT (COUNT(DISTINCT ?h) AS ?n) WHERE "
+                "{ GRAPH ?g { ?h a <urn:holonic:ontology:Holon> } }"
+            )
+            n_holons = int(rows[0]["n"]) if rows else 0
+        except Exception:
+            n_holons = "?"
+        return (
+            f"HolonicDataset(backend={backend_name}, "
+            f"holons={n_holons}, "
+            f"registry='{self.registry_iri}')"
+        )

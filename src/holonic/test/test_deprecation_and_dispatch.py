@@ -341,3 +341,160 @@ def test_bulk_load_empty():
     n_holons, n_portals = ds.bulk_load()
     assert n_holons == 0
     assert n_portals == 0
+
+
+# ══════════════════════════════════════════════════════════════
+# __repr__ (0.5.0)
+# ══════════════════════════════════════════════════════════════
+
+
+def test_repr_shows_backend_and_holon_count():
+    """repr(ds) includes backend name and holon count."""
+    ds = HolonicDataset()
+    r = repr(ds)
+    assert "RdflibBackend" in r
+    assert "holons=0" in r
+
+    ds.add_holon("urn:holon:a", "A")
+    ds.add_holon("urn:holon:b", "B")
+    r = repr(ds)
+    assert "holons=2" in r
+    assert "registry=" in r
+
+
+# ══════════════════════════════════════════════════════════════
+# to_dict() on model/console_model dataclasses (0.5.0)
+# ══════════════════════════════════════════════════════════════
+
+
+def test_holon_info_to_dict():
+    """HolonInfo.to_dict() returns a plain dict."""
+    ds = HolonicDataset()
+    ds.add_holon("urn:holon:a", "A")
+    ds.add_interior("urn:holon:a", "<urn:x> a <urn:T> .")
+    h = ds.list_holons()[0]
+    d = h.to_dict()
+    assert isinstance(d, dict)
+    assert d["iri"] == "urn:holon:a"
+    assert d["label"] == "A"
+    assert isinstance(d["interior_graphs"], list)
+
+
+def test_membrane_result_to_dict_converts_enum():
+    """MembraneResult.to_dict() converts MembraneHealth enum to string."""
+    ds = HolonicDataset()
+    ds.add_holon("urn:holon:a", "A")
+    ds.add_interior("urn:holon:a", "<urn:x> a <urn:T> .")
+    ds.add_boundary(
+        "urn:holon:a",
+        """
+        @prefix sh: <http://www.w3.org/ns/shacl#> .
+        <urn:shapes:S> a sh:NodeShape .
+    """,
+    )
+    result = ds.validate_membrane("urn:holon:a")
+    d = result.to_dict()
+    assert d["health"] == "intact"  # string, not MembraneHealth.INTACT
+    assert isinstance(d["health"], str)
+
+
+def test_holon_summary_to_dict():
+    """HolonSummary.to_dict() returns a JSON-serializable dict."""
+    import json
+
+    ds = HolonicDataset()
+    ds.add_holon("urn:holon:a", "A")
+    summaries = ds.list_holons_summary()
+    d = summaries[0].to_dict()
+    # Must be JSON-serializable
+    s = json.dumps(d, default=str)
+    assert "urn:holon:a" in s
+
+
+# ══════════════════════════════════════════════════════════════
+# export / export_graph (0.5.0)
+# ══════════════════════════════════════════════════════════════
+
+
+def test_export_graph_returns_turtle():
+    """export_graph returns valid Turtle for a named graph."""
+    ds = HolonicDataset()
+    ds.add_holon("urn:holon:a", "A")
+    ds.add_interior("urn:holon:a", "<urn:x> a <urn:T> .")
+    ttl = ds.export_graph("urn:holon:a/interior")
+    assert "<urn:x>" in ttl or "urn:x" in ttl
+    assert "urn:T" in ttl
+
+
+def test_export_graph_raises_for_missing():
+    """export_graph raises ValueError for a non-existent graph."""
+    ds = HolonicDataset()
+    with pytest.raises(ValueError, match="does not exist"):
+        ds.export_graph("urn:nonexistent")
+
+
+def test_export_trig_contains_all_graphs():
+    """export(format='trig') includes triples from all named graphs."""
+    ds = HolonicDataset()
+    ds.add_holon("urn:holon:a", "A")
+    ds.add_interior("urn:holon:a", "<urn:x> a <urn:T> .")
+    ds.add_holon("urn:holon:b", "B")
+    ds.add_interior("urn:holon:b", "<urn:y> a <urn:U> .")
+
+    trig = ds.export(format="trig")
+    # Both holons' data should be present
+    assert "urn:x" in trig
+    assert "urn:y" in trig
+    # Should be non-trivially large (ontology + holons)
+    assert len(trig) > 1000
+
+
+def test_export_nquads():
+    """export(format='nquads') produces valid N-Quads."""
+    ds = HolonicDataset()
+    ds.add_holon("urn:holon:a", "A")
+    ds.add_interior("urn:holon:a", "<urn:x> a <urn:T> .")
+    nq = ds.export(format="nquads")
+    # N-Quads lines have 4 terms (s p o g .)
+    data_lines = [_ for _ in nq.strip().split("\n") if _.strip()]
+    assert len(data_lines) > 0
+    # Each line should end with " ."
+    assert all(_.rstrip().endswith(" .") for _ in data_lines)
+
+
+# ══════════════════════════════════════════════════════════════
+# summary() portal display fix (0.5.0)
+# ══════════════════════════════════════════════════════════════
+
+
+def test_summary_portal_shows_label():
+    """summary() shows portal label without redundant source/target."""
+    ds = HolonicDataset()
+    ds.add_holon("urn:holon:a", "A")
+    ds.add_holon("urn:holon:b", "B")
+    ds.add_portal(
+        "urn:portal:ab",
+        "urn:holon:a",
+        "urn:holon:b",
+        "CONSTRUCT { ?s ?p ?o } WHERE { GRAPH ?g { ?s ?p ?o } }",
+        label="HR Sync",
+    )
+    s = ds.summary()
+    assert "HR Sync" in s
+    # Should show label (source → target), not label: source → target
+    assert "HR Sync (a → b)" in s
+
+
+def test_summary_portal_without_label():
+    """summary() shows source → target when no label is set."""
+    ds = HolonicDataset()
+    ds.add_holon("urn:holon:x", "X")
+    ds.add_holon("urn:holon:y", "Y")
+    ds.add_portal(
+        "urn:portal:xy",
+        "urn:holon:x",
+        "urn:holon:y",
+        "CONSTRUCT { ?s ?p ?o } WHERE { GRAPH ?g { ?s ?p ?o } }",
+    )
+    s = ds.summary()
+    assert "x → y" in s

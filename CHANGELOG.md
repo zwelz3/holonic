@@ -53,6 +53,29 @@ sections with a landing page.
   04-06, Operations 07-09, Advanced 10-13). Landing page
   (`00_start_here.ipynb`) rebuilt with sectioned tables and
   hyperlinks. All cross-references and titles corrected.
+- **`py.typed` marker** added. Downstream consumers using mypy or
+  pyright will now get type-checking support from holonic's
+  annotations.
+- **`__repr__` on `HolonicDataset`.** `repr(ds)` now shows
+  `HolonicDataset(backend=RdflibBackend, holons=3, registry='...')`.
+- **`to_dict()` on all dataclasses.** Every model and console-model
+  dataclass (20 classes) inherits `_DictMixin` providing
+  `to_dict()` for JSON-ready serialization. Enum values are
+  converted to their string value automatically.
+- **`export()` and `export_graph()`.** Serialize the entire dataset
+  to TriG/N-Quads or a single named graph to Turtle/JSON-LD/N-Triples.
+  Closes the build-to-persist gap: `ds.export()` is the
+  complement to building a holarchy via `add_holon`/`add_portal`.
+- **`summary()` portal display improved.** Shows
+  `Label (source -> target)` when a label exists, plain
+  `source -> target` when it doesn't. Eliminates the previous
+  redundant display.
+- **Developer landing page.** `notebooks/00_index.ipynb` provides
+  a sectioned guide to all 13 example notebooks with descriptions,
+  learning objectives, and a quick-reference code block. Separate
+  from the JupyterLite landing page (`00_start_here.ipynb`); the
+  sync script skips `00_`-prefixed notebooks so each directory
+  keeps its own landing page.
 
 ### Fixed
 

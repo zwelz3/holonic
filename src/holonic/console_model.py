@@ -6,13 +6,15 @@ that the existing model surface stays focused on in-process holon
 mechanics; the types here are tuned for serialization to JSON over
 HTTP and for graph-rendering payloads.
 
-All types are plain dataclasses with no Pydantic dependency. Convert
-to dict via ``dataclasses.asdict`` if a service layer wants JSON.
+All types are plain dataclasses with a ``to_dict()`` method for
+JSON-ready serialization (inherited from ``_DictMixin``).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+
+from holonic.model import _DictMixin
 
 
 def _short(iri: str) -> str:
@@ -39,7 +41,7 @@ def _short(iri: str) -> str:
 
 
 @dataclass
-class HolonSummary:
+class HolonSummary(_DictMixin):
     """Lightweight holon descriptor for browser/list views.
 
     Excludes layer graphs to keep the list query cheap. Use
@@ -61,7 +63,7 @@ class HolonSummary:
 
 
 @dataclass
-class ClassInstanceCount:
+class ClassInstanceCount(_DictMixin):
     """Count of instances of a single rdf:type within a holon's interior."""
 
     class_iri: str
@@ -69,7 +71,7 @@ class ClassInstanceCount:
 
 
 @dataclass
-class GraphMetadata:
+class GraphMetadata(_DictMixin):
     """Per-graph operational metadata, materialized in the registry.
 
     Added in 0.3.3. Read via ``HolonicDataset.get_graph_metadata()``.
@@ -94,7 +96,7 @@ class GraphMetadata:
 
 
 @dataclass
-class HolonDetail:
+class HolonDetail(_DictMixin):
     """Full holon descriptor including layer graph IRIs and registry triples."""
 
     iri: str
@@ -122,7 +124,7 @@ class HolonDetail:
 
 
 @dataclass
-class ProjectionPipelineStep:
+class ProjectionPipelineStep(_DictMixin):
     """One step in a projection pipeline.
 
     Either ``transform_name`` or ``construct_query`` must be set.
@@ -140,7 +142,7 @@ class ProjectionPipelineStep:
 
 
 @dataclass
-class ProjectionPipelineSpec:
+class ProjectionPipelineSpec(_DictMixin):
     """A named, ordered pipeline of projection steps.
 
     Created in Python, registered into the holonic registry graph
@@ -160,7 +162,7 @@ class ProjectionPipelineSpec:
 
 
 @dataclass
-class ProjectionPipelineSummary:
+class ProjectionPipelineSummary(_DictMixin):
     """Lightweight pipeline descriptor for browser/list views.
 
     Excludes step content to keep list queries cheap. Use
@@ -182,7 +184,7 @@ class ProjectionPipelineSummary:
 
 
 @dataclass
-class NeighborhoodNode:
+class NeighborhoodNode(_DictMixin):
     """Stores metadata about a node in a neighborhood subgraph."""
 
     key: str
@@ -195,7 +197,7 @@ class NeighborhoodNode:
 
 
 @dataclass
-class NeighborhoodEdge:
+class NeighborhoodEdge(_DictMixin):
     """Stores metadata about an edge in a neighborhood subgraph."""
 
     key: str
@@ -208,7 +210,7 @@ class NeighborhoodEdge:
 
 
 @dataclass
-class NeighborhoodGraph:
+class NeighborhoodGraph(_DictMixin):
     """A neighborhood subgraph centered on a holon, depth-bounded.
 
     Serializes to graphology's native JSON via ``to_graphology()``.
@@ -275,7 +277,7 @@ class NeighborhoodGraph:
 
 
 @dataclass
-class PortalSummary:
+class PortalSummary(_DictMixin):
     """Lightweight portal descriptor for browser/list views."""
 
     iri: str
@@ -289,7 +291,7 @@ class PortalSummary:
 
 
 @dataclass
-class PortalDetail:
+class PortalDetail(_DictMixin):
     """Full portal descriptor including the CONSTRUCT query body."""
 
     iri: str

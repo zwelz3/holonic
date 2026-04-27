@@ -38,6 +38,11 @@ through the entire 0.4.x series.
 | `find_portals_from(iri, limit=, offset=)` | Existing method now accepts pagination kwargs |
 | `find_portals_to(iri, limit=, offset=)` | Existing method now accepts pagination kwargs |
 | `bulk_load(holons=, portals=)` | Batch construction with one metadata refresh at the end |
+| `export(format='trig')` | Serialize the entire dataset to TriG, N-Quads, etc. |
+| `export_graph(iri, format='turtle')` | Serialize a single named graph |
+| `to_dict()` on all dataclasses | JSON-ready serialization (enums converted to strings) |
+| `py.typed` marker | Enables mypy/pyright type checking for downstream consumers |
+| `repr(ds)` | Shows backend type, holon count, and registry IRI |
 
 ---
 
