@@ -3,7 +3,7 @@
 Computes per-graph triple counts, last-modified timestamps, and
 class inventories, and materializes them in the registry graph
 (``urn:holarchy:registry`` by default, configurable via
-``HolonicDataset(registry_graph_iri=...)``).
+``HolonicDataset(registry_iri=...)``).
 
 This is an internal module. The public API is exposed through
 ``HolonicDataset.refresh_metadata()``, ``refresh_all_metadata()``,

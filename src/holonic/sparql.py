@@ -375,7 +375,7 @@ LIMIT {limit}
 #
 # All templates read from and write to the registry graph
 # (urn:holarchy:registry by default; configurable via
-# HolonicDataset(registry_graph_iri=...)). Substitution is done
+# HolonicDataset(registry_iri=...)). Substitution is done
 # with str.format(registry_iri=..., graph_iri=..., ...).
 # See docs/DECISIONS.md § 0.3.3 for the design rationale.
 # ══════════════════════════════════════════════════════════════

@@ -482,7 +482,7 @@ cga:systemEndpoint a owl:DatatypeProperty ; rdfs:domain cga:ExternalSystem ; rdf
 #
 # Per-graph operational metadata lives in the registry graph
 # (urn:holarchy:registry by default, configurable via
-# HolonicDataset(registry_graph_iri=...)). Subjects are LayerGraph
+# HolonicDataset(registry_iri=...)). Subjects are LayerGraph
 # IRIs; objects are counts, timestamps, or ClassInstanceCount
 # records.
 #
