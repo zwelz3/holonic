@@ -60,16 +60,12 @@ cmd = "echo 🔎"
 cmd = "pytest"
 
 [feature.tasks-lint.tasks.clean-notebooks]
-description = """Strip all outputs from notebooks in place. Runs first in
-    lint-fix so any stray committed cell outputs are removed before the
-    Python formatters touch anything."""
+description = """Strip all outputs from notebooks in place. Runs first in lint-fix so any stray committed cell outputs are removed before the Python formatters touch anything."""
 cmd = "jupyter nbconvert --clear-output --inplace notebooks/*.ipynb"
 inputs = ["notebooks/*.ipynb"]
 
 [feature.tasks-lint.tasks.check-notebooks]
-description = """Fail if any notebook has cell outputs. Uses --stdout to a
-    throwaway comparison instead of modifying the files. Notebook outputs
-    should never be committed; they bloat diffs and leak data."""
+description = """Fail if any notebook has cell outputs. Uses --stdout to a throwaway comparison instead of modifying the files. Notebook outputs should never be committed; they bloat diffs and leak data."""
 cmd = "python scripts/check_notebooks.py"
 inputs = ["notebooks/*.ipynb", "scripts/check_notebooks.py"]
 
@@ -127,10 +123,7 @@ cmd = "python scripts/spec_compliance_check.py"
 inputs = ["docs/SPEC.md", "src/holonic/**/*.py", "scripts/spec_compliance_check.py"]
 
 [feature.tasks-spec.tasks.spec-score]
-description = """Compute the spec maturity score (0-100%). Fraction of
-    requirements without SHACL violations or warnings. Embed the SVG
-    badge in the README by running `spec-badge` and referencing the
-    generated file. See docs/SPEC.md for the embed snippet."""
+description = """Compute the spec maturity score (0-100%). Fraction of requirements without SHACL violations or warnings. Embed the SVG badge in the README by running `spec-badge` and referencing the generated file. See docs/SPEC.md for the embed snippet."""
 cmd = "specl-validate score docs/SPEC.ttl $(python -c 'import specl, pathlib; print(pathlib.Path(specl.__file__).parent / \"shapes.ttl\")')"
 depends-on = ["spec-translate"]
 
