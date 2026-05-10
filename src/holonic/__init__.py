@@ -4,7 +4,7 @@ A lightweight Python client for building holonic knowledge graphs
 backed by rdflib, Apache Jena Fuseki, or any SPARQL-compliant store.
 """
 
-__version__ = "0.5.1"
+__version__ = "0.6.0"
 
 from holonic.backends import AbstractHolonicStore, HolonicStore, RdflibBackend
 from holonic.client import HolonicDataset
@@ -29,6 +29,7 @@ from holonic.model import (
     MembraneHealth,
     MembraneResult,
     PortalInfo,
+    SealedPortalError,
     SurfaceReport,
     TraversalRecord,
     ValidationRecord,
@@ -78,6 +79,7 @@ __all__ = [
     "ValidationRecord",
     "HolonInfo",
     "MembraneBreachError",
+    "SealedPortalError",
     "MembraneHealth",
     "MembraneResult",
     "PortalInfo",

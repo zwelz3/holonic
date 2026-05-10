@@ -284,6 +284,7 @@ class PortalSummary(_DictMixin):
     source_iri: str
     target_iri: str
     label: str | None = None
+    portal_type: str | None = None
     last_traversal: str | None = None
     health: str | None = None
     """ISO-8601 timestamp of the most-recent recorded traversal."""
@@ -298,6 +299,7 @@ class PortalDetail(_DictMixin):
     source_iri: str
     target_iri: str
     label: str | None = None
+    portal_type: str | None = None
     construct_query: str | None = None
     graph_iri: str | None = None
     """Named graph in which this portal is registered (the source's boundary)."""

@@ -426,6 +426,96 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
   - acceptance: Given a portal created with `portal_type="cga:SealedPortal"` and no `construct_query`, when `find_portals_from(source)` is called, then exactly one `PortalInfo` is returned with `construct_query=None`; and given a portal created with `extra_ttl` carrying a downstream predicate, when the boundary graph is queried by SPARQL for that predicate, then the extra triples are present; and given a TransformPortal without a constructQuery or a SealedPortal/IconPortal carrying one, when the registry is validated against `cga-shapes.ttl`, then the corresponding shape reports a violation (for TransformPortal) or warning (for SealedPortal and IconPortal).
   - verifiedBy: src/holonic/test/test_lifecycle.py::TestAddPortalExtensibility and src/holonic/test/test_ontology.py::TestPortalSubtypeShapeSemantics
 
+- R9.23 Portal discovery queries MUST return the portal's RDF type (excluding base `cga:Portal`) as a `portal_type` field on `PortalInfo`, `PortalSummary`, and `PortalDetail`. All five discovery SPARQL queries include `OPTIONAL { ?portal a ?portalType . FILTER(?portalType != cga:Portal) }`.
+  - priority: MUST
+  - constrains: holonic/model.py (PortalInfo), holonic/console_model.py (PortalSummary, PortalDetail), holonic/sparql.py, holonic/client.py
+  - acceptance: Given a TransformPortal, when `find_portals_from()` is called, then `portal.portal_type` contains `"urn:holonic:ontology:TransformPortal"`. Given a SealedPortal, when `get_portal()` is called, then `detail.portal_type` contains `"SealedPortal"`.
+  - verifiedBy: src/holonic/test/test_verified_gaps.py::TestPortalTypeInDataModel
+
+- R9.24 `traverse_portal()` MUST check the portal's RDF type before executing the CONSTRUCT query. If the portal is `cga:SealedPortal`, it MUST raise `SealedPortalError` (a `ValueError` subclass) regardless of whether the portal carries a `constructQuery`.
+  - priority: MUST
+  - constrains: holonic/client.py (traverse_portal), holonic/model.py (SealedPortalError)
+  - acceptance: Given a SealedPortal with or without a CONSTRUCT query, when `traverse_portal()` or `traverse()` is called, then `SealedPortalError` is raised with a message identifying the portal.
+  - verifiedBy: src/holonic/test/test_verified_gaps.py::TestSealedPortalEnforcement
+
+- R9.25 `traverse()` MUST register the target interior graph as `cga:hasInterior` after injection. It MUST look up existing registered interiors first and inject into the first one found; if none exist, it falls back to the `{target_iri}/interior` convention name. This ensures `validate_membrane()` can see the injected data.
+  - priority: MUST
+  - constrains: holonic/client.py (traverse)
+  - acceptance: Given a target holon with no pre-existing interior, when `traverse()` injects triples, then `GET_HOLON_INTERIORS` returns the injected graph and `validate_membrane()` validates against the injected data, not an empty graph.
+  - verifiedBy: src/holonic/test/test_verified_gaps.py::TestTraverseInteriorRegistration
+
+- R9.26 `get_holon()` MUST use a direct filtered SPARQL query (O(1) in holarchy size) rather than scanning all holons via `iter_holons()`.
+  - priority: MUST
+  - constrains: holonic/client.py (get_holon)
+  - acceptance: Given 20 holons, when `get_holon()` is called, then the method source does not reference `iter_holons`.
+  - verifiedBy: src/holonic/test/test_verified_gaps.py::TestGetHolonEfficiency
+
+- R9.27 `validate_all()` MUST validate membranes for all holons and return `dict[str, MembraneResult]`.
+  - priority: MUST
+  - constrains: holonic/client.py (validate_all)
+  - acceptance: Given 2 holons, when `validate_all()` is called, then a dict with 2 entries is returned, each value a `MembraneResult`.
+  - verifiedBy: src/holonic/test/test_verified_gaps.py::TestValidateAll
+
+- R9.28 `traverse()` MUST accept `fail_on_breach: bool = False`. When True and validation returns COMPROMISED, it MUST roll back injected triples and raise `MembraneBreachError`. Rollback removes the exact triples that were injected.
+  - priority: MUST
+  - constrains: holonic/client.py (traverse)
+  - acceptance: Given a traversal that produces COMPROMISED validation, when `fail_on_breach=True`, then `MembraneBreachError` is raised and the target interior is unchanged. See OQ11 for the SHACL coverage gap.
+  - verifiedBy: src/holonic/test/test_verified_gaps.py::TestFailClosedTraversal
+
+- R9.29 `update_portal()` MUST update portal properties in-place without requiring remove+add. Uses per-graph SPARQL DELETE for old values and Turtle parse for new values.
+  - priority: MUST
+  - constrains: holonic/client.py (update_portal)
+  - acceptance: Given a portal with a CONSTRUCT query, when `update_portal(construct_query=new_query)` is called, then `get_portal()` returns the new query.
+  - verifiedBy: src/holonic/test/test_verified_gaps.py::TestPortalUpdate
+
+- R9.30 `traverse_path()` MUST execute multi-hop traversals by calling `find_path()` then looping `traverse()`. Raises `ValueError` if no path exists. Records provenance per hop when `agent_iri` is provided.
+  - priority: MUST
+  - constrains: holonic/client.py (traverse_path)
+  - acceptance: Given a 3-holon chain A->B->C, when `traverse_path("A", "C")` is called, then 2 hops are executed and provenance records exist for each.
+  - verifiedBy: src/holonic/test/test_verified_gaps.py::TestTraversePath
+
+- R9.31 `dry_run()` MUST simulate a traversal without mutating state. Runs the CONSTRUCT, merges with existing interiors in memory, validates against boundary shapes, and returns `(projected_graph, membrane_result)`.
+  - priority: MUST
+  - constrains: holonic/client.py (dry_run)
+  - acceptance: Given a source and target with data, when `dry_run()` is called, then projected triples are returned, a membrane result is returned, and the target interior is empty.
+  - verifiedBy: src/holonic/test/test_verified_gaps.py::TestPortalDryRun
+
+- R9.32 `last_traversal(holon_iri)` MUST return the most recent `TraversalRecord` targeting a holon. `derivation_chain(holon_iri)` MUST walk `prov:wasDerivedFrom` to return upstream holon IRIs.
+  - priority: MUST
+  - constrains: holonic/client.py (last_traversal, derivation_chain)
+  - acceptance: Given traversals A->B->C, when `derivation_chain("C")` is called, then `["B", "A"]` is returned. When `last_traversal("C")` is called, then a `TraversalRecord` with `target_iri="C"` is returned.
+  - verifiedBy: src/holonic/test/test_verified_gaps.py::TestPerHolonProvenanceHelpers
+
+- R9.33 `compose(holon_iris)` MUST union interior graphs across multiple holons into a single `rdflib.Graph`. Accepts optional `layers` parameter for specifying which layer types to include.
+  - priority: MUST
+  - constrains: holonic/client.py (compose)
+  - acceptance: Given holons A and B with different vocabularies, when `compose(["A", "B"])` is called, then the returned graph contains triples from both holons' interiors.
+  - verifiedBy: src/holonic/test/test_verified_gaps.py::TestCompositionViews
+
+- R9.34 `rollback_traversal(activity_iri)` MUST undo a traversal by re-running the portal's CONSTRUCT and removing the projected triples from the target interior. Returns the number of triples removed.
+  - priority: MUST
+  - constrains: holonic/client.py (rollback_traversal)
+  - acceptance: Given a recorded traversal, when `rollback_traversal(activity_iri)` is called, then the target interior is empty.
+  - verifiedBy: src/holonic/test/test_verified_gaps.py::TestRollback
+
+- R9.35 `traverse_portal()` MUST support source layer scoping. When a portal declares `cga:sourceLayer cga:ProjectionRole`, the CONSTRUCT runs against projection graphs only. When no `sourceLayer` is declared but the source holon has projection graphs, the CONSTRUCT defaults to projection scope. Portals can force full-dataset access via `cga:sourceLayer cga:InteriorRole`.
+  - priority: MUST
+  - constrains: holonic/client.py (traverse_portal)
+  - acceptance: Given a source holon with PII in the interior and a sanitized projection, when a portal without explicit sourceLayer is traversed, then the CONSTRUCT sees only projection data and PII does not leak.
+  - verifiedBy: src/holonic/test/test_verified_gaps.py::TestPortalConstructScope
+
+- R9.36 `traverse()` MUST compute a SHA-256 hash of the projected graph and compare against a stored hash (`cga:lastProjectionHash`) in the target's context graph. When hashes match, injection is skipped and the traversal is recorded as a no-op. Hash tracking is active only when `agent_iri` is provided.
+  - priority: MUST
+  - constrains: holonic/client.py (traverse)
+  - acceptance: Given two identical traversals, when the second is executed with `agent_iri`, then the audit trail contains a record with "no-op" in its label.
+  - verifiedBy: src/holonic/test/test_verified_gaps.py::TestIncrementalTraversal
+
+- R9.37 `freshness(holon_iri)` MUST return a `timedelta` since the most recent traversal. `is_stale(holon_iri, max_age)` MUST return True when freshness exceeds the threshold. `stale_holons(max_age)` MUST return all holons exceeding the threshold.
+  - priority: MUST
+  - constrains: holonic/client.py (freshness, is_stale, stale_holons)
+  - acceptance: Given a traversal with agent_iri, when `freshness()` is called, then a `timedelta` is returned.
+  - verifiedBy: src/holonic/test/test_verified_gaps.py::TestStalenessTracking
+
 # User Stories
 
 - US1 As a knowledge engineer, I create a holon, add interior data from multiple sources into named sub-graphs, declare boundary shapes, and validate the membrane — all from a single `HolonicDataset` instance against in-memory rdflib.
@@ -468,7 +558,7 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
 - The dataset is the holarchy. Python methods are convenience over SPARQL, not a separate object model. Dataclasses returned from queries are ephemeral views, not persistent state.
 - Named graphs are hypergraphs. Recognizing this subsumes the RDF-vs-LPG distinction and makes the four-graph model a natural consequence of standard RDF 1.1 semantics.
 - SPARQL is the primary control surface. Python handles only what SPARQL cannot express (Dijkstra path ranking, template rendering, pipeline orchestration).
-- Minimal dependencies. The hard deps are rdflib, pyshacl, and pydantic. Optional extras add jupyter, aiohttp (Fuseki), owlrl (entailment), and visualization widgets.
+- Minimal dependencies. The hard deps are rdflib and pyshacl. Optional extras add jupyter, aiohttp (Fuseki), owlrl (entailment), and visualization widgets.
 - PROV-O for activity-level provenance. Graph-to-graph derivation via `prov:wasDerivedFrom`. Holon-to-holon structural dependency via `cga:derivedFrom`. These are distinct concepts and both exist.
 - SHACL shapes, not OWL axioms, for constraint checking. Reasoner-free by design; entailment is optional via the `owlrl` extra.
 - Nested Turtle notation everywhere the library emits RDF. Predicates grouped with `;`, object lists with `,`. No verbose explicit-triple form in examples, fixtures, or docs.
@@ -529,6 +619,10 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
   - status: deferred
 
 - OQ10 Upper-ontology alignment (BFO/CCO, gist). The CGA ontology's structural core (Holon, Portal, LayerGraph) is genuinely novel and does not reduce cleanly to existing upper-ontology categories. A holon is not a BFO Continuant, not an Occurrent, not a gist Content — it is a structural container with an inside/outside distinction, layer-scoped named graphs, and a membrane. Forcing it into an upper-ontology branch would misrepresent what it is. The governance vocabulary (DataDomain, BusinessProcess, ExternalSystem, Capability) maps more naturally to established categories (CCO Agent, CCO InformationBearingEntity, gist Organization). The recommended approach is alignment-not-import: ship optional alignment modules (`cga-bfo-alignment.ttl`, `cga-gist-alignment.ttl`) that downstream consumers load when interoperability with a specific upper ontology is required. The core ontology stays standalone, reasoner-free, and philosophically uncommitted. BFO/CCO alignment supports consumers in regulated industries (ISO 21838-2); gist alignment supports commercial enterprise consumers. Both can be developed in parallel without affecting the core.
+  - status: open
+
+- OQ11 SHACL target-class validation gap for fail-on-breach. Standard SHACL `sh:targetClass` validates only instances of the target class; when no instances exist, validation reports conformant. This means `fail_on_breach=True` cannot detect the case where a portal injects data of the WRONG type (e.g. `bad:Wrong` instead of `good:Required`). The membrane reports INTACT because there are no `good:Required` instances to validate against. The `fail_on_breach` mechanism (R9.28) is correctly implemented for cases where SHACL does report violations. Closing this gap requires one of: (a) non-standard SHACL interpretation where boundary shapes assert minimum cardinality on target-class instances, not just properties; (b) a pre-validation check that verifies at least one instance of each `sh:targetClass` exists in the interior after injection; (c) custom SPARQL-based validation in addition to SHACL. Two tests in `test_verified_gaps.py` are marked `xfail` pending resolution. This is a critical design decision because it affects whether `fail_on_breach` provides meaningful protection against schema-mismatch errors, not just constraint violations within the correct schema.
+  - status: open
   - owner: zwelz3
   - recommendation: Develop alignment modules as separate Turtle files under `src/holonic/ontology/`. Use `skos:broadMatch` / `skos:closeMatch` in the core ontology for lightweight cross-referencing without owl:imports. Document the alignment rationale in `docs/source/ontology.md`. Target 0.6.0 or later; gated on a concrete downstream consumer requesting BFO or gist compatibility.
   - status: deferred

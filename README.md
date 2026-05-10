@@ -261,6 +261,7 @@ The roadmap is tracked as `R9.*` requirements in [`docs/SPEC.md`](./docs/SPEC.md
 
 ### Shipped
 
+- **0.6.0** -- Governance enforcement and audit remediation. Breaking: portal CONSTRUCT scoping defaults to projections (R9.35). 14 new methods (traverse_path, dry_run, compose, validate_all, update_portal, fail_on_breach, rollback_traversal, last_traversal, derivation_chain, freshness, is_stale, stale_holons, SealedPortalError, batch). Third-party audit: Turtle injection fixed (C1), get_graph copy semantics (C2), IRI validation (S4), structured SHACL parsing (M1), batch context manager (M3). Snapshot rollback (M2), concurrency docs (M4), pydantic removed (O4).
 - **0.5.0** -- Breaking cleanup: removed `GraphBackend` alias, `registry_graph` kwarg/property (R9.18). Added `holon_type` kwarg, `iter_holons/iter_portals_*` generators with `limit`/`offset` pagination (R9.11). `bulk_load()` for batch holarchy construction. `list_named_graphs()` confirmed mandatory (R9.17). Notebook reorganization with sectioned landing page.
 - **0.4.3** -- Ontology enrichment: all 68 properties defined, holon subtype shapes (AgentHolon, AggregateHolon), ClassificationLevel enum (**breaking**: `dataClassification` is now an ObjectProperty), OQ10 upper-ontology alignment strategy.
 - **0.4.2** -- Structural lifecycle completion: `remove_holon`, `remove_portal`, extensible `add_portal` supporting all CGA portal subtypes plus downstream subclasses (R9.20, R9.21, R9.22).
@@ -268,18 +269,17 @@ The roadmap is tracked as `R9.*` requirements in [`docs/SPEC.md`](./docs/SPEC.md
 - **0.4.0** -- `HolonicStore` protocol (renamed from `GraphBackend`), ABC split, optional native-dispatch hook (R9.8 -- R9.10).
 - **0.3.x** -- Typed graphs, scope resolution, graph-level metadata, projection plugin system (R9.1 -- R9.7).
 
-### 0.6.0 -- Scope and registry expansion
+### 0.7.0 -- Planned
 
+- Decompose `client.py` into delegate modules (S1 from audit)
+- Migrate to parameterized SPARQL queries (S2 from audit)
+- FusekiBackend connection pooling (S3 from audit)
 - Aggregated membrane health in the registry (R9.13)
-- Additional scope predicate classes: `HasPortalProducing`, `HasShapeFor`, `LabelMatches` (R9.14)
-- Optional BFO/CCO and gist alignment modules if downstream consumers request them (OQ10)
-
-### 0.7.0+ — Contingent on evidence and community signal
-
+- Additional scope predicate classes (R9.14)
+- Optional BFO/CCO and gist alignment modules (OQ10)
 - Federation semantics across multiple registries (OQ7)
-- Async variant of `HolonicStore` if demand emerges from async consumers (R2.5)
-- Graph-level tick semantics (OQ8)
-- DOM-style event propagation as coordination primitive (OQ9)
+- Async variant of `HolonicStore` (R2.5)
+- Resolve SHACL target-class gap for fail_on_breach (OQ11)
 
 See [`docs/source/dom-comparison.md`](./docs/source/dom-comparison.md) for the framing of how the current synchronous API already maps onto DOM concepts; the open question is whether explicit machinery is warranted.
 

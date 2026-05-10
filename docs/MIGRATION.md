@@ -5,6 +5,42 @@ introduces. Sections are newest-first.
 
 ---
 
+## 0.5.0 → 0.6.0
+
+One breaking change. All other additions are backward-compatible.
+
+### Breaking: Portal CONSTRUCT queries default to projection scope
+
+**Before (0.5.0):** Portal CONSTRUCT queries always ran against the
+full dataset (union of all named graphs). A CONSTRUCT like
+`WHERE { ?s a ex:Employee ; ?p ?o }` would match every triple about
+employees, including PII in raw interiors.
+
+**After (0.6.0):** When the source holon has registered projection
+graphs (via `add_projection()`), the CONSTRUCT runs against the
+projection graphs only. Projections exist to be the governed,
+sanitized view; raw interiors may contain data the portal should
+not see.
+
+**If you need full-dataset access**, add `cga:sourceLayer
+cga:InteriorRole` to the portal:
+
+```python
+ds.add_portal(
+    "urn:portal:full-access", source, target, construct_query,
+    extra_ttl=(
+        '<urn:portal:full-access> '
+        '<urn:holonic:ontology:sourceLayer> '
+        '<urn:holonic:ontology:InteriorRole> .'
+    ),
+)
+```
+
+**If the source holon has no projections**, behavior is unchanged:
+the CONSTRUCT runs against the full dataset.
+
+---
+
 ## 0.4.3 → 0.5.0
 
 Three breaking removals. All were deprecated in 0.4.0 with warnings

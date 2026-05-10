@@ -2,6 +2,118 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2026-05-06
+
+Comprehensive audit remediation. Addresses 38 of 40 gap tests from
+the verified feature audit. Two remaining tests are marked `xfail`
+pending resolution of SHACL target-class semantics (OQ11 in SPEC).
+
+### Breaking
+
+- **Portal CONSTRUCT queries now scope to projections by default.**
+  When the source holon has registered projection graphs and the
+  portal does not declare an explicit `cga:sourceLayer`, the
+  CONSTRUCT query runs against the projection graphs rather than
+  the full dataset. This prevents PII and sensitive data in raw
+  interiors from leaking through unscoped CONSTRUCT queries.
+  Portals that need full-dataset access can declare
+  `cga:sourceLayer cga:InteriorRole` explicitly.
+
+### Added
+
+- **`MembraneResult.is_healthy`** convenience property. Returns
+  `True` when `health == MembraneHealth.INTACT`.
+- **Portal type in data model.** `portal_type: str | None` field
+  on `PortalInfo`, `PortalSummary`, `PortalDetail`. All discovery
+  SPARQL queries updated to SELECT the portal's RDF subtype.
+- **`SealedPortalError`** exception (subclass of `ValueError`).
+  `traverse_portal()` raises it when the portal is a
+  `cga:SealedPortal`, regardless of whether a CONSTRUCT query
+  exists.
+- **`validate_all()`** batch membrane validation returning
+  `dict[str, MembraneResult]`.
+- **`update_portal(iri, construct_query=, label=, portal_type=)`**
+  in-place portal update preserving the IRI and metadata.
+- **`traverse(fail_on_breach=True)`** fail-closed traversal. When
+  validation returns COMPROMISED, injected triples are rolled back
+  and `MembraneBreachError` is raised.
+- **`traverse_path(source, target)`** multi-hop traversal along
+  the shortest portal path. Records provenance per hop.
+- **`dry_run(source, target)`** simulates a traversal without
+  mutating state. Returns projected triples and a what-if membrane
+  result.
+- **`compose(holon_iris, layers=)`** unions interior graphs across
+  multiple holons into one queryable `rdflib.Graph`.
+- **`last_traversal(holon_iri)`** returns the most recent
+  `TraversalRecord` targeting a holon.
+- **`derivation_chain(holon_iri)`** walks `prov:wasDerivedFrom`
+  backward to return upstream holon IRIs.
+- **`rollback_traversal(activity_iri)`** undoes a traversal by
+  re-running the portal's CONSTRUCT and removing the projected
+  triples from the target interior.
+- **Incremental traversal.** `traverse()` computes a SHA-256 hash
+  of the projected graph and compares against a stored hash
+  (`cga:lastProjectionHash`). Identical projections are skipped
+  as no-ops. Active only when `agent_iri` is provided.
+- **Staleness tracking.** `freshness(holon_iri)` returns a
+  `timedelta` since the last traversal. `is_stale(holon_iri,
+  max_age=)` returns a boolean. `stale_holons(max_age=)` returns
+  all stale holons.
+- **Source layer scoping.** Portals can declare
+  `cga:sourceLayer cga:ProjectionRole` or `cga:InteriorRole` to
+  control which graphs the CONSTRUCT executes against. When no
+  `sourceLayer` is declared, the library defaults to projection
+  scope if projections exist.
+- **SPEC requirements R9.23 through R9.37** covering all audit
+  findings. **OQ11** captures the SHACL target-class gap as a
+  critical open design decision.
+
+### Audit Remediation (third-party + follow-up)
+
+- **C1: Turtle injection fixed.** `_escape_ttl()` now applied to
+  all user-supplied labels in `add_holon()`, `add_portal()`,
+  `update_portal()`.
+- **C2: `get_graph()` returns a copy.** `RdflibBackend.get_graph()`
+  now creates a detached copy with namespace bindings instead of
+  returning a live reference to the dataset graph.
+- **S4: IRI validation at API boundaries.** `_validate_iri()`
+  rejects empty strings and characters unsafe in Turtle/SPARQL
+  contexts. Called at the top of all public `add_*` methods.
+- **M1: SHACL report parsing uses structured graph.** Replaces
+  fragile text scanning with `sh:ValidationResult` queries against
+  the pyshacl report graph.
+- **M2: Snapshot-based rollback.** `traverse(fail_on_breach=True)`
+  snapshots the target interior before injection and restores it
+  on breach. Eliminates the risk of removing pre-existing triples
+  that overlapped with the projection.
+- **M3: `ds.batch()` context manager.** Suppresses metadata refresh
+  during the block and fires one consolidated refresh on exit.
+  Nests safely. Restores mode on exception without refreshing.
+- **M4: Concurrency semantics documented** in the `HolonicStore`
+  protocol docstring.
+- **O3: DEBUG logging** added to `add_holon`, `add_portal`,
+  `traverse_portal`, `traverse`, `validate_membrane`.
+- **O4: pydantic removed from hard dependencies.** Zero imports in
+  the codebase; no longer installed as a required dependency.
+- **S3 (partial): Dead `_get_or_create_loop` removed** from
+  FusekiBackend. Connection pooling deferred to 0.7.
+
+### Deferred to 0.7
+
+- **S1:** Decompose `client.py` (~3,460 lines) into delegate modules.
+- **S2:** Migrate to parameterized SPARQL queries via `initBindings`.
+- **S3 (remaining):** FusekiBackend connection pooling.
+
+### Fixed
+
+- **`traverse()` now registers injected interiors.** Previously,
+  `traverse_portal()` wrote triples but did not call
+  `_register_layer()`, causing `validate_membrane()` to validate
+  against an empty graph (vacuous INTACT false positive).
+- **`get_holon()` rewritten to O(1).** Uses a direct filtered
+  SPARQL query (5 queries total) instead of scanning all holons
+  via `iter_holons()`.
+
 ## [0.5.0] - 2026-04-23
 
 Breaking cleanup release. Removes the deprecated aliases that have

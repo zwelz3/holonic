@@ -87,13 +87,14 @@ FIND_PORTALS_FROM = """
 PREFIX cga:  <urn:holonic:ontology:>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 
-SELECT DISTINCT ?portal ?target ?label ?query
+SELECT DISTINCT ?portal ?target ?label ?query ?portalType
 WHERE {
     graph ?g {
         ?portal cga:sourceHolon ?source ;
             cga:targetHolon ?target .
         OPTIONAL { ?portal rdfs:label ?label }
         OPTIONAL { ?portal cga:constructQuery ?query }
+        OPTIONAL { ?portal a ?portalType . FILTER(?portalType != cga:Portal) }
     }
 }
 """
@@ -102,13 +103,14 @@ FIND_PORTALS_TO = """
 PREFIX cga:  <urn:holonic:ontology:>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 
-SELECT DISTINCT ?portal ?source ?label ?query
+SELECT DISTINCT ?portal ?source ?label ?query ?portalType
 WHERE {
     graph ?g {
         ?portal cga:sourceHolon ?source ;
             cga:targetHolon ?target .
         OPTIONAL { ?portal rdfs:label ?label }
         OPTIONAL { ?portal cga:constructQuery ?query }
+        OPTIONAL { ?portal a ?portalType . FILTER(?portalType != cga:Portal) }
     }
 }
 """
@@ -117,13 +119,14 @@ FIND_PORTAL_DIRECT = """
 PREFIX cga:  <urn:holonic:ontology:>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 
-SELECT DISTINCT ?portal ?label ?query
+SELECT DISTINCT ?portal ?label ?query ?portalType
 WHERE {
     graph ?g {
         ?portal cga:sourceHolon ?source ;
             cga:targetHolon ?target .
         OPTIONAL { ?portal rdfs:label ?label }
         OPTIONAL { ?portal cga:constructQuery ?query }
+        OPTIONAL { ?portal a ?portalType . FILTER(?portalType != cga:Portal) }
     }
 }
 LIMIT 1
@@ -133,12 +136,13 @@ ALL_PORTALS = """
 PREFIX cga:  <urn:holonic:ontology:>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 
-SELECT DISTINCT ?portal ?source ?target ?label
+SELECT DISTINCT ?portal ?source ?target ?label ?portalType
 WHERE {
     graph ?g {
         ?portal cga:sourceHolon ?source ;
             cga:targetHolon ?target .
         OPTIONAL { ?portal rdfs:label ?label }
+        OPTIONAL { ?portal a ?portalType . FILTER(?portalType != cga:Portal) }
     }
 }
 """

@@ -1030,6 +1030,51 @@ case — get the correct behavior without changes.
 
 ## How to add a decision to this document
 
+---
+
+## 0.6.0 -- Audit remediation
+
+### D-0.6.0-1 -- Snapshot-based rollback for fail_on_breach
+
+**Context.** The original `fail_on_breach` rollback removed projected triples individually from the target interior. If any projected triple overlapped with pre-existing data, the rollback deleted that data too, leaving the target in a worse state than before.
+
+**Decision.** Snapshot the target interior before injection (`get_graph()` returns a copy post-C2 fix). On breach, restore the snapshot via `put_graph()`. This is correct for all backends and handles the overlap case.
+
+**Alternatives considered.** (a) SPARQL UPDATE transactions (backend-specific, Fuseki only). (b) Per-triple removal with overlap detection (complex, error-prone). Snapshot is simpler and backend-neutral.
+
+### D-0.6.0-2 -- pydantic removed from hard dependencies
+
+**Context.** pydantic was listed in `dependencies` but imported nowhere in the codebase. It adds ~5MB of compiled extensions for users who only need the core library.
+
+**Decision.** Remove from hard deps. If needed for a downstream consumer (e.g., console), add as an optional extra at that time.
+
+### D-0.6.0-3 -- client.py decomposition deferred to pre-0.7
+
+**Context.** `client.py` is ~3,460 lines containing all CRUD, traversal, validation, provenance, projection, console, export, and pipeline methods. The third-party audit (S1) correctly identifies this as the single biggest maintenance risk.
+
+**Decision.** Defer the full decomposition to 0.7 planning. The existing delegation pattern (`self._metadata`, `self._scope`) is the template. Planned extraction groups:
+
+- Traversal: traverse, traverse_portal, traverse_path, dry_run, rollback_traversal
+- Validation: validate_membrane, validate_all, surface_report
+- Provenance: record_traversal, record_validation, collect_audit
+- Console: list_holons_summary, get_holon_detail, neighborhood, etc.
+
+CRUD methods stay in HolonicDataset as the core API surface.
+
+**Rationale for deferral.** Extraction is a refactoring risk that should be done carefully with a clean test-green baseline. It does not add user-facing functionality. The 0.6.0 scope is already large (38 gap tests, 32 audit tests, 1 breaking change).
+
+### D-0.6.0-4 -- Parameterized SPARQL deferred to pre-0.7
+
+**Context.** SPARQL queries are built via f-string interpolation and `.replace()`. The `bindings` parameter on `query()` exists but is unused. The third-party audit (S2) identifies this as fragile.
+
+**Decision.** Defer migration to parameterized queries to 0.7 planning. The current approach works because all interpolated values are IRIs (syntactically constrained). The migration path: start with security-sensitive queries (traverse, remove_holon), then extend to FusekiBackend's HTTP payloads.
+
+### D-0.6.0-5 -- Concurrency semantics documented
+
+**Context.** The `HolonicStore` protocol said nothing about thread safety. The third-party audit (M4) correctly notes this is important for federated deployments.
+
+**Decision.** Added a "Concurrency semantics" section to the `HolonicStore` protocol docstring documenting: RdflibBackend is not thread-safe; FusekiBackend is safe for concurrent reads but multi-step operations are not atomic; callers serialize at the application level.
+
 Decisions are append-only within a release section. Each decision
 has:
 

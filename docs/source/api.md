@@ -70,6 +70,58 @@ automatically converted to their string value.
 **Typing.** The library ships a `py.typed` marker file. Downstream
 consumers using mypy or pyright get full type-checking support.
 
+## Governance & Safety (0.6.0)
+
+**Fail-closed traversal.** `traverse(fail_on_breach=True)` validates
+the target membrane after injection. If COMPROMISED, the target
+interior is restored from a pre-injection snapshot and
+`MembraneBreachError` is raised. The target is left unchanged.
+
+**Dry-run simulation.** `dry_run(source, target)` runs the portal's
+CONSTRUCT, merges with the target's existing interior in memory, and
+validates against boundary shapes. Nothing is written to the dataset.
+
+**Multi-hop traversal.** `traverse_path(source, target)` discovers
+the shortest portal path and executes `traverse()` for each hop.
+Supports `fail_on_breach` and provenance recording per hop.
+
+**Sealed portals.** `SealedPortalError` is raised when traversal is
+attempted on a `cga:SealedPortal`. Use `update_portal(portal_type=
+"cga:SealedPortal")` to seal a portal without removing it.
+
+**Batch validation.** `validate_all()` validates every holon's
+membrane and returns `dict[str, MembraneResult]`.
+
+**Portal update.** `update_portal(iri, construct_query=, label=,
+portal_type=)` updates portal properties in-place.
+
+**Composition.** `compose([holon_iris], layers=)` unions interior
+graphs across multiple holons into one queryable `rdflib.Graph`.
+
+**Provenance helpers.** `last_traversal(holon_iri)` returns the most
+recent `TraversalRecord`. `derivation_chain(holon_iri)` walks
+`prov:wasDerivedFrom` backward to list upstream holons.
+
+**Rollback.** `rollback_traversal(activity_iri)` undoes a traversal
+by re-running the portal's CONSTRUCT and removing the projected
+triples from the target interior.
+
+**Staleness tracking.** `freshness(holon_iri)` returns a `timedelta`
+since the last traversal. `is_stale(holon_iri, max_age=)` returns a
+boolean. `stale_holons(max_age=)` returns all stale holons.
+
+**Source layer scoping.** Portal CONSTRUCTs default to projection
+scope when projections exist (prevents PII leaking from raw
+interiors). Force full-dataset access via
+`cga:sourceLayer cga:InteriorRole` on the portal.
+
+**Batch context manager.** `with ds.batch():` suppresses per-write
+metadata refresh and fires one consolidated refresh on exit.
+
+**Input validation.** All `add_*` methods validate IRIs at the API
+boundary via `_validate_iri()`. Labels are escaped via `_escape_ttl()`
+to prevent Turtle injection.
+
 ## Store Protocol (0.4.0)
 
 ```{eval-rst}

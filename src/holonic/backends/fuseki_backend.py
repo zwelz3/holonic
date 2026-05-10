@@ -20,20 +20,6 @@ from holonic.backends.store import AbstractHolonicStore
 log = logging.getLogger(__name__)
 
 
-def _get_or_create_loop():
-    """Get the running event loop or create one."""
-    try:
-        _loop = asyncio.get_running_loop()
-        # We're inside an async context — can't use asyncio.run()
-        raise RuntimeError(
-            "FusekiBackend sync methods cannot be called from within "
-            "an async context.  Use FusekiBackendAsync directly."
-        )
-    except RuntimeError:
-        pass
-    return asyncio.new_event_loop()
-
-
 class FusekiBackend(AbstractHolonicStore):
     """HolonicStore implementation backed by an Apache Jena Fuseki server.
 

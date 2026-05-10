@@ -52,8 +52,19 @@ class RdflibBackend(AbstractHolonicStore):
         return len(g) > 0
 
     def get_graph(self, graph_iri: str) -> Graph:
-        """Get named graph from the dataset."""
-        return self.ds.graph(URIRef(graph_iri))
+        """Return a *copy* of the named graph for local processing.
+
+        Mutations to the returned graph do NOT affect the backing
+        dataset.  Use ``put_graph`` / ``post_graph`` to persist
+        changes.
+        """
+        source = self.ds.graph(URIRef(graph_iri))
+        copy = Graph()
+        for prefix, ns in source.namespaces():
+            copy.bind(prefix, ns, override=False)
+        for triple in source:
+            copy.add(triple)
+        return copy
 
     def put_graph(self, graph_iri: str, g: Graph) -> None:
         """Replace graph data in the dataset named graph."""

@@ -65,6 +65,17 @@ class MembraneResult(_DictMixin):
                 lines.append(f"    - {w}")
         return "\n".join(lines)
 
+    @property
+    def is_healthy(self) -> bool:
+        """True when the membrane is INTACT, False otherwise.
+
+        Convenience property so callers don't need to import
+        ``MembraneHealth`` for a simple boolean check.
+
+        .. versionadded:: 0.6.0
+        """
+        return self.health == MembraneHealth.INTACT
+
 
 @dataclass
 class PortalInfo(_DictMixin):
@@ -75,10 +86,12 @@ class PortalInfo(_DictMixin):
     target_iri: str
     label: str | None = None
     construct_query: str | None = None
+    portal_type: str | None = None
 
     def __repr__(self) -> str:
         lbl = self.label or self.iri.rsplit(":", 1)[-1]
-        return f"Portal({lbl}: {self.source_iri} → {self.target_iri})"
+        ptype = self.portal_type.rsplit(":", 1)[-1] if self.portal_type else "Portal"
+        return f"{ptype}({lbl}: {self.source_iri} → {self.target_iri})"
 
 
 @dataclass
@@ -176,6 +189,23 @@ class MembraneBreachError(Exception):
         self.result = result
         super().__init__(
             f"Membrane COMPROMISED for {result.holon_iri}: {len(result.violations)} violation(s)"
+        )
+
+
+class SealedPortalError(ValueError):
+    """Raised when traversal is attempted on a SealedPortal.
+
+    Subclasses ValueError for backward compatibility with code that
+    catches ValueError from traverse_portal().
+
+    .. versionadded:: 0.6.0
+    """
+
+    def __init__(self, portal_iri: str):
+        self.portal_iri = portal_iri
+        super().__init__(
+            f"Portal {portal_iri} is sealed — traversal is explicitly blocked. "
+            f"Reclassify to TransformPortal to enable traversal."
         )
 
 
