@@ -5,8 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [0.7.0] - 2026-05-11
 
 Upstream consumer integration and API surface expansion. Driven by
-friction points documented in `docs/UPSTREAM-RECOMMENDATIONS.md`
-from a downstream FastAPI/React console application.
+friction points from a downstream FastAPI/React console application.
 
 ### Added
 
@@ -45,23 +44,6 @@ from a downstream FastAPI/React console application.
   SPARQL engine via `ORDER BY DESC(?timestamp) LIMIT/OFFSET`
   and `FILTER(?timestamp > ...)`. Backward compatible; calling
   with no arguments returns the full trail as before.
-
-### Upstream recommendations disposition
-
-| # | Recommendation | Decision |
-|---|---------------|----------|
-| 1 | Async backend | Protocol definition deferred |
-| 2 | Paginated audit trail | **Shipped** |
-| 3 | Activity lookup | **Shipped** |
-| 4 | SPARQL classification | **Shipped** |
-| 5 | IRI validation (public) | **Shipped** |
-| 6 | Derivation chain as graph | Declined (list[str] is correct) |
-| 7 | Holarchy graph | Deferred |
-| 8 | Dashboard summary | **Shipped** |
-| 9 | find_path efficiency | Deferred |
-| 10 | Change notification hooks | **Shipped** |
-| 11 | Serialization / Pydantic | Declined (to_dict is stable API) |
-| 12 | Membrane violation detail | **Shipped** |
 
 ## [0.6.0] - 2026-05-06
 
@@ -200,12 +182,14 @@ sections with a landing page.
   `a cga:Holon`; the kwarg adds a second `rdf:type` assertion.
 - **Generator-based iteration with pagination.** New methods yield
   results lazily so large holarchies avoid full materialization:
-  - `iter_holons(limit=, offset=)` — yields `HolonInfo` one at a time
-  - `iter_portals_from(iri, limit=, offset=)` — yields `PortalInfo`
-  - `iter_portals_to(iri, limit=, offset=)` — yields `PortalInfo`
+    - `iter_holons(limit=, offset=)` — yields `HolonInfo` one at a time
+    - `iter_portals_from(iri, limit=, offset=)` — yields `PortalInfo`
+    - `iter_portals_to(iri, limit=, offset=)` — yields `PortalInfo`
+
   The existing `list_holons()` and `find_portals_from/to()` methods
-  now delegate to the generators and also accept `limit`/`offset`.
-  Pagination threads through to SPARQL LIMIT/OFFSET.
+now delegate to the generators and also accept `limit`/`offset`.
+Pagination threads through to SPARQL LIMIT/OFFSET.
+
 - **`bulk_load(holons=, portals=)` for batch construction.** Accepts
   lists of holon and portal specs (dicts matching the `add_holon()`
   and `add_portal()` parameter names), suppresses per-write metadata
@@ -278,13 +262,13 @@ migration path.
 ### Added
 
 - **New SHACL shapes for holon subtypes:**
-  - `cga:AgentHolonShape` — Info severity: agent holons should have
-    interior (state/memory), boundary (output constraints), and
-    context (execution history) layers populated.
-  - `cga:AggregateHolonShape` — Warning severity via SPARQL: flags
-    aggregate holons that have interior data but no traversal
-    provenance linking that data to a `prov:Activity`. Catches
-    holons misclassified as aggregates.
+    - `cga:AgentHolonShape` — Info severity: agent holons should have
+      interior (state/memory), boundary (output constraints), and
+      context (execution history) layers populated.
+    - `cga:AggregateHolonShape` — Warning severity via SPARQL: flags
+      aggregate holons that have interior data but no traversal
+      provenance linking that data to a `prov:Activity`. Catches
+      holons misclassified as aggregates.
 - **`notebooks/06_holon_subtypes.ipynb`** — new notebook exercising
   AgentHolon, AggregateHolon, and ClassificationLevel shapes. Shows
   well-formed vs. incomplete agent holons, correct vs. suspect
@@ -357,29 +341,29 @@ subtype (previously hardcoded to `cga:TransformPortal`).
   reclassify back.
 - **Ontology enrichment** — holistic review and improvement of
   `cga.ttl` and `cga-shapes.ttl`:
-  - Ontology version bumped to 0.4.2 with `dcterms:modified`,
-    `rdfs:seeAlso` (docs site, PROV-O, SHACL), and a `skos:note`
-    about the standalone/alignment strategy (OQ10).
-  - All 68 properties now carry `skos:definition` (29 were bare).
-  - All four `LayerRole` individuals expanded from one-line to
-    multi-line definitions covering what belongs in each layer,
-    what the library writes automatically, and what downstream
-    consumers add.
-  - New `cga:ClassificationLevel` class with five individuals
-    (`Public`, `CUI`, `PII`, `Secret`, `TopSecret`).
-  - `cga:PortalType` individuals (`UnidirectionalPortal`,
-    `BidirectionalPortal`) now have definitions and a note that
-    directionality is orthogonal to subtype, populated by
-    downstream consumers.
-  - `cga:Holon` class gains a `skos:note` documenting the
-    `dcterms:conformsTo` governance pattern.
-  - New shapes: `cga:AlignmentHolonShape` (Warning: should have
-    label and interior), `cga:HolonStewardshipShape` (Info: nudge
-    for stewardship on all holon subtypes),
-    `cga:ProjectionPipelineSpecShape` (Warning: should have label
-    and steps), `cga:ProjectionPipelineStepShape` (Warning: step
-    with neither transformName nor constructQuery does nothing).
-  - Shapes file version bumped to 0.4.2.
+    - Ontology version bumped to 0.4.2 with `dcterms:modified`,
+      `rdfs:seeAlso` (docs site, PROV-O, SHACL), and a `skos:note`
+      about the standalone/alignment strategy (OQ10).
+    - All 68 properties now carry `skos:definition` (29 were bare).
+    - All four `LayerRole` individuals expanded from one-line to
+      multi-line definitions covering what belongs in each layer,
+      what the library writes automatically, and what downstream
+      consumers add.
+    - New `cga:ClassificationLevel` class with five individuals
+      (`Public`, `CUI`, `PII`, `Secret`, `TopSecret`).
+    - `cga:PortalType` individuals (`UnidirectionalPortal`,
+      `BidirectionalPortal`) now have definitions and a note that
+      directionality is orthogonal to subtype, populated by
+      downstream consumers.
+    - `cga:Holon` class gains a `skos:note` documenting the
+      `dcterms:conformsTo` governance pattern.
+    - New shapes: `cga:AlignmentHolonShape` (Warning: should have
+      label and interior), `cga:HolonStewardshipShape` (Info: nudge
+      for stewardship on all holon subtypes),
+      `cga:ProjectionPipelineSpecShape` (Warning: should have label
+      and steps), `cga:ProjectionPipelineStepShape` (Warning: step
+      with neither transformName nor constructQuery does nothing).
+    - Shapes file version bumped to 0.4.2.
 - **`notebooks/04_governed_boundaries.ipynb`** — new notebook
   demonstrating governed boundary contracts. Exercises
   `cga:AlignmentHolon`, `cga:DataDomain`, `cga:dataSteward`,
@@ -650,17 +634,17 @@ until downstream migration is complete.
   (`holonic.projections` group). Pipelines reference transforms
   by registered name. See `docs/DECISIONS.md` § 0.3.5.
 - **`holonic.plugins` module** with:
-  - `@projection_transform(name)` decorator for first-party
-    transform registration.
-  - `get_registered_transforms()` — merges first-party and
-    entry-point transforms; first-party wins on name collision.
-  - `resolve_transform(name)` — lookup by registered name.
-  - `TransformNotFoundError` — raised at registration time when
-    a pipeline references an unknown transform.
-  - `transform_version(name)` — returns `"<pkg-name>==<version>"`
-    for provenance recording.
-  - `host_metadata()` — returns dict of hostname, platform,
-    Python version, holonic version.
+    - `@projection_transform(name)` decorator for first-party
+      transform registration.
+    - `get_registered_transforms()` — merges first-party and
+      entry-point transforms; first-party wins on name collision.
+    - `resolve_transform(name)` — lookup by registered name.
+    - `TransformNotFoundError` — raised at registration time when
+      a pipeline references an unknown transform.
+    - `transform_version(name)` — returns `"<pkg-name>==<version>"`
+      for provenance recording.
+    - `host_metadata()` — returns dict of hostname, platform,
+      Python version, holonic version.
 - **First-party transforms registered via entry points**:
   `strip_blank_nodes`, `localize_predicates`,
   `collapse_reification`. Declared in `pyproject.toml` under
@@ -675,27 +659,27 @@ until downstream migration is complete.
   `cga:runHolonicVersion`. `cga:constructQuery` is reused from
   the portal vocabulary.
 - **New `HolonicDataset` methods**:
-  - `register_pipeline(spec)` — validates transform names, writes
-    spec to registry, returns the spec IRI.
-  - `register_pipeline_ttl(ttl)` — raw-Turtle escape hatch for
-    advanced use.
-  - `attach_pipeline(holon_iri, spec_iri)` — declares holon has
-    access to a pipeline.
-  - `list_pipelines(holon_iri)` — returns
-    `ProjectionPipelineSummary` objects for attached pipelines.
-  - `get_pipeline(spec_iri)` — returns full
-    `ProjectionPipelineSpec` with step order preserved via
-    `rdf:List` walk.
-  - `run_projection(holon_iri, spec_iri, *, store_as=None,
-    agent_iri=None)` — merges interior graphs, executes steps,
-    optionally stores result as a projection layer, records a
-    `prov:Activity` in the holon's context graph.
+    - `register_pipeline(spec)` — validates transform names, writes
+      spec to registry, returns the spec IRI.
+    - `register_pipeline_ttl(ttl)` — raw-Turtle escape hatch for
+      advanced use.
+    - `attach_pipeline(holon_iri, spec_iri)` — declares holon has
+      access to a pipeline.
+    - `list_pipelines(holon_iri)` — returns
+      `ProjectionPipelineSummary` objects for attached pipelines.
+    - `get_pipeline(spec_iri)` — returns full
+      `ProjectionPipelineSpec` with step order preserved via
+      `rdf:List` walk.
+    - `run_projection(holon_iri, spec_iri, *, store_as=None,
+      agent_iri=None)` — merges interior graphs, executes steps,
+      optionally stores result as a projection layer, records a
+      `prov:Activity` in the holon's context graph.
 - **New dataclasses in `console_model`**:
-  - `ProjectionPipelineSpec` — top-level pipeline with `iri`,
-    `name`, `steps`, `description`.
-  - `ProjectionPipelineStep` — one step with `name`,
-    `transform_name`, `construct_query`.
-  - `ProjectionPipelineSummary` — lightweight listing record.
+    - `ProjectionPipelineSpec` — top-level pipeline with `iri`,
+      `name`, `steps`, `description`.
+    - `ProjectionPipelineStep` — one step with `name`,
+      `transform_name`, `construct_query`.
+    - `ProjectionPipelineSummary` — lightweight listing record.
 - **Four new SPARQL templates**:
   `LIST_PIPELINES_FOR_HOLON_TEMPLATE`,
   `READ_PIPELINE_DETAIL_TEMPLATE`,
