@@ -40,6 +40,21 @@ class MembraneHealth(Enum):
 
 
 @dataclass
+class ShapeViolation(_DictMixin):
+    """A single SHACL shape violation with structured detail.
+
+    .. versionadded:: 0.7.0
+    """
+
+    shape_iri: str | None = None
+    focus_node: str | None = None
+    path: str | None = None
+    value: str | None = None
+    message: str = ""
+    severity: str = "Violation"
+
+
+@dataclass
 class MembraneResult(_DictMixin):
     """Result of SHACL membrane validation."""
 
@@ -49,6 +64,7 @@ class MembraneResult(_DictMixin):
     report_text: str
     violations: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    shape_violations: list[ShapeViolation] = field(default_factory=list)
 
     def summary(self) -> str:
         """Return a summary of the Holon's Membrane."""

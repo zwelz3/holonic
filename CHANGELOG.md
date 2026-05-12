@@ -2,6 +2,67 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2026-05-11
+
+Upstream consumer integration and API surface expansion. Driven by
+friction points documented in `docs/UPSTREAM-RECOMMENDATIONS.md`
+from a downstream FastAPI/React console application.
+
+### Added
+
+- **`classify_sparql(query)`** utility that returns the SPARQL
+  form (`'select'`, `'ask'`, `'construct'`, `'describe'`,
+  `'update'`). Strips comments and string literals before
+  matching. Eliminates the need for consumers to reimplement
+  SPARQL classification.
+- **`validate_iri(iri)`** public entry point to the library's IRI
+  validation. Raises `ValueError` for unsafe characters.
+- **`get_activity(activity_iri)`** direct lookup of a single
+  provenance activity by IRI. Returns `TraversalRecord`,
+  `ValidationRecord`, or None. Eliminates the O(all) scan
+  through `collect_audit_trail()`.
+- **`holarchy_summary(max_age=, recent_limit=)`** aggregated
+  dashboard snapshot returning `HolarchySummary` with holon
+  count, portal count, root count, health distribution,
+  staleness count, and recent activities. Reduces 4+ SPARQL
+  round-trips to a single method call.
+- **`on_traversal(callback)` / `on_validation(callback)`**
+  notification hooks. Callbacks fire synchronously after each
+  `traverse()` or `validate_membrane()`. Eliminates polling for
+  same-process event detection.
+- **`ShapeViolation` dataclass** with structured fields:
+  `shape_iri`, `focus_node`, `path`, `value`, `message`,
+  `severity`. Replaces opaque text-only violation reporting.
+- **`MembraneResult.shape_violations`** field populated from
+  the SHACL report graph with full `ShapeViolation` objects.
+- **`HolarchySummary` dataclass** for dashboard integration.
+
+### Changed
+
+- **`collect_audit_trail()` now accepts pagination parameters:**
+  `limit`, `offset`, `since` (ISO-8601 timestamp), and `kind`
+  (`'traversal'` or `'validation'`). Filtering is pushed to the
+  SPARQL engine via `ORDER BY DESC(?timestamp) LIMIT/OFFSET`
+  and `FILTER(?timestamp > ...)`. Backward compatible; calling
+  with no arguments returns the full trail as before.
+
+### Upstream recommendations disposition
+
+| # | Recommendation | Decision |
+|---|---------------|----------|
+| 1 | Async backend | Protocol definition deferred |
+| 2 | Paginated audit trail | **Shipped** |
+| 3 | Activity lookup | **Shipped** |
+| 4 | SPARQL classification | **Shipped** |
+| 5 | IRI validation (public) | **Shipped** |
+| 6 | Derivation chain as graph | Declined (list[str] is correct) |
+| 7 | Holarchy graph | Deferred |
+| 8 | Dashboard summary | **Shipped** |
+| 9 | find_path efficiency | Deferred |
+| 10 | Change notification hooks | **Shipped** |
+| 11 | Serialization / Pydantic | Declined (to_dict is stable API) |
+| 12 | Membrane violation detail | **Shipped** |
+
 ## [0.6.0] - 2026-05-06
 
 Comprehensive audit remediation. Addresses 38 of 40 gap tests from

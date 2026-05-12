@@ -43,6 +43,7 @@ from holonic.model import (
     MembraneHealth,
     MembraneResult,
     PortalInfo,
+    ShapeViolation,
     SurfaceReport,
     TraversalRecord,
     ValidationRecord,
@@ -71,18 +72,37 @@ _SENTINEL = object()
 # ══════════════════════════════════════════════════════════════
 
 
-def _escape_ttl(s: str) -> str:
-    """Escape a string for use inside a Turtle "..." literal."""
-    return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+def classify_sparql(
+    query: str,
+) -> str:
+    """Classify a SPARQL query by its form.
 
+    Returns one of ``'select'``, ``'ask'``, ``'construct'``,
+    ``'describe'``, or ``'update'``.
 
-def _escape_construct(s: str) -> str:
-    """Escape a CONSTRUCT for use inside Turtle triple-quoted literal.
+    Strips comments and string literals before matching the first
+    keyword. Raises ``ValueError`` if the form cannot be determined.
 
-    Triple-quoted literals allow most content, but backslash-escape
-    triple quotes if they appear in the query body.
+    .. versionadded:: 0.7.0
     """
-    return s.replace('"""', '\\"\\"\\"')
+    import re
+
+    # Strip comments and string literals
+    cleaned = re.sub(r"#[^\n]*", "", query)
+    cleaned = re.sub(r'""".*?"""', "", cleaned, flags=re.DOTALL)
+    cleaned = re.sub(r"'''.*?'''", "", cleaned, flags=re.DOTALL)
+    cleaned = re.sub(r'"[^"]*"', "", cleaned)
+    cleaned = re.sub(r"'[^']*'", "", cleaned)
+    cleaned = cleaned.strip()
+
+    upper = cleaned.upper()
+    for form in ("SELECT", "ASK", "CONSTRUCT", "DESCRIBE"):
+        if form in upper.split():
+            return form.lower()
+    for kw in ("INSERT", "DELETE", "LOAD", "CLEAR", "DROP", "CREATE", "COPY", "MOVE", "ADD"):
+        if kw in upper.split():
+            return "update"
+    raise ValueError(f"Cannot classify SPARQL query: {query[:80]!r}")
 
 
 # Characters that are unsafe when an IRI is interpolated into a
@@ -106,6 +126,38 @@ def _validate_iri(iri: str, param_name: str = "iri") -> None:
         )
 
 
+def validate_iri(iri: str) -> None:
+    """Validate an IRI for safe use in SPARQL/Turtle interpolation.
+
+    Raises ``ValueError`` if the IRI is empty or contains characters
+    that are unsafe in Turtle/SPARQL contexts (angle brackets,
+    quotes, backticks, braces, whitespace except space).
+
+    This is the public interface to the library's IRI validation.
+    All ``add_*`` methods call this internally.
+
+    .. versionadded:: 0.7.0
+    """
+    _validate_iri(iri, "iri")
+    """Escape a string for use inside a Turtle "..." literal."""
+
+
+def _escape_ttl(s: str) -> str:
+    """Escape a string for use inside a Turtle literal."""
+    return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+    return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+
+def _escape_construct(s: str) -> str:
+    """Escape a CONSTRUCT for use inside Turtle triple-quoted literal.
+
+    Triple-quoted literals allow most content, but backslash-escape
+    triple quotes if they appear in the query body.
+    """
+    return s.replace('"""', '\\"\\"\\"')
+
+
 def _run_construct_on_graph(graph: Graph, construct_query: str) -> Graph:
     """Run a SPARQL CONSTRUCT against an in-memory Graph.
 
@@ -118,24 +170,29 @@ def _run_construct_on_graph(graph: Graph, construct_query: str) -> Graph:
 
 def _parse_shacl_report(
     report_graph: Graph,
-) -> tuple[list[str], list[str]]:
+) -> tuple[list[str], list[str], list[ShapeViolation]]:
     """Extract violations and warnings from a SHACL validation report graph.
 
     Parses the structured ``sh:ValidationResult`` entries rather than
     scanning the human-readable text, making the result independent
     of pyshacl's text-formatting choices.
 
-    Returns ``(violations, warnings)`` where each is a list of
-    human-readable summary strings.
+    Returns ``(violations, warnings, shape_violations)`` where
+    ``violations`` and ``warnings`` are human-readable summary strings,
+    and ``shape_violations`` is a list of structured
+    :class:`ShapeViolation` objects.
     """
     violations: list[str] = []
     warnings: list[str] = []
+    structured: list[ShapeViolation] = []
 
     for result in report_graph.objects(predicate=SH.result):
         severity = report_graph.value(result, SH.resultSeverity)
         message = report_graph.value(result, SH.resultMessage)
         focus = report_graph.value(result, SH.focusNode)
         path = report_graph.value(result, SH.resultPath)
+        source_shape = report_graph.value(result, SH.sourceShape)
+        value = report_graph.value(result, SH.value)
 
         severity_str = str(severity) if severity else ""
         msg = str(message) if message else "No message"
@@ -149,13 +206,29 @@ def _parse_shacl_report(
             detail_parts.append(f"path={path_str}")
         detail = "; ".join(detail_parts)
 
+        sev_label = "Violation"
         if severity_str.endswith("Violation"):
             violations.append(f"Violation: {detail}")
+            sev_label = "Violation"
         elif severity_str.endswith("Warning"):
             warnings.append(f"Warning: {detail}")
-        # Info severity is intentionally ignored (non-blocking)
+            sev_label = "Warning"
+        else:
+            # Info severity: skip for violation/warning lists
+            continue
 
-    return violations, warnings
+        structured.append(
+            ShapeViolation(
+                shape_iri=str(source_shape) if source_shape else None,
+                focus_node=focus_str or None,
+                path=path_str or None,
+                value=str(value) if value else None,
+                message=msg,
+                severity=sev_label,
+            )
+        )
+
+    return violations, warnings, structured
 
 
 class HolonicDataset:
@@ -277,6 +350,30 @@ class HolonicDataset:
         from holonic.scope import ScopeResolver
 
         self._scope = ScopeResolver(backend=self.backend, registry_iri=self.registry_iri)
+
+        # Notification hooks (0.7.0). Callbacks fire synchronously
+        # after traversal/validation within the calling thread.
+        self._on_traversal: list = []
+        self._on_validation: list = []
+
+    def on_traversal(self, callback) -> None:
+        """Register a callback fired after each ``traverse()``.
+
+        The callback receives ``(source_iri, target_iri, projected,
+        membrane_result)`` as arguments.
+
+        .. versionadded:: 0.7.0
+        """
+        self._on_traversal.append(callback)
+
+    def on_validation(self, callback) -> None:
+        """Register a callback fired after each ``validate_membrane()``.
+
+        The callback receives ``(holon_iri, membrane_result)``.
+
+        .. versionadded:: 0.7.0
+        """
+        self._on_validation.append(callback)
 
     # ══════════════════════════════════════════════════════════
     # Holon management
@@ -727,18 +824,47 @@ class HolonicDataset:
                 self.backend.parse_into(self.registry_iri, ttl, "turtle")
 
         if portal_type is not _SENTINEL and portal_type is not None:
-            # Remove old subtype (keep cga:Portal base type)
-            self.backend.update(f"""
+            # Find and remove old subtypes per-graph
+            type_graphs = self.backend.query(f"""
                 PREFIX cga: <urn:holonic:ontology:>
-                DELETE WHERE {{
+                SELECT DISTINCT ?g ?type WHERE {{
                     GRAPH ?g {{
                         <{portal_iri}> a ?type .
                         FILTER(?type != cga:Portal)
                     }}
                 }}
             """)
+            for row in type_graphs:
+                g_iri = row["g"]
+                old_type = row["type"]
+                self.backend.update(f"""
+                    DELETE DATA {{
+                        GRAPH <{g_iri}> {{
+                            <{portal_iri}> a <{old_type}> .
+                        }}
+                    }}
+                """)
+            # Insert new type into registry AND the boundary graph
+            # (boundary is where structural triples live; queries
+            # look for type in the same graph as sourceHolon)
             ttl = f"@prefix cga: <urn:holonic:ontology:> .\n<{portal_iri}> a {portal_type} .\n"
             self.backend.parse_into(self.registry_iri, ttl, "turtle")
+            # Find the boundary graph
+            bnd_rows = self.backend.query(f"""
+                PREFIX cga: <urn:holonic:ontology:>
+                SELECT ?g WHERE {{
+                    GRAPH ?g {{
+                        <{portal_iri}> cga:sourceHolon ?s .
+                    }}
+                    FILTER(?g != <{self.registry_iri}>)
+                }} LIMIT 1
+            """)
+            if bnd_rows:
+                self.backend.parse_into(
+                    bnd_rows[0]["g"],
+                    ttl,
+                    "turtle",
+                )
 
         if self._metadata_updates == "eager":
             self._metadata.refresh_graph(self.registry_iri)
@@ -1615,6 +1741,10 @@ class HolonicDataset:
                     agent_iri=agent_iri,
                 )
 
+        # Fire notification hooks
+        for hook in self._on_traversal:
+            hook(source_iri, target_iri, projected, membrane_result)
+
         return projected, membrane_result
 
     def traverse_path(
@@ -1749,7 +1879,9 @@ class HolonicDataset:
             allow_infos=True,
         )
 
-        violations, warnings_list = _parse_shacl_report(report_graph)
+        violations, warnings_list, shape_viols = _parse_shacl_report(
+            report_graph,
+        )
 
         if violations:
             health = MembraneHealth.COMPROMISED
@@ -1765,6 +1897,7 @@ class HolonicDataset:
             report_text=report_text,
             violations=violations,
             warnings=warnings_list,
+            shape_violations=shape_viols,
         )
 
     # ══════════════════════════════════════════════════════════
@@ -1815,7 +1948,9 @@ class HolonicDataset:
         )
 
         # Parse violations and warnings from the structured report graph
-        violations, warnings = _parse_shacl_report(report_graph)
+        violations, warnings, shape_violations = _parse_shacl_report(
+            report_graph,
+        )
 
         if violations:
             health = MembraneHealth.COMPROMISED
@@ -1824,14 +1959,21 @@ class HolonicDataset:
         else:
             health = MembraneHealth.INTACT
 
-        return MembraneResult(
+        result = MembraneResult(
             holon_iri=holon_iri,
             conforms=conforms,
             health=health,
             report_text=report_text,
             violations=violations,
             warnings=warnings,
+            shape_violations=shape_violations,
         )
+
+        # Fire notification hooks
+        for hook in self._on_validation:
+            hook(holon_iri, result)
+
+        return result
 
     def validate_all(self) -> dict[str, MembraneResult]:
         """Validate membranes for all holons in the holarchy.
@@ -1952,45 +2094,102 @@ class HolonicDataset:
                         report.violations += 0  # counted at validation time
         return report
 
-    def collect_audit_trail(self) -> AuditTrail:
-        """Collect the full provenance audit trail from context graphs.
+    def collect_audit_trail(
+        self,
+        *,
+        limit: int | None = None,
+        offset: int | None = None,
+        since: str | None = None,
+        kind: str | None = None,
+    ) -> AuditTrail:
+        """Collect the provenance audit trail from context graphs.
 
         Queries all PROV-O activities across every context graph in the
         dataset, correlates traversals with validations, and builds
         surface reports from boundary shapes.
 
+        Parameters
+        ----------
+        limit :
+            Maximum number of activities to return. None means all.
+        offset :
+            Number of activities to skip. None means 0.
+        since :
+            ISO-8601 timestamp. Only return activities started after
+            this time. Pushed to the SPARQL engine via FILTER.
+        kind :
+            Filter by activity type: ``'traversal'`` or
+            ``'validation'``. None means both.
+
         Returns:
         -------
         AuditTrail
-            Complete structured audit of traversals, validations,
-            derivation chains, and surface reports.
-        """
-        # Collect traversals
-        traversal_rows = self.backend.query(Q.COLLECT_TRAVERSALS)
-        traversals = [
-            TraversalRecord(
-                activity_iri=r["activity"],
-                source_iri=r["source"],
-                target_iri=r["target"],
-                agent_iri=r.get("agent"),
-                portal_label=r.get("label"),
-                timestamp=r.get("timestamp"),
-            )
-            for r in traversal_rows
-        ]
 
-        # Collect validations
-        validation_rows = self.backend.query(Q.COLLECT_VALIDATIONS)
-        validations = [
-            ValidationRecord(
-                activity_iri=r["activity"],
-                holon_iri=r["holon"],
-                health=r["health"],
-                agent_iri=r.get("agent"),
-                timestamp=r.get("timestamp"),
-            )
-            for r in validation_rows
-        ]
+        .. versionchanged:: 0.7.0
+            Added ``limit``, ``offset``, ``since``, ``kind``.
+        """
+        traversals = []
+        validations = []
+
+        if kind in (None, "traversal"):
+            tq = Q.COLLECT_TRAVERSALS
+            # Strip existing ORDER BY clause for re-ordering
+            if "ORDER BY" in tq:
+                tq = tq[: tq.index("ORDER BY")].rstrip()
+            if since:
+                # Insert FILTER before closing }
+                tq = tq.rstrip().rstrip("}")
+                tq += (
+                    f"  FILTER(?timestamp > "
+                    f'"{since}"^^<http://www.w3.org/2001/'
+                    f"XMLSchema#dateTime>)\n}}\n"
+                )
+            tq += "\nORDER BY DESC(?timestamp)"
+            if limit is not None:
+                tq += f"\nLIMIT {int(limit)}"
+            if offset is not None:
+                tq += f"\nOFFSET {int(offset)}"
+
+            traversals = [
+                TraversalRecord(
+                    activity_iri=r["activity"],
+                    source_iri=r["source"],
+                    target_iri=r["target"],
+                    agent_iri=r.get("agent"),
+                    portal_label=r.get("label"),
+                    timestamp=r.get("timestamp"),
+                )
+                for r in self.backend.query(tq)
+            ]
+
+        if kind in (None, "validation"):
+            vq = Q.COLLECT_VALIDATIONS
+            # Strip existing ORDER BY clause
+            if "ORDER BY" in vq:
+                vq = vq[: vq.index("ORDER BY")].rstrip()
+            if since:
+                vq = vq.rstrip().rstrip("}")
+                vq += (
+                    f"  FILTER(?timestamp > "
+                    f'"{since}"^^<http://www.w3.org/2001/'
+                    f"XMLSchema#dateTime>)\n}}\n"
+                )
+            vq += "\nORDER BY DESC(?timestamp)"
+            if limit is not None:
+                vq += f"\nLIMIT {int(limit)}"
+            if offset is not None:
+                vq += f"\nOFFSET {int(offset)}"
+
+            validations = [
+                ValidationRecord(
+                    activity_iri=r["activity"],
+                    holon_iri=r["holon"],
+                    health=r["health"],
+                    agent_iri=r.get("agent"),
+                    timestamp=r.get("timestamp"),
+                )
+                for r in self.backend.query(vq)
+            ]
 
         # Collect derivation chain
         derivation_rows = self.backend.query(Q.COLLECT_DERIVATION_CHAIN)
@@ -2333,6 +2532,71 @@ class HolonicDataset:
                     merged += g
 
         return merged
+
+    def holarchy_summary(
+        self,
+        *,
+        max_age: timedelta | None = None,
+        recent_limit: int = 10,
+    ):
+        """Return an aggregated health snapshot of the holarchy.
+
+        Collects holon/portal counts, root count, membrane health
+        distribution, staleness count, and recent activities in a
+        single call. Designed for dashboards that need a consolidated
+        overview without making 4+ separate SPARQL round-trips.
+
+        Parameters
+        ----------
+        max_age :
+            Staleness threshold. Defaults to 1 hour.
+        recent_limit :
+            Number of recent activities to include.
+
+        Returns:
+        -------
+        HolarchySummary
+
+        .. versionadded:: 0.7.0
+        """
+        from holonic.console_model import HolarchySummary
+
+        holons = self.list_holons()
+        portals = self.backend.query(Q.ALL_PORTALS)
+        roots = [
+            h
+            for h in holons
+            if not self.backend.query(
+                f"PREFIX cga: <urn:holonic:ontology:> "
+                f"SELECT ?p WHERE {{ GRAPH ?g {{ "
+                f"<{h.iri}> cga:memberOf ?p }} }} LIMIT 1"
+            )
+        ]
+
+        # Health distribution
+        health_dist: dict[str, int] = {
+            "intact": 0,
+            "weakened": 0,
+            "compromised": 0,
+        }
+        for h in holons:
+            result = self.validate_membrane(h.iri)
+            health_dist[result.health.value] += 1
+
+        # Staleness
+        stale = self.stale_holons(max_age=max_age)
+
+        # Recent activities
+        trail = self.collect_audit_trail(limit=recent_limit)
+
+        return HolarchySummary(
+            holon_count=len(holons),
+            portal_count=len(portals),
+            root_count=len(roots),
+            health_distribution=health_dist,
+            stale_count=len(stale),
+            recent_activities=(trail.traversals[:recent_limit]),
+        )
 
     def export_graph(
         self,
@@ -2828,6 +3092,82 @@ class HolonicDataset:
             )
             for r in rows
         ]
+
+    def get_activity(
+        self,
+        activity_iri: str,
+    ) -> TraversalRecord | ValidationRecord | None:
+        """Look up a single provenance activity by IRI.
+
+        Returns a :class:`TraversalRecord` if the activity has
+        ``prov:used`` and ``prov:generated`` predicates (indicating
+        a portal traversal), a :class:`ValidationRecord` if it has
+        ``cga:validatedHolon``, or None if not found.
+
+        .. versionadded:: 0.7.0
+        """
+        # Try as traversal first
+        rows = self.backend.query(f"""
+            PREFIX prov: <http://www.w3.org/ns/prov#>
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            SELECT ?source ?target ?agent ?label ?timestamp
+            WHERE {{
+                GRAPH ?g {{
+                    <{activity_iri}> a prov:Activity ;
+                        prov:used ?source ;
+                        prov:generated ?target .
+                    OPTIONAL {{
+                        <{activity_iri}> prov:wasAssociatedWith ?agent
+                    }}
+                    OPTIONAL {{
+                        <{activity_iri}> rdfs:label ?label
+                    }}
+                    OPTIONAL {{
+                        <{activity_iri}> prov:startedAtTime ?timestamp
+                    }}
+                }}
+            }} LIMIT 1
+        """)
+        if rows:
+            r = rows[0]
+            return TraversalRecord(
+                activity_iri=activity_iri,
+                source_iri=r["source"],
+                target_iri=r["target"],
+                agent_iri=r.get("agent"),
+                portal_label=r.get("label"),
+                timestamp=r.get("timestamp"),
+            )
+
+        # Try as validation
+        rows = self.backend.query(f"""
+            PREFIX prov: <http://www.w3.org/ns/prov#>
+            PREFIX cga:  <urn:holonic:ontology:>
+            SELECT ?holon ?health ?agent ?timestamp WHERE {{
+                GRAPH ?g {{
+                    <{activity_iri}> a prov:Activity ;
+                        cga:validatedHolon ?holon ;
+                        cga:membraneHealth ?health .
+                    OPTIONAL {{
+                        <{activity_iri}> prov:wasAssociatedWith ?agent
+                    }}
+                    OPTIONAL {{
+                        <{activity_iri}> prov:startedAtTime ?timestamp
+                    }}
+                }}
+            }} LIMIT 1
+        """)
+        if rows:
+            r = rows[0]
+            return ValidationRecord(
+                activity_iri=activity_iri,
+                holon_iri=r["holon"],
+                health=r["health"],
+                agent_iri=r.get("agent"),
+                timestamp=r.get("timestamp"),
+            )
+
+        return None
 
     def last_traversal(self, holon_iri: str) -> TraversalRecord | None:
         """Return the most recent traversal targeting a given holon.

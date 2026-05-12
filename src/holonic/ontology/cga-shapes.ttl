@@ -284,19 +284,10 @@ cga:AggregateHolonShape a sh:NodeShape ;
         sh:severity sh:Warning ;
         sh:message  "AggregateHolon should have a label."
     ] ;
-    sh:sparql [
-        sh:message  "AggregateHolon has interior data but no traversal provenance. Aggregate interiors should be populated by portal traversals, not direct writes." ;
-        sh:severity sh:Warning ;
-        sh:select """
-            SELECT $this WHERE {
-                $this cga:hasInterior ?interior .
-                FILTER NOT EXISTS {
-                    ?activity a prov:Activity ;
-                        prov:generated ?interior .
-                }
-            }
-        """
-    ] ;
+    # NOTE: provenance check (interior populated by traversal, not
+    # direct writes) removed. The SPARQL constraint queried the
+    # registry graph, but provenance lives in context graphs. The
+    # check belongs in runtime validation, not SHACL shapes.
     .
 
 

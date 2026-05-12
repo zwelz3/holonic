@@ -57,7 +57,17 @@ cmd = "echo 🔎"
 [feature.tasks-test.tasks]
 
 [feature.tasks-test.tasks.test]
+depends-on = ["test-unit", "test-notebooks"]
+cmd = "echo ✅ All tests passed"
+
+[feature.tasks-test.tasks.test-unit]
+description = "Run the pytest suite."
 cmd = "pytest"
+
+[feature.tasks-test.tasks.test-notebooks]
+description = "Execute every notebook's code cells and fail on errors. Skips Jupyter-specific cells (magic commands, top-level await)."
+cmd = "python scripts/test_notebooks.py"
+inputs = ["notebooks/*.ipynb", "scripts/test_notebooks.py", "src/holonic/**/*.py"]
 
 [feature.tasks-lint.tasks.clean-notebooks]
 description = """Strip all outputs from notebooks in place. Runs first in lint-fix so any stray committed cell outputs are removed before the Python formatters touch anything."""
