@@ -402,7 +402,7 @@ try:
     ds5 = HolonicDataset()
     ds5.add_holon("urn:h:a", "A")
     ds5.add_holon("urn:h:b", "B")
-    # Passing a huge depth should not crash — should clamp
+    # Passing a huge depth should not crash -- should clamp
     nb = ds5.holon_neighborhood("urn:h:a", depth=999)
     check("R6.6", True,
           "holon_neighborhood(depth=999) returns without error (clamped internally)",
@@ -431,7 +431,7 @@ check("R7.1", has_project_to_lpg and has_pipeline,
 
 # R7.2 project_to_lpg independent flags
 # Per the SPEC (aligned to implementation): collapse_types, collapse_literals,
-# resolve_blanks, resolve_lists — four independent booleans.
+# resolve_blanks, resolve_lists -- four independent booleans.
 sig = inspect.signature(project_to_lpg)
 required_flags = ["collapse_types", "collapse_literals", "resolve_blanks", "resolve_lists"]
 params = list(sig.parameters.keys())
@@ -489,7 +489,7 @@ for f in test_files:
     parse_into_count += src.count(".parse_into(")
     # heuristic: direct rdflib.Graph() construction in tests
     graph_constructor_count += src.count("rdflib.Graph()") + src.count("Graph()")
-# Not a hard rule — test utilities sometimes construct graphs. Report the ratio.
+# Not a hard rule -- test utilities sometimes construct graphs. Report the ratio.
 manual("R8.3", f"parse_into calls: {parse_into_count}; direct Graph() calls: {graph_constructor_count} (acceptable if most are in test utilities)")
 
 # R8.4: PyPI publishable as 'holonic'
@@ -584,7 +584,7 @@ check("R9.8", HolonicStore is not None and AbstractHolonicStore is not None,
       "HolonicStore (Protocol) and AbstractHolonicStore (ABC) both present",
       "ABC split incomplete")
 
-# R9.9: GraphBackend alias — removed in 0.5.0
+# R9.9: GraphBackend alias -- removed in 0.5.0
 migration_path = pathlib.Path("docs/MIGRATION.md")
 try:
     import holonic as _h
@@ -612,7 +612,7 @@ check("R9.11", has_holon_type and has_iter_holons and has_iter_portals_from,
       f"holon_type kwarg + iter_holons + iter_portals_from generators present",
       f"holon_type={has_holon_type} iter_holons={has_iter_holons} iter_portals_from={has_iter_portals_from}")
 
-# R9.12: SHOULD — lazy metadata mode
+# R9.12: SHOULD -- lazy metadata mode
 manual("R9.12", "metadata_updates='lazy' mode deferred to future release (SHOULD, evidence-gated)")
 
 # R9.13-R9.17: SHOULD/roadmap items, deferred
@@ -731,7 +731,7 @@ check("R9.22", subtype_discovery and sealed_has_no_query and extra_triples_prese
 # ──────────────────────────────────────────────────────────────
 
 print(f"{'='*80}")
-print(f"COMPREHENSIVE SPEC COMPLIANCE REPORT — holonic 0.4.2")
+print(f"COMPREHENSIVE SPEC COMPLIANCE REPORT -- holonic 0.4.2")
 print(f"{'='*80}")
 print()
 

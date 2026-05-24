@@ -1,6 +1,6 @@
 """Holonic store protocol and ABC (0.4.0).
 
-Any graph store — rdflib.Dataset, Fuseki, Oxigraph, GraphDB — can back
+Any graph store -- rdflib.Dataset, Fuseki, Oxigraph, GraphDB -- can back
 a HolonicDataset by satisfying the ``HolonicStore`` protocol. All
 methods operate on named graphs via IRIs and SPARQL strings; no
 rdflib types leak through the interface beyond ``rdflib.Graph`` for
@@ -23,14 +23,14 @@ generic Python fallbacks from the library's helpers (``MetadataRefresher``,
 Optional surface (0.4.0)
 ------------------------
 
-Minimal to start — see ``docs/DECISIONS.md`` § 0.4.0:
+Minimal to start -- see ``docs/DECISIONS.md`` § 0.4.0:
 
-- ``refresh_graph_metadata(graph_iri)`` — recompute per-graph metadata
+- ``refresh_graph_metadata(graph_iri)`` -- recompute per-graph metadata
   natively. Library dispatches to this if present; otherwise falls
   back to the Python ``MetadataRefresher``.
 
 Future 0.4.x extensions (scope walking, bulk load, pipeline
-execution) will be additive — a backend that implements none of them
+execution) will be additive -- a backend that implements none of them
 continues to work; a backend that implements some gets native speed
 for those operations.
 
@@ -61,7 +61,7 @@ class HolonicStore(Protocol):
     """Mandatory interface for a quad-aware graph store.
 
     Every backend must satisfy this protocol. The methods cover
-    named-graph CRUD and SPARQL dispatch — enough for all holonic
+    named-graph CRUD and SPARQL dispatch -- enough for all holonic
     operations when combined with the library's Python-side helpers
     (``MetadataRefresher``, ``ScopeResolver``, ``run_projection``).
 
@@ -133,7 +133,7 @@ class HolonicStore(Protocol):
         """Execute a SELECT query. Return list of binding dicts.
 
         Each dict maps variable names (without ``?``) to their values.
-        Values are strings (IRIs/literals) — callers convert as needed.
+        Values are strings (IRIs/literals) -- callers convert as needed.
         """
         ...
 
@@ -252,7 +252,7 @@ class AbstractHolonicStore(ABC):
         """Return True if the named graph contains at least one triple.
 
         Implementations SHOULD treat "does not exist" and "exists
-        but empty" as equivalent — both return False. Callers use
+        but empty" as equivalent -- both return False. Callers use
         this as a cheap presence check before committing to a full
         read.
         """

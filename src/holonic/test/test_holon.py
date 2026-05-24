@@ -140,7 +140,7 @@ class TestSummary:
 
     def test_summary_includes_portals(self, ds_with_holons):
         s = ds_with_holons.summary()
-        assert "Portal" in s or "→" in s
+        assert "Portal" in s or "->" in s
 
 
 class TestDefaultConstructor:

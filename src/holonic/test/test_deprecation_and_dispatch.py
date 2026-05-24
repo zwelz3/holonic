@@ -8,7 +8,7 @@ from holonic import HolonicDataset, RdflibBackend
 from holonic._metadata import MetadataRefresher
 
 # ══════════════════════════════════════════════════════════════
-# GraphBackend alias — REMOVED in 0.5.0
+# GraphBackend alias -- REMOVED in 0.5.0
 # ══════════════════════════════════════════════════════════════
 
 
@@ -37,7 +37,7 @@ def test_unknown_attribute_raises_attribute_error():
 
 
 # ══════════════════════════════════════════════════════════════
-# registry_graph — REMOVED in 0.5.0
+# registry_graph -- REMOVED in 0.5.0
 # ══════════════════════════════════════════════════════════════
 
 
@@ -181,7 +181,7 @@ class _NativeStore:
         self.native_calls: list[tuple[str, str]] = []
 
     def refresh_graph_metadata(self, graph_iri: str, registry_iri: str):
-        """Native hook — just record the call, return None."""
+        """Native hook -- just record the call, return None."""
         self.native_calls.append((graph_iri, registry_iri))
         # Return None to exercise the "materialize via read()" fallback
         return None
@@ -481,12 +481,12 @@ def test_summary_portal_shows_label():
     )
     s = ds.summary()
     assert "HR Sync" in s
-    # Should show label (source → target), not label: source → target
-    assert "HR Sync (a → b)" in s
+    # Should show label (source -> target), not label: source -> target
+    assert "HR Sync (a -> b)" in s
 
 
 def test_summary_portal_without_label():
-    """summary() shows source → target when no label is set."""
+    """summary() shows source -> target when no label is set."""
     ds = HolonicDataset()
     ds.add_holon("urn:holon:x", "X")
     ds.add_holon("urn:holon:y", "Y")
@@ -497,4 +497,4 @@ def test_summary_portal_without_label():
         "CONSTRUCT { ?s ?p ?o } WHERE { GRAPH ?g { ?s ?p ?o } }",
     )
     s = ds.summary()
-    assert "x → y" in s
+    assert "x -> y" in s

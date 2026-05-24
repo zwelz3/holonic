@@ -8,7 +8,7 @@ spec:holonic-001 a specl:Specification ;
     dct:title "Holonic Library — Graph-Native Holonic RDF Systems" ;
     dct:hasVersion "0.7.0" ;
     specl:status "prototype" ;
-    dct:created "2026-05-20"^^xsd:date ;
+    dct:created "2026-05-23"^^xsd:date ;
     specl:intent """Provide a Python library that implements Cagel's four-graph holon model on top of RDF named graphs, enabling distributed knowledge systems to expose genuine inside/outside distinction, governed traversal, and event-level provenance without inventing new query languages or wire protocols. The library is a client-side coordination layer in front of any quad-aware graph store (rdflib, Apache Jena Fuseki, Oxigraph, GraphDB) — not a graph database itself.""" ;
     specl:purpose """Make it practical to build holarchies for digital engineering, enterprise knowledge graphs, and agentic memory systems. A holon is a named IRI whose four layers (interior, boundary, projection, context) live as named graphs in the quad store; portals are RDF entities carrying SPARQL CONSTRUCT queries; membranes are SHACL shapes. All state lives in the graph. Python is a thin convenience layer over SPARQL and PROV-O.""" .
 

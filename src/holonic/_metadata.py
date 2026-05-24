@@ -104,13 +104,13 @@ class MetadataRefresher:
     Intended to be held by a ``HolonicDataset``. Exposes two write
     entry points:
 
-    - ``refresh_graph(graph_iri)`` — refresh one graph only.
-    - ``refresh_holon(holon_iri)`` — refresh all layer graphs of
+    - ``refresh_graph(graph_iri)`` -- refresh one graph only.
+    - ``refresh_holon(holon_iri)`` -- refresh all layer graphs of
       one holon, then write the rolled-up per-holon metadata.
 
     And one read:
 
-    - ``read(graph_iri)`` — return the currently-materialized
+    - ``read(graph_iri)`` -- return the currently-materialized
       ``GraphMetadata`` for a graph.
     """
 
@@ -225,8 +225,8 @@ class MetadataRefresher:
     ) -> None:
         """Compute and persist the per-holon rollup metadata.
 
-        - ``cga:interiorTripleCount`` — sum across interior graphs
-        - ``cga:holonLastModified`` — max of layer lastModified
+        - ``cga:interiorTripleCount`` -- sum across interior graphs
+        - ``cga:holonLastModified`` -- max of layer lastModified
         """
         # Sum interior triples
         interior_sum = 0

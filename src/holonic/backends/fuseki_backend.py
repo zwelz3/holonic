@@ -49,7 +49,7 @@ class FusekiBackend(AbstractHolonicStore):
         extra_headers: dict[str, str] | None = None,
         **client_kwargs: Any,
     ):
-        # Lazy import — don't require aiohttp unless this backend is used
+        # Lazy import -- don't require aiohttp unless this backend is used
         from holonic.backends._fuseki_client import FusekiClient
 
         self.base_url = base_url

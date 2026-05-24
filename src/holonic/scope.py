@@ -44,12 +44,12 @@ if TYPE_CHECKING:
 ResolveOrder = Literal["network", "reverse-network", "containment"]
 """BFS topology choice for ``ScopeResolver.resolve()``.
 
-- ``"network"`` — outbound portals followed by inbound portals.
+- ``"network"`` -- outbound portals followed by inbound portals.
   The default; matches how data actually flows through the holarchy.
-- ``"reverse-network"`` — inbound portals only. Useful for
+- ``"reverse-network"`` -- inbound portals only. Useful for
   "who depends on me?" queries and for debugging a holon's upstream
   reach.
-- ``"containment"`` — ``cga:memberOf`` chain in both directions
+- ``"containment"`` -- ``cga:memberOf`` chain in both directions
   (parent + descendants). Matches governance hierarchies rather than
   data-flow topologies.
 """
@@ -65,7 +65,7 @@ class ResolvePredicate(Protocol):
 
     Implementations render one or more SPARQL queries against the
     backend and interpret the result. Keep per-predicate state to a
-    minimum — predicates are evaluated once per candidate holon
+    minimum -- predicates are evaluated once per candidate holon
     during resolution.
     """
 

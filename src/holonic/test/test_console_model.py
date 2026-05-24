@@ -148,7 +148,7 @@ class TestNeighborhoodGraphologyShape:
                     source="urn:holon:foo",
                     target="urn:holon:bar",
                     edge_type="portal",
-                    label="Foo→Bar",
+                    label="Foo->Bar",
                     health="intact",
                     size=2.0,
                 )
@@ -160,6 +160,6 @@ class TestNeighborhoodGraphologyShape:
         assert edge["target"] == "urn:holon:bar"
         attrs = edge["attributes"]
         assert attrs["edgeType"] == "portal"
-        assert attrs["label"] == "Foo→Bar"
+        assert attrs["label"] == "Foo->Bar"
         assert attrs["health"] == "intact"
         assert attrs["size"] == 2.0

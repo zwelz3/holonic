@@ -83,6 +83,6 @@ def ds_with_holons(ds):
         "urn:holon:source",
         "urn:holon:target",
         construct,
-        label="Source → Target",
+        label="Source -> Target",
     )
     return ds

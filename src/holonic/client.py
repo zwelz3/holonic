@@ -405,7 +405,7 @@ class HolonicDataset:
 
         Note:
         ----
-        Depth is not stored — it is derivable from the cga:memberOf
+        Depth is not stored -- it is derivable from the cga:memberOf
         chain via ``compute_depth()``.
         """
         _validate_iri(iri, "iri")
@@ -577,7 +577,7 @@ class HolonicDataset:
         -------
         bool
             ``True`` if the holon existed and was removed. ``False`` if
-            the IRI was not found in the registry (idempotent — not an
+            the IRI was not found in the registry (idempotent -- not an
             error).
 
         Notes:
@@ -590,10 +590,10 @@ class HolonicDataset:
           / ``hasContext`` bindings in the registry
         - The layer graphs themselves (via ``backend.delete_graph``)
         - Graph-typing triples for the layer graphs (``cga:HolonicGraph``,
-          ``cga:graphRole`` — added by 0.3.4 eager typing)
+          ``cga:graphRole`` -- added by 0.3.4 eager typing)
         - Graph-level metadata records (``cga:tripleCount``,
           ``cga:lastModified``, ``cga:ClassInstanceCount`` inventory
-          records — added by 0.3.3)
+          records -- added by 0.3.3)
         - The per-holon rollup (``cga:holonLastModified``)
         - ``cga:memberOf`` triples where OTHER holons reference this
           holon as parent (those children become root-level; they are
@@ -603,7 +603,7 @@ class HolonicDataset:
 
         What is preserved:
 
-        - Child holons (they become parentless, not deleted — matches
+        - Child holons (they become parentless, not deleted -- matches
           the semantic that the containment relationship is dissolved,
           not the child)
         - Provenance activities referencing this holon (provenance is
@@ -664,7 +664,7 @@ class HolonicDataset:
         )
         portal_iris = [str(r["portal"]) for r in portal_rows]
 
-        # Suppress per-step metadata refresh during cascading cleanup —
+        # Suppress per-step metadata refresh during cascading cleanup --
         # we'll fire one consolidated refresh at the end.
         original_mode = self._metadata_updates
         self._metadata_updates = "off"
@@ -1132,10 +1132,10 @@ class HolonicDataset:
             block before parsing. Useful for portal subclasses that
             carry extra predicates. Applied to both the boundary graph
             and the registry mirror. The string should NOT include
-            ``@prefix`` declarations — the method prepends the
+            ``@prefix`` declarations -- the method prepends the
             standard prefix block.
         label :
-            Human-readable label. Defaults to "<source> → <target>".
+            Human-readable label. Defaults to "<source> -> <target>".
         graph_iri :
             Explicit boundary graph IRI. Defaults to
             ``"<source_iri>/boundary"``.
@@ -1187,7 +1187,7 @@ class HolonicDataset:
             _validate_iri(graph_iri, "graph_iri")
         graph_iri = graph_iri or f"{source_iri}/boundary"
         # TODO to_pithy_id
-        lbl = label or f"{source_iri} → {target_iri}"
+        lbl = label or f"{source_iri} -> {target_iri}"
 
         # Extract any @prefix lines from extra_ttl so they can be placed
         # at the top of the combined Turtle block (prefix declarations
@@ -1242,7 +1242,7 @@ class HolonicDataset:
         -------
         bool
             ``True`` if the portal existed and was removed. ``False`` if
-            the IRI was not found in any graph (idempotent — not an
+            the IRI was not found in any graph (idempotent -- not an
             error).
 
         Notes:
@@ -1478,7 +1478,7 @@ class HolonicDataset:
         traversal specification.
 
         Raises :class:`SealedPortalError` if the portal is a
-        ``cga:SealedPortal`` — traversal is explicitly blocked regardless
+        ``cga:SealedPortal`` -- traversal is explicitly blocked regardless
         of whether the portal carries a CONSTRUCT query.
 
         Parameters
@@ -1496,7 +1496,7 @@ class HolonicDataset:
         """
         from holonic.model import SealedPortalError
 
-        # Check portal type — SealedPortal blocks traversal
+        # Check portal type -- SealedPortal blocks traversal
         type_rows = self.backend.query(f"""
             PREFIX cga: <urn:holonic:ontology:>
             SELECT ?type WHERE {{
@@ -1520,11 +1520,11 @@ class HolonicDataset:
         # Source layer scoping: determine what the CONSTRUCT runs against.
         #
         # Priority:
-        #   1. Explicit cga:sourceLayer on the portal → honor it
-        #   2. Source holon has projection graphs → scope to projections
+        #   1. Explicit cga:sourceLayer on the portal -> honor it
+        #   2. Source holon has projection graphs -> scope to projections
         #      (projections exist to be the governed view; raw interiors
         #      may contain PII or other data the portal should not see)
-        #   3. No projections → full dataset (backward compat)
+        #   3. No projections -> full dataset (backward compat)
         #
         # BREAKING in 0.6.0: portals that previously accessed raw
         # interiors will now be scoped to projections if the source
@@ -2698,16 +2698,16 @@ class HolonicDataset:
             tgt = r["target"].rsplit("/", 1)[-1].rsplit(":", 1)[-1]
             lbl = r.get("label")
             if lbl:
-                lines.append(f"    {lbl} ({src} → {tgt})")
+                lines.append(f"    {lbl} ({src} -> {tgt})")
             else:
-                lines.append(f"    {src} → {tgt}")
+                lines.append(f"    {src} -> {tgt}")
 
         return "\n".join(lines)
 
     def compute_depth(self, holon_iri: str | None = None):
         """Compute nesting depth from the cga:memberOf chain.
 
-        Depth is not stored — it is derived from structure.  A root
+        Depth is not stored -- it is derived from structure.  A root
         holon (no memberOf) has depth 0.  Each memberOf hop adds 1.
 
         Uses a simple SPARQL query to fetch direct memberOf pairs from
@@ -2724,7 +2724,7 @@ class HolonicDataset:
         Returns:
         -------
         HolarchyTree
-            Dict-like object (``tree[iri]`` → depth) that also carries
+            Dict-like object (``tree[iri]`` -> depth) that also carries
             parent/child relationships and labels.  ``print(tree)``
             renders the holarchy as an indented tree.
         """
@@ -2796,14 +2796,14 @@ class HolonicDataset:
     #
     # These methods support operator-tool browsers that need cheaper
     # listing queries and graph-shaped neighborhood payloads. They
-    # are additive — the existing list_holons/get_holon return the
+    # are additive -- the existing list_holons/get_holon return the
     # richer HolonInfo type and remain unchanged.
     # ══════════════════════════════════════════════════════════
 
     def list_holons_summary(self) -> list[HolonSummary]:
         """Return lightweight holon summaries for browser/list views.
 
-        Single SPARQL query — no per-holon layer fan-out. Use
+        Single SPARQL query -- no per-holon layer fan-out. Use
         ``get_holon_detail()`` for the full picture of one holon.
         """
         rows = self.backend.query(Q.COLLECT_HOLONS)
@@ -2847,7 +2847,7 @@ class HolonicDataset:
             classification=match.classification,
             member_of=match.member_of,
         )
-        # Layer graphs — same per-predicate queries used by list_holons
+        # Layer graphs -- same per-predicate queries used by list_holons
         for predicate, attr in (
             (Q.GET_HOLON_INTERIORS, "interior_graphs"),
             (Q.GET_HOLON_BOUNDARIES, "boundary_graphs"),
@@ -2871,7 +2871,7 @@ class HolonicDataset:
 
         # Per-layer metadata from the registry. Added 0.3.3. Any layer
         # graph with no materialized metadata is simply absent from the
-        # dict — callers should not assume full coverage.
+        # dict -- callers should not assume full coverage.
         all_layer_graphs = (
             detail.interior_graphs
             + detail.boundary_graphs
@@ -3062,7 +3062,7 @@ class HolonicDataset:
     ) -> list[TraversalRecord]:
         """Return recorded traversals attributable to a single portal.
 
-        See note in ``sparql.py`` PORTAL_TRAVERSAL_HISTORY_TEMPLATE —
+        See note in ``sparql.py`` PORTAL_TRAVERSAL_HISTORY_TEMPLATE --
         scoped by (source, target) pair, since the current provenance
         schema does not store the portal IRI as a structured triple.
         Returns an empty list if the portal is not registered.
@@ -3071,7 +3071,7 @@ class HolonicDataset:
         if portal is None:
             return []
 
-        # Clamp limit defensively — runaway value would let a caller
+        # Clamp limit defensively -- runaway value would let a caller
         # pull the full audit history.
         safe_limit = max(1, min(int(limit), 10_000))
 
@@ -3472,7 +3472,7 @@ class HolonicDataset:
             lines.append(f'    rdfs:comment "{_escape_ttl(spec.description)}" ;')
 
         if not spec.steps:
-            # Empty pipeline — no steps, close the spec
+            # Empty pipeline -- no steps, close the spec
             lines[-1] = lines[-1].rstrip(" ;") + " ."
             return "\n".join(lines)
 
@@ -3558,7 +3558,7 @@ class HolonicDataset:
         """Return projection pipelines attached to a holon.
 
         Each summary carries just iri, name, description, and step
-        count — use ``get_pipeline(iri)`` for full step content.
+        count -- use ``get_pipeline(iri)`` for full step content.
         """
         from holonic.console_model import ProjectionPipelineSummary
 

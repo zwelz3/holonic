@@ -107,7 +107,7 @@ class PortalInfo(_DictMixin):
     def __repr__(self) -> str:
         lbl = self.label or self.iri.rsplit(":", 1)[-1]
         ptype = self.portal_type.rsplit(":", 1)[-1] if self.portal_type else "Portal"
-        return f"{ptype}({lbl}: {self.source_iri} → {self.target_iri})"
+        return f"{ptype}({lbl}: {self.source_iri} -> {self.target_iri})"
 
 
 @dataclass
@@ -161,7 +161,7 @@ class HolarchyTree(_DictMixin):
         connector = "└── " if is_last else "├── "
         label = self.labels.get(iri, iri.rsplit(":", 1)[-1])
         if not prefix:
-            # Root node — no connector
+            # Root node -- no connector
             lines.append(label)
         else:
             lines.append(f"{prefix}{connector}{label}")
@@ -220,7 +220,7 @@ class SealedPortalError(ValueError):
     def __init__(self, portal_iri: str):
         self.portal_iri = portal_iri
         super().__init__(
-            f"Portal {portal_iri} is sealed — traversal is explicitly blocked. "
+            f"Portal {portal_iri} is sealed -- traversal is explicitly blocked. "
             f"Reclassify to TransformPortal to enable traversal."
         )
 
@@ -323,7 +323,7 @@ class AuditTrail(_DictMixin):
         if self.traversals:
             lines.append("\n  Pipeline:")
             for i, t in enumerate(self.traversals):
-                arrow = "→"
+                arrow = "->"
                 v = self.validation_for(t.target_iri)
                 health = f" [{v.health_label}]" if v else ""
                 lines.append(f"    {i + 1}. {t.source_label} {arrow} {t.target_label}{health}")

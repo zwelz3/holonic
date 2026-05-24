@@ -58,7 +58,7 @@ def _filter_display_attrs(
 def _format_value(val: Any, max_len: int = 35) -> str:
     """Format a value for display in a node attribute line."""
     if isinstance(val, dict):
-        # Nested blank node — show key count
+        # Nested blank node -- show key count
         return f"{{...{len(val)} fields}}"
     if isinstance(val, list):
         if len(val) <= 3:

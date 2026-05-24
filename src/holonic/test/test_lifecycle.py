@@ -11,7 +11,7 @@ Covers:
 from holonic import HolonicDataset, RdflibBackend
 
 # ══════════════════════════════════════════════════════════════
-# Change 3 — extensible add_portal()
+# Change 3 -- extensible add_portal()
 # ══════════════════════════════════════════════════════════════
 
 
@@ -121,7 +121,7 @@ class TestAddPortalExtensibility:
 
 
 # ══════════════════════════════════════════════════════════════
-# Change 2 — remove_portal()
+# Change 2 -- remove_portal()
 # ══════════════════════════════════════════════════════════════
 
 
@@ -216,7 +216,7 @@ class TestRemovePortal:
 
 
 # ══════════════════════════════════════════════════════════════
-# Change 1 — remove_holon()
+# Change 1 -- remove_holon()
 # ══════════════════════════════════════════════════════════════
 
 
@@ -232,8 +232,8 @@ class TestRemoveHolon:
             ├── child_a  (interior + boundary + context)
             └── child_b  (interior only)
 
-            portal: child_a → child_b
-            portal: child_b → child_a
+            portal: child_a -> child_b
+            portal: child_b -> child_a
         """
         ds.add_holon("urn:holon:root", "Root")
         ds.add_holon("urn:holon:child_a", "Child A", member_of="urn:holon:root")
@@ -407,7 +407,7 @@ class TestRemoveHolonWithEagerMetadata:
         ds.remove_holon("urn:holon:a")
         # Registry metadata should reflect the absence of the layer graph.
         # Query the registry for any metadata records referencing the
-        # removed graph — there should be none.
+        # removed graph -- there should be none.
         rows = list(
             ds.query(
                 """

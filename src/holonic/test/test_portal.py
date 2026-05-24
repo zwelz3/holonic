@@ -81,20 +81,20 @@ class TestPathFinding:
         ds.add_interior("urn:holon:b", "")
         ds.add_interior("urn:holon:c", "")
 
-        # A → B → C (no direct A → C)
+        # A -> B -> C (no direct A -> C)
         ds.add_portal(
             "urn:portal:a-to-b",
             "urn:holon:a",
             "urn:holon:b",
             "CONSTRUCT { ?s a <urn:T> } WHERE { ?s a <urn:T> }",
-            label="A→B",
+            label="A->B",
         )
         ds.add_portal(
             "urn:portal:b-to-c",
             "urn:holon:b",
             "urn:holon:c",
             "CONSTRUCT { ?s a <urn:T> } WHERE { ?s a <urn:T> }",
-            label="B→C",
+            label="B->C",
         )
 
         path = ds.find_path("urn:holon:a", "urn:holon:c")
@@ -104,7 +104,7 @@ class TestPathFinding:
         assert path[1].target_iri == "urn:holon:c"
 
     def test_self_path_returns_none_without_self_portal(self, ds_with_holons):
-        # No source → source portal exists, so BFS finds nothing
+        # No source -> source portal exists, so BFS finds nothing
         path = ds_with_holons.find_path("urn:holon:source", "urn:holon:source")
         assert path is None
 

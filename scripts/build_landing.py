@@ -21,13 +21,13 @@ Everything the `holonic` library does that doesn't require external services:
 - ✅ Projections (CONSTRUCT + Python transforms)
 - ✅ Scope resolution across the holarchy
 - ✅ Projection pipelines with the plugin system
-- ✅ Dispatch patterns (synchronous, event-queue, asyncio) — notebook 10
+- ✅ Dispatch patterns (synchronous, event-queue, asyncio) -- notebook 10
 
 ## What doesn't work here
 
-- ❌ `FusekiBackend` — no HTTP in the browser sandbox
-- ❌ `yfiles-jupyter-graphs` visualization widgets (notebook 11) — requires a Jupyter server extension that pyodide can't provide
-- ❌ `holonic-migrate-registry` CLI — no subprocess invocation in pyodide
+- ❌ `FusekiBackend` -- no HTTP in the browser sandbox
+- ❌ `yfiles-jupyter-graphs` visualization widgets (notebook 11) -- requires a Jupyter server extension that pyodide can't provide
+- ❌ `holonic-migrate-registry` CLI -- no subprocess invocation in pyodide
 
 If you want the full feature set, install locally with `pip install holonic` and clone the example notebooks from the repository.
 
@@ -61,17 +61,17 @@ print(ds.summary())"""),
 
 The file browser on the left side has the full set of example notebooks:
 
-- **01–05** — Foundations: holons, portals, translation, projections, topology visualization
-- **06** — Console dataclasses for web UI consumption
-- **07** — Graph-level metadata (triple counts, class inventory, refresh policies)
-- **08** — Scope resolution (BFS predicates over the holarchy)
-- **09** — Projection plugins (entry-point-discovered transforms)
-- **10** — Dispatch patterns (synchronous, event-queue, asyncio)
-- **11** — Interactive visualization (won't run here; local Jupyter only)
+- **01-05** -- Foundations: holons, portals, translation, projections, topology visualization
+- **06** -- Console dataclasses for web UI consumption
+- **07** -- Graph-level metadata (triple counts, class inventory, refresh policies)
+- **08** -- Scope resolution (BFS predicates over the holarchy)
+- **09** -- Projection plugins (entry-point-discovered transforms)
+- **10** -- Dispatch patterns (synchronous, event-queue, asyncio)
+- **11** -- Interactive visualization (won't run here; local Jupyter only)
 
 Start with `01_holon_basics.ipynb` if this is your first time.
 
-Notebooks 01–10 use only the base `holonic` package which you installed above. Notebook 11 attempts to install `holonic[viz]` for yFiles widgets, but the yFiles JupyterLab extension is not available in Pyodide — so that notebook is better run locally."""),
+Notebooks 01-10 use only the base `holonic` package which you installed above. Notebook 11 attempts to install `holonic[viz]` for yFiles widgets, but the yFiles JupyterLab extension is not available in Pyodide -- so that notebook is better run locally."""),
 ]
 
 nb.cells = cells

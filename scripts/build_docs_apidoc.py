@@ -7,7 +7,7 @@ that crawls the entire repo root. This script iterates over each
 library under ``libraries/`` and invokes sphinx-apidoc against only
 that library's package directory.
 
-Services are NOT processed — they have their own documentation trees
+Services are NOT processed -- they have their own documentation trees
 and will be wrapped via MyST include directives in
 ``docs/source/services/<name>.md``.
 

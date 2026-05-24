@@ -2,7 +2,7 @@
 
 All widgets query the HolonicDataset via SPARQL and project through
 the projections module before rendering.  No direct Python object
-traversal — the dataset is the source of truth.
+traversal -- the dataset is the source of truth.
 
 Classes
 -------
@@ -11,7 +11,7 @@ HolonViz
     SHACL shape tables, and edge-reduced topology.
 
 HolarchyViz
-    Visualize the holarchy topology — collapsed (holons as nodes) or
+    Visualize the holarchy topology -- collapsed (holons as nodes) or
     expanded (layers visible per holon).
 
 SPARQLExplorer
@@ -478,8 +478,8 @@ class SPARQLExplorer:
     """Interactive SPARQL CONSTRUCT explorer linked to graph visualization.
 
     Executes CONSTRUCT queries against the HolonicDataset and renders
-    results through the projections module — types collapsed, literals
-    inlined, blank nodes resolved — before visualization.
+    results through the projections module -- types collapsed, literals
+    inlined, blank nodes resolved -- before visualization.
 
     Includes:
       - Namespace manager (auto-generates PREFIX declarations)
@@ -493,7 +493,7 @@ class SPARQLExplorer:
     ds :
         A HolonicDataset instance.
     namespaces :
-        Additional namespace prefix → IRI mappings.
+        Additional namespace prefix -> IRI mappings.
     layout :
         Default layout algorithm.
 

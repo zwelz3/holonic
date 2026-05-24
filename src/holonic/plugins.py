@@ -8,16 +8,16 @@ reference transforms by registered name.
 
 This module exposes:
 
-- ``projection_transform(name)`` — decorator for first-party
+- ``projection_transform(name)`` -- decorator for first-party
   transforms in ``holonic.projections``. Register a function
   under a name that pipelines can reference.
-- ``get_registered_transforms()`` — returns ``dict[str, Callable]``
+- ``get_registered_transforms()`` -- returns ``dict[str, Callable]``
   of all discovered transforms (first-party + third-party).
-- ``resolve_transform(name)`` — return the callable for a given
+- ``resolve_transform(name)`` -- return the callable for a given
   registered name, or raise ``TransformNotFoundError``.
-- ``transform_version(name)`` — return ``pkg-name==version`` for
+- ``transform_version(name)`` -- return ``pkg-name==version`` for
   a registered transform, for provenance recording.
-- ``host_metadata()`` — return a dict of host/platform/runtime
+- ``host_metadata()`` -- return a dict of host/platform/runtime
   metadata to include in projection-run activities.
 
 See ``docs/DECISIONS.md`` § 0.3.5 for rationale.

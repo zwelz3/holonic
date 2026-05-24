@@ -59,7 +59,7 @@ def _primary_type(node: ProjectedNode) -> str:
 
 
 # ══════════════════════════════════════════════════════════════
-# ProjectedGraph → yFiles data
+# ProjectedGraph -> yFiles data
 # ══════════════════════════════════════════════════════════════
 
 
@@ -128,7 +128,7 @@ def projected_to_yfiles(
 
 
 # ══════════════════════════════════════════════════════════════
-# Holon → yFiles (via HolonicDataset)
+# Holon -> yFiles (via HolonicDataset)
 # ══════════════════════════════════════════════════════════════
 
 
@@ -184,7 +184,7 @@ def holon_to_yfiles(
             }
         )
 
-    # Map layer role → (query_template, layer_name)
+    # Map layer role -> (query_template, layer_name)
     layer_specs = {
         "interior": (GET_HOLON_INTERIORS, "interior"),
         "boundary": (GET_HOLON_BOUNDARIES, "boundary"),
@@ -315,7 +315,7 @@ def _holarchy_expanded(
 
 
 # ══════════════════════════════════════════════════════════════
-# Holarchy topology → yFiles
+# Holarchy topology -> yFiles
 # ══════════════════════════════════════════════════════════════
 
 
@@ -347,7 +347,7 @@ def holarchy_to_yfiles(
 
 
 # ══════════════════════════════════════════════════════════════
-# SPARQL result → yFiles (for SPARQLExplorer)
+# SPARQL result -> yFiles (for SPARQLExplorer)
 # ══════════════════════════════════════════════════════════════
 
 

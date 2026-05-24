@@ -1,4 +1,4 @@
-"""holonic — Graph-native holonic RDF systems.
+"""holonic -- Graph-native holonic RDF systems.
 
 A lightweight Python client for building holonic knowledge graphs
 backed by rdflib, Apache Jena Fuseki, or any SPARQL-compliant store.

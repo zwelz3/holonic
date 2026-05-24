@@ -50,14 +50,14 @@ def populated_ds():
         "urn:holon:alpha",
         "urn:holon:beta",
         construct,
-        label="Alpha → Beta",
+        label="Alpha -> Beta",
     )
     ds.add_portal(
         "urn:portal:beta-to-alpha",
         "urn:holon:beta",
         "urn:holon:alpha",
         construct,
-        label="Beta → Alpha",
+        label="Beta -> Alpha",
     )
     return ds
 

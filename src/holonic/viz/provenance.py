@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from holonic.model import AuditTrail
 
-# ── Health → color mapping ──
+# ── Health -> color mapping ──
 
 HEALTH_COLORS = {
     "INTACT": "#22c55e",  # green
@@ -258,7 +258,7 @@ class ProvenanceViz:
         A HolonicDataset instance.
     layout :
         yFiles layout algorithm.  Default: hierarchic (best for
-        pipelines — left-to-right flow).
+        pipelines -- left-to-right flow).
     show_surface :
         If True, nodes display boundary contract summaries.
     show_agents :
@@ -389,7 +389,7 @@ class ProvenanceViz:
 
         # Detailed traversal report
         for i, t in enumerate(a.traversals):
-            print(f"  Hop {i + 1}: {t.source_label} → {t.target_label}")
+            print(f"  Hop {i + 1}: {t.source_label} -> {t.target_label}")
             if t.portal_label:
                 print(f"    Portal:    {t.portal_label}")
             if t.agent_iri:

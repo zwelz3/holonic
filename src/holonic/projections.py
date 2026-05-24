@@ -43,7 +43,7 @@ log = logging.getLogger(__name__)
 
 
 CONSTRUCT_STRIP_TYPES = """
-# Strip rdf:type triples — useful when type is encoded as a node
+# Strip rdf:type triples -- useful when type is encoded as a node
 # attribute in the downstream representation.
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 CONSTRUCT {{
@@ -56,7 +56,7 @@ WHERE {{
 """
 
 CONSTRUCT_OBJECT_PROPERTIES_ONLY = """
-# Retain only object properties (IRI objects) — data properties
+# Retain only object properties (IRI objects) -- data properties
 # become node attributes in the downstream representation.
 CONSTRUCT {{
     ?s ?p ?o .
@@ -152,7 +152,7 @@ def build_construct(
     un-escaped) and the placeholder is substituted with either a
     ``GRAPH <iri>`` clause or an empty string.
 
-    If the placeholder is absent, the template is returned as-is —
+    If the placeholder is absent, the template is returned as-is --
     letting callers pass raw CONSTRUCT queries through ``add_construct``
     without having to escape every brace for ``str.format``.
     """
@@ -192,7 +192,7 @@ class ProjectedEdge:
 
     def __repr__(self):
         p = self.predicate.rsplit("/", 1)[-1].rsplit("#", 1)[-1]
-        return f"Edge({self.source.rsplit(':', 1)[-1]} —{p}→ {self.target.rsplit(':', 1)[-1]})"
+        return f"Edge({self.source.rsplit(':', 1)[-1]} --{p}-> {self.target.rsplit(':', 1)[-1]})"
 
 
 @dataclass
@@ -316,7 +316,7 @@ def project_to_lpg(
     if resolve_blanks:
         for s, p, o in graph:
             if isinstance(o, BNode) and o not in list_heads:
-                # Track parent → blank mapping
+                # Track parent -> blank mapping
                 blank_parents[o] = (s, p)
 
     # ── Pass 3: build nodes and edges ──
@@ -400,7 +400,7 @@ def project_to_lpg(
                         projected.nodes[s_str].attributes[p_str] = nested
                 continue
 
-        # ── Object property → edge ──
+        # ── Object property -> edge ──
         if isinstance(o, URIRef):
             o_str = str(o)
             # Ensure target node exists
@@ -473,8 +473,8 @@ class ProjectionStep:
     """A single step in a projection pipeline."""
 
     name: str
-    construct: str | None = None  # SPARQL CONSTRUCT (graph→graph)
-    transform: Callable[[Graph], Graph] | None = None  # Python (graph→graph)
+    construct: str | None = None  # SPARQL CONSTRUCT (graph->graph)
+    transform: Callable[[Graph], Graph] | None = None  # Python (graph->graph)
 
     def apply(self, source: Graph, backend=None) -> Graph:
         """Apply this step to a source graph."""
@@ -493,7 +493,7 @@ class ProjectionPipeline:
 
     Steps are applied sequentially.  Each step takes the output of
     the previous step as input.  Steps can be SPARQL CONSTRUCTs
-    (staying in RDF) or Python functions (Graph→Graph).
+    (staying in RDF) or Python functions (Graph->Graph).
 
     The final output can optionally be converted to a ProjectedGraph
     via project_to_lpg().
@@ -534,7 +534,7 @@ class ProjectionPipeline:
         name: str,
         fn: Callable[[Graph], Graph],
     ) -> ProjectionPipeline:
-        """Add a Python transform step (Graph→Graph)."""
+        """Add a Python transform step (Graph->Graph)."""
         self.steps.append(ProjectionStep(name=name, transform=fn))
         return self
 
@@ -563,7 +563,7 @@ class ProjectionPipeline:
 
 
 # ══════════════════════════════════════════════════════════════
-# Convenience: common projection functions (Graph→Graph)
+# Convenience: common projection functions (Graph->Graph)
 # ══════════════════════════════════════════════════════════════
 
 
@@ -581,7 +581,7 @@ def strip_blank_nodes(graph: Graph) -> Graph:
 
 
 def extract_types(graph: Graph) -> dict[str, list[str]]:
-    """Extract a mapping of subject IRI → list of rdf:type IRIs.
+    """Extract a mapping of subject IRI -> list of rdf:type IRIs.
 
     This is the companion to type-stripping: extract the types first,
     then strip them from the graph.
@@ -606,7 +606,7 @@ def filter_by_class(graph: Graph, class_iri: str) -> Graph:
 def localize_predicates(graph: Graph) -> Graph:
     """Replace full predicate IRIs with their local names.
 
-    `http://example.org/ontology#hasName` → `hasName` (as a new IRI
+    `http://example.org/ontology#hasName` -> `hasName` (as a new IRI
     in a local namespace).  Useful for visualization where full IRIs
     clutter edge labels.
     """
@@ -630,11 +630,11 @@ def localize_predicates(graph: Graph) -> Graph:
 #
 # extract_types is not registered (returns a dict, not a Graph).
 # filter_by_class is not registered (requires a class_iri argument;
-# 0.3.5 pipeline steps do not carry per-step arguments — see
+# 0.3.5 pipeline steps do not carry per-step arguments -- see
 # D-0.3.5-9).
 # ══════════════════════════════════════════════════════════════
 
-from holonic.plugins import (  # noqa: E402 — deferred import: wraps transforms defined above
+from holonic.plugins import (  # noqa: E402 -- deferred import: wraps transforms defined above
     projection_transform as _projection_transform,
 )
 

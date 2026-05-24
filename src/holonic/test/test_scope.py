@@ -27,7 +27,7 @@ def _portal_from(ds, source, target, label=None):
 
 @pytest.fixture
 def linear_chain():
-    """A → B → C → D. Each holon has an interior with one rdf:type."""
+    """A -> B -> C -> D. Each holon has an interior with one rdf:type."""
     ds = HolonicDataset(RdflibBackend())
     for name, cls in [("a", "Alpha"), ("b", "Beta"), ("c", "Gamma"), ("d", "Delta")]:
         ds.add_holon(f"urn:holon:{name}", name.upper())
@@ -116,7 +116,7 @@ def test_resolve_returns_matches_in_bfs_order(star_topology):
         max_depth=2,
     )
     assert len(matches) == 3
-    # All should be at distance 1 — before hub matches itself (0) if hub
+    # All should be at distance 1 -- before hub matches itself (0) if hub
     # had been Spoke-typed, which it isn't
     for m in matches:
         assert m.distance == 1
@@ -248,7 +248,7 @@ def test_custom_sparql_predicate(linear_chain):
 
 def test_max_depth_clamped_to_zero_floor(linear_chain):
     ds = linear_chain
-    # Negative max_depth clamps to 0 — starting holon only
+    # Negative max_depth clamps to 0 -- starting holon only
     matches = ds.resolve(
         HasClassInInterior("urn:ex:Alpha"),
         from_holon="urn:holon:a",

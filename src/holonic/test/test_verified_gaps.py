@@ -231,7 +231,7 @@ class TestTraverseInteriorRegistration:
 
 
 # ══════════════════════════════════════════════════════════
-# [1.2] traverse_path() — multi-hop traversal
+# [1.2] traverse_path() -- multi-hop traversal
 # ══════════════════════════════════════════════════════════
 
 

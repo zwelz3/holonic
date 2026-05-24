@@ -118,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
 
     plan = _plan(ds)
     if not plan:
-        print("nothing to do — every layer graph is already typed.")
+        print("nothing to do -- every layer graph is already typed.")
         return 0
 
     print(f"plan ({len(plan)} graphs to type):")
@@ -128,7 +128,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.apply:
         print()
-        print("dry run — pass --apply to write these triples.")
+        print("dry run -- pass --apply to write these triples.")
         return 0
 
     n = _apply(ds, plan)

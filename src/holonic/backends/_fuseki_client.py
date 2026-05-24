@@ -39,8 +39,8 @@ class FusekiClient:
     # ------------------------------------------------------------------
     # Fuseki dataset type constants (used when creating datasets)
     # ------------------------------------------------------------------
-    DB_TYPE_TDB2 = "tdb2"  # Persistent – TDB2 (recommended)
-    DB_TYPE_TDB1 = "tdb"  # Persistent – TDB1 (legacy)
+    DB_TYPE_TDB2 = "tdb2"  # Persistent - TDB2 (recommended)
+    DB_TYPE_TDB1 = "tdb"  # Persistent - TDB1 (legacy)
     DB_TYPE_MEM = "mem"  # In-memory (non-persistent)
 
     def __init__(
@@ -63,7 +63,7 @@ class FusekiClient:
         self.default_ct = default_graph_content_type
         # Extra headers merged into every outbound request. Per-call
         # headers (e.g. Content-Type, Accept) take precedence over
-        # these — useful for bearer tokens, mTLS-handshake hints,
+        # these -- useful for bearer tokens, mTLS-handshake hints,
         # tenant identifiers passed through by the console.
         self.extra_headers: dict[str, str] = dict(extra_headers or {})
 
@@ -193,7 +193,7 @@ class FusekiClient:
         return await resp.json(content_type=None)
 
     # ==================================================================
-    # Dataset management  (Fuseki Admin API – /$/datasets)
+    # Dataset management  (Fuseki Admin API - /$/datasets)
     # ==================================================================
 
     async def list_datasets(self) -> list[dict[str, Any]]:
@@ -262,7 +262,7 @@ class FusekiClient:
         Raises:
         ------
         FusekiError
-            If the server rejects the request (e.g. dataset already exists → 409).
+            If the server rejects the request (e.g. dataset already exists -> 409).
         """
         ds = self._resolve_dataset(dataset)
 
@@ -292,7 +292,7 @@ class FusekiClient:
     ) -> dict[str, Any]:
         """Return dataset info if it already exists; otherwise create it first.
 
-        This is an idempotent operation — safe to call repeatedly without
+        This is an idempotent operation -- safe to call repeatedly without
         side effects on an existing dataset.
 
         Parameters
@@ -327,14 +327,14 @@ class FusekiClient:
         )
 
         if resp.status == 200:
-            # Dataset already exists — return its metadata
+            # Dataset already exists -- return its metadata
             log.debug("Dataset '%s' already exists", ds)
             try:
                 return await resp.json(content_type=None)
             except Exception:
                 return {"ds.name": f"/{ds}", "status": "exists"}
 
-        # --- Does not exist — create it -----------------------------------
+        # --- Does not exist -- create it -----------------------------------
         log.info("Dataset '%s' not found; creating with dbType=%s", ds, db_type)
         await self.create_dataset(dataset=ds, db_type=db_type)
 
@@ -363,7 +363,7 @@ class FusekiClient:
         Raises:
         ------
         FusekiError
-            If the server rejects the request (e.g. dataset not found → 404).
+            If the server rejects the request (e.g. dataset not found -> 404).
         """
         ds = self._resolve_dataset(dataset)
         url = f"{self._admin_datasets_endpoint}/{ds}"

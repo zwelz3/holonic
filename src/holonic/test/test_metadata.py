@@ -17,7 +17,7 @@ def test_utc_now_iso_format():
     ts = _utc_now_iso()
     assert ts.endswith("Z")
     assert "T" in ts
-    # Microsecond precision — a fractional second component with 6 digits
+    # Microsecond precision -- a fractional second component with 6 digits
     assert "." in ts
     frac = ts.split(".")[1].rstrip("Z")
     assert len(frac) == 6
@@ -60,7 +60,7 @@ def test_invalid_mode_raises():
 
 
 # ══════════════════════════════════════════════════════════════
-# Eager mode — metadata materializes on add_interior
+# Eager mode -- metadata materializes on add_interior
 # ══════════════════════════════════════════════════════════════
 
 
@@ -102,7 +102,7 @@ def test_eager_mode_refreshes_on_add_boundary():
 
 
 # ══════════════════════════════════════════════════════════════
-# Off mode — no automatic metadata
+# Off mode -- no automatic metadata
 # ══════════════════════════════════════════════════════════════
 
 
@@ -181,7 +181,7 @@ def test_refresh_after_external_mutation_reconciles():
     )
     assert ds.get_graph_metadata(gi).triple_count == 1
 
-    # Direct backend write — bypasses _maybe_refresh
+    # Direct backend write -- bypasses _maybe_refresh
     ds.backend.parse_into(
         gi,
         """
@@ -190,7 +190,7 @@ def test_refresh_after_external_mutation_reconciles():
         """,
         "turtle",
     )
-    # Stale — still reports 1
+    # Stale -- still reports 1
     assert ds.get_graph_metadata(gi).triple_count == 1
 
     # Explicit refresh reconciles

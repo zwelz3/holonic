@@ -135,7 +135,7 @@ class TestShapesValidateRegistry:
 
         # allow_infos=True so advisory shapes (HolonStewardshipShape)
         # don't cause conforms=False.  Info severity is intentionally
-        # non-blocking — it nudges, it doesn't constrain.
+        # non-blocking -- it nudges, it doesn't constrain.
         conforms, _, _ = pyshacl.validate(
             registry,
             shacl_graph=shapes,
@@ -170,7 +170,7 @@ class TestPortalSubtypeShapeSemantics:
         loaded_ds.add_interior("urn:holon:a", "<urn:x> a <urn:T> .")
         loaded_ds.add_holon("urn:holon:b", "B")
         loaded_ds.add_interior("urn:holon:b", "<urn:y> a <urn:T> .")
-        # Transform portal with no query — violates TransformPortalShape
+        # Transform portal with no query -- violates TransformPortalShape
         loaded_ds.add_portal(
             "urn:portal:incomplete",
             source_iri="urn:holon:a",

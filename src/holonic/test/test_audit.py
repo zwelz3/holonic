@@ -9,7 +9,7 @@ from holonic.model import (
 )
 
 # ══════════════════════════════════════════════════════════════
-# AuditTrail dataclass — pure unit tests, no client
+# AuditTrail dataclass -- pure unit tests, no client
 # ══════════════════════════════════════════════════════════════
 
 
@@ -80,7 +80,7 @@ class TestAuditTrailModel:
                     activity_iri="urn:prov:traversal:1",
                     source_iri="urn:holon:a",
                     target_iri="urn:holon:b",
-                    portal_label="A→B",
+                    portal_label="A->B",
                     timestamp="2026-04-05T12:00:00",
                 ),
             ],
@@ -96,7 +96,7 @@ class TestAuditTrailModel:
         assert "Traversals:  1" in s
         assert "Validations: 1" in s
         assert "Holons:" in s
-        assert "A→B" in s or "a → b" in s
+        assert "A->B" in s or "a -> b" in s
 
     def test_summary_includes_surfaces(self):
         a = AuditTrail(
@@ -144,7 +144,7 @@ class TestRecordLabels:
 
 
 # ══════════════════════════════════════════════════════════════
-# collect_audit_trail — integration with the client
+# collect_audit_trail -- integration with the client
 # ══════════════════════════════════════════════════════════════
 
 

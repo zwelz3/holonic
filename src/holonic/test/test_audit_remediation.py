@@ -15,7 +15,7 @@ from rdflib import URIRef
 from holonic import HolonicDataset, MembraneHealth
 
 # ══════════════════════════════════════════════════════════════
-# C1 — Turtle injection neutralized
+# C1 -- Turtle injection neutralized
 # ══════════════════════════════════════════════════════════════
 
 
@@ -72,7 +72,7 @@ class TestTurtleInjection:
 
 
 # ══════════════════════════════════════════════════════════════
-# C2 — get_graph returns a copy
+# C2 -- get_graph returns a copy
 # ══════════════════════════════════════════════════════════════
 
 
@@ -128,7 +128,7 @@ class TestGetGraphCopySemantics:
 
 
 # ══════════════════════════════════════════════════════════════
-# S4 — IRI validation
+# S4 -- IRI validation
 # ══════════════════════════════════════════════════════════════
 
 
@@ -214,7 +214,7 @@ class TestIRIValidation:
 
 
 # ══════════════════════════════════════════════════════════════
-# M1 — SHACL report graph parsing
+# M1 -- SHACL report graph parsing
 # ══════════════════════════════════════════════════════════════
 
 
@@ -289,7 +289,7 @@ class TestSHACLReportGraphParsing:
 
 
 # ══════════════════════════════════════════════════════════════
-# M3 — batch() context manager
+# M3 -- batch() context manager
 # ══════════════════════════════════════════════════════════════
 
 

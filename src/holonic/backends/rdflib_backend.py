@@ -1,6 +1,6 @@
 """rdflib.Dataset backend for holonic.
 
-This is the default backend — zero infrastructure, pure Python.
+This is the default backend -- zero infrastructure, pure Python.
 Uses rdflib.Dataset (a ConjunctiveGraph with explicit named-graph support)
 as the quad store.
 """

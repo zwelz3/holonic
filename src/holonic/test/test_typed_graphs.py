@@ -125,7 +125,7 @@ def test_migration_plan_empty_when_all_typed():
         "urn:holon:h1",
         "@prefix ex: <urn:ex:> . <urn:ex:a> a ex:Thing .",
     )
-    # Every graph is typed eagerly — nothing to migrate
+    # Every graph is typed eagerly -- nothing to migrate
     assert _plan(ds) == []
 
 

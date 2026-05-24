@@ -125,6 +125,17 @@ def run_notebook(path: str) -> tuple[bool, str]:
 
 
 def main() -> int:
+    # Force UTF-8 output on Windows (cp1252 can't encode box-drawing
+    # and symbol characters used in viz formatters and repr methods).
+    import io
+    import os
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    elif os.name == "nt":
+        sys.stdout = io.TextIOWrapper(
+            sys.stdout.buffer, encoding="utf-8", errors="replace",
+        )
+
     paths = sorted(glob.glob("notebooks/[0-9]*.ipynb"))
     if not paths:
         print("No notebooks found in notebooks/")
