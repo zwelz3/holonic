@@ -122,6 +122,39 @@ metadata refresh and fires one consolidated refresh on exit.
 boundary via `_validate_iri()`. Labels are escaped via `_escape_ttl()`
 to prevent Turtle injection.
 
+## Consumer Integration (0.7.0)
+
+**Paginated audit trail.** `collect_audit_trail(limit=, offset=,
+since=, kind=)` pushes filtering to the SPARQL engine via
+`ORDER BY DESC(?timestamp) LIMIT/OFFSET`. Calling with no
+arguments returns the full trail (backward compatible).
+
+**Activity lookup.** `get_activity(activity_iri)` returns a
+`TraversalRecord` or `ValidationRecord` for a single provenance
+activity. Eliminates the O(all) scan through `collect_audit_trail()`.
+
+**SPARQL classification.** `classify_sparql(query)` returns the
+query form (`'select'`, `'ask'`, `'construct'`, `'describe'`,
+`'update'`). Strips comments and string literals before matching.
+
+**IRI validation.** `validate_iri(iri)` is the public entry point
+to the library's IRI validation. Raises `ValueError` for unsafe
+characters.
+
+**Dashboard summary.** `holarchy_summary(max_age=, recent_limit=)`
+returns a `HolarchySummary` with holon count, portal count, root
+count, health distribution, staleness count, and recent activities.
+
+**Notification hooks.** `on_traversal(callback)` and
+`on_validation(callback)` register callbacks that fire
+synchronously after each `traverse()` or `validate_membrane()`.
+Eliminates polling for same-process event detection.
+
+**Structured violations.** `ShapeViolation` dataclass with
+`shape_iri`, `focus_node`, `path`, `value`, `message`, `severity`.
+`MembraneResult.shape_violations` carries a `list[ShapeViolation]`
+populated from the pyshacl report graph.
+
 ## Store Protocol (0.4.0)
 
 ```{eval-rst}

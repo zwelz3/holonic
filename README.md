@@ -281,6 +281,8 @@ The roadmap is tracked as `R9.*` requirements in [`docs/SPEC.md`](./docs/SPEC.md
 - Federation semantics across multiple registries (OQ7)
 - Async variant of `HolonicStore` (R2.5)
 - Resolve SHACL target-class gap for fail_on_breach (OQ11)
+- Holarchy graph with `to_graphology()` (upstream #7)
+- `find_path()` adjacency caching (upstream #9)
 
 See [`docs/source/dom-comparison.md`](./docs/source/dom-comparison.md) for the framing of how the current synchronous API already maps onto DOM concepts; the open question is whether explicit machinery is warranted.
 

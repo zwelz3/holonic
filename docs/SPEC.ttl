@@ -851,9 +851,8 @@ spec:OQ5 a specl:OpenIssue ;
 
 spec:OQ6 a specl:OpenIssue ;
     specl:partOf spec:holonic-001 ;
-    dct:description "Protocol rename (`GraphBackend` to `HolonicStore`) remains unresolved from issue #4 Option D." ;
-    specl:owner "zwelz3" ;
-    specl:recommendation "Ship the rename in 0.4.0 as a breaking change with a deprecated alias kept through 0.4.x. Shipped via R9.8, R9.9." ;
+    dct:description "Protocol rename (`GraphBackend` to `HolonicStore`). Resolved in 0.4.0 via R9.8, R9.9. Deprecated alias removed in 0.5.0 via R9.18." ;
+    specl:resolutionStatus "resolved" ;
     specl:resolutionStatus "resolved" .
 
 spec:OQ7 a specl:OpenIssue ;

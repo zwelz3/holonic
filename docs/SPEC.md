@@ -562,7 +562,7 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
   - acceptance: Given a membrane violation, when `validate_membrane()` returns, then `result.shape_violations[0].focus_node` identifies the offending node.
   - verifiedBy: src/holonic/test/test_audit_remediation.py::TestSHACLReportParsing
 
-### Remaining for 0.8.0+
+### Deferred to 0.8.0+
 
 # User Stories
 
@@ -646,9 +646,8 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
   - recommendation: Make metadata updates opt-in via a constructor kwarg. Shipped in 0.3.3 as metadata_updates="eager"|"off" on HolonicDataset.
   - status: resolved
 
-- OQ6 Protocol rename (`GraphBackend` to `HolonicStore`) remains unresolved from issue #4 Option D.
-  - owner: zwelz3
-  - recommendation: Ship the rename in 0.4.0 as a breaking change with a deprecated alias kept through 0.4.x. Shipped via R9.8, R9.9.
+- OQ6 Protocol rename (`GraphBackend` to `HolonicStore`). Resolved in 0.4.0 via R9.8, R9.9. Deprecated alias removed in 0.5.0 via R9.18.
+  - status: resolved
   - status: resolved
 
 - OQ7 Federation semantics across multiple registries are out of scope for 0.3.x. Open question preserved because the typed-graph design (R9.1) should not close the door on registry-to-registry declarations like `cga:federatesWith`.
