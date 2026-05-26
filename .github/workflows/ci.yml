@@ -96,7 +96,7 @@ jobs:
           environments: dev
 
       - name: Sync notebooks to JupyterLite content
-        run: pixi run -e dev sync_notebooks_to_jlite
+        run: pixi run -e dev sync_jl
 
       - name: Build JupyterLite site
         run: pixi run -e dev build_jl
