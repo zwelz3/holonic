@@ -19,7 +19,7 @@ build:
     # live in jupyterlite/requirements.txt.
     pre_build:
       - pip install "jupyterlite-core>=0.4" "jupyterlite-pyodide-kernel>=0.4" "jupyterlab>=4,<5" "notebook>=7,<8"
-      - python scripts/sync_notebooks_to_jlite.py
+      - python scripts/sync_jl.py
       - mkdir -p docs/source/_extra
       - cd jupyterlite && jupyter lite build --output-dir ../docs/source/_extra/jupyterlite
 

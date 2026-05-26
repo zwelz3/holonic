@@ -1,9 +1,4 @@
-# Dependencies installed into the JupyterLite pyodide kernel.
-# These wheels must be pure-python or have pyodide builds available.
-#
-# holonic is unpinned here because JupyterLite pulls the latest from
-# PyPI at build time. Rebuild the JupyterLite site after each holonic
-# release to pick up changes.
+# JupyterLite build environment.
 name: jupyterlite-env
 channels:
   - https://repo.prefix.dev/emscripten-forge
@@ -12,7 +7,5 @@ dependencies:
   - pip
   - pip:
     - holonic
-  - rdflib
-  - pyshacl
-  - pydantic>=2.0.0
-  - jinja2
+    - rdflib>=7.0.0
+    - pyshacl>=0.26.0

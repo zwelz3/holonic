@@ -641,7 +641,7 @@ check("R9.18", alias_removed and not has_registry_graph,
 jlite_content = pathlib.Path("jupyterlite/content")
 jlite_config = pathlib.Path("jupyterlite/jupyter_lite_config.json")
 rtd_config = pathlib.Path(".readthedocs.yaml")
-sync_script = pathlib.Path("scripts/sync_notebooks_to_jlite.py")
+sync_script = pathlib.Path("scripts/sync_jl.py")
 landing = pathlib.Path("jupyterlite/content/00_start_here.ipynb")
 all_present = all([jlite_content.is_dir(), jlite_config.exists(),
                    rtd_config.exists(), sync_script.exists(), landing.exists()])

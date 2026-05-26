@@ -34,7 +34,6 @@ pip = ">=25"
 polars = "*"
 rdflib = ">=7.0.0"
 pyshacl = ">=0.26.0"
-pydantic =  ">=2.0.0"
 jinja2 = ">=3.1.0"
 python-docx = ">=1.0.0"
 jupytext = "*"
@@ -162,7 +161,7 @@ cwd = "jupyterlite"
 inputs = ["jupyterlite/content/*.ipynb", "jupyterlite/requirements.txt", "jupyterlite/jupyter_lite_config.json"]
 outputs = ["docs/source/_extra/jupyterlite/index.html"]
 
-[feature.tasks-jlite.tasks.sync_notebooks_to_jlite]
+[feature.tasks-jlite.tasks.sync_jl]
 description = "Copy the latest example notebooks into jupyterlite/content so the next JupyterLite build serves them"
 cmd = "python scripts/sync_notebooks_to_jlite.py"
 inputs = ["notebooks/*.ipynb"]
