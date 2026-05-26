@@ -122,7 +122,7 @@ metadata refresh and fires one consolidated refresh on exit.
 boundary via `_validate_iri()`. Labels are escaped via `_escape_ttl()`
 to prevent Turtle injection.
 
-## Consumer Integration (0.7.0)
+## Consumer Integration (0.7.1)
 
 **Paginated audit trail.** `collect_audit_trail(limit=, offset=,
 since=, kind=)` pushes filtering to the SPARQL engine via

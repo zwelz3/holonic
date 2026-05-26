@@ -1,7 +1,7 @@
 ---
 spec_id: holonic-001
 title: Holonic Library — Graph-Native Holonic RDF Systems
-version: 0.7.0
+version: 0.7.1
 status: prototype
 authors: [zwelz3]
 ---
@@ -518,7 +518,7 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
   - acceptance: Given a traversal with agent_iri, when `freshness()` is called, then a `timedelta` is returned.
   - verifiedBy: src/holonic/test/test_verified_gaps.py::TestStalenessTracking
 
-### Shipped in 0.7.0
+### Shipped in 0.7.1
 
 - R9.38 `collect_audit_trail()` MUST accept optional `limit`, `offset`, `since`, and `kind` parameters for SPARQL-level pagination. Filtering is pushed to the SPARQL engine via `ORDER BY DESC(?timestamp) LIMIT/OFFSET` and `FILTER(?timestamp > ...)`. Calling with no arguments returns the full trail (backward compatible).
   - priority: MUST
@@ -686,7 +686,7 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
 @prefix skos:    <http://www.w3.org/2004/02/skos/core#> .
 ```
 
-# Appendix B: Module Map (0.7.0)
+# Appendix B: Module Map (0.7.1)
 
 ```
 src/holonic/
