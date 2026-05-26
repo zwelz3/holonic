@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.1] - 2026-05-25 (bugfix)
+
+- Fix jlite by adding explicit holonic install for each `.ipynb`. 
+- Remove unused `pydantic` import. 
+
 ## [0.7.0] - 2026-05-11
 
 Upstream consumer integration and API surface expansion. Driven by
