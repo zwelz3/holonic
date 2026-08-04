@@ -158,14 +158,21 @@ depends-on = ["lint-check", "test", "build_html_docs"]
 description = "Build the JupyterLite static site into docs/source/_extra/jupyterlite so Sphinx html_extra_path picks it up"
 cmd = "mkdir -p ../docs/source/_extra && jupyter lite build --output-dir ../docs/source/_extra/jupyterlite"
 cwd = "jupyterlite"
-inputs = ["jupyterlite/content/*.ipynb", "jupyterlite/jupyter_lite_config.json"]
+inputs = [
+  "jupyterlite/content/*.ipynb",
+  "jupyterlite/jupyter_lite_config.json",
+  "jupyterlite/jupyter-lite.json",
+]
 outputs = ["docs/source/_extra/jupyterlite/index.html"]
 
 [feature.tasks-jlite.tasks.sync_jl]
 description = "Copy the latest example notebooks into jupyterlite/content so the next JupyterLite build serves them"
 cmd = "python scripts/sync_notebooks_to_jlite.py"
 inputs = ["notebooks/*.ipynb"]
-outputs = ["jupyterlite/content/01_holon_basics.ipynb"]
+outputs = [
+  "jupyterlite/content/01_holon_basics.ipynb",
+  "jupyterlite/jupyter-lite.json",
+]
 
 [feature.tasks-lab.tasks.serve]
 description = "Serve local jupyterlab"
