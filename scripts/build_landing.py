@@ -35,7 +35,10 @@ If you want the full feature set, install locally with `pip install holonic` and
 
 The cell below installs holonic into the pyodide environment. Run this once per session; subsequent notebooks inherit the installed package."""),
 
-    nbf.v4.new_code_cell("""%pip install --quiet holonic
+    nbf.v4.new_code_cell("""try:
+    %pip install --quiet holonic
+except Exception:
+    %pip install --quiet holonic --force-reinstall
 
 import holonic
 print(f"holonic version: {holonic.__version__}")"""),
