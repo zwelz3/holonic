@@ -52,3 +52,5 @@ docs/source/_extra/
 # Other
 rdf_gen/
 data/render_templates/
+.devcontainer
+.mcp.json
