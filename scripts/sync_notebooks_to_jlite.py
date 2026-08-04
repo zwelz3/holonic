@@ -10,10 +10,17 @@ Each copied notebook gets an install cell injected at the top so that
 holonic is available regardless of which notebook the user opens first.
 Nothing pre-installs holonic into the Pyodide environment, so every
 notebook has to install it for itself.
+
+Also writes jupyterlite/jupyter-lite.json, keying the browser contents
+store to a hash of the notebooks so a new build supersedes the copies
+JupyterLite persists in IndexedDB. Note this is the *runtime* config
+shipped to the browser, not the build-time jupyter_lite_config.json.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import pathlib
 import sys
 
@@ -34,7 +41,15 @@ _PIP_CELL_SOURCE = """# holonic-jlite-install
 try:
     %pip install --quiet holonic
 except Exception:
-    %pip install --quiet holonic --force-reinstall
+    try:
+        %pip install --quiet holonic --force-reinstall
+    except Exception:
+        print(
+            "holonic failed to install. Your browser may be holding a partial "
+            "wheel: reopen this page in a private window, or clear site data "
+            "for this origin, then re-run this cell."
+        )
+        raise
 
 import holonic
 print(f"holonic {holonic.__version__}")
@@ -87,6 +102,55 @@ def _sync_landing_install_cell(target: pathlib.Path) -> bool:
     return True
 
 
+def _content_hash(target: pathlib.Path) -> str:
+    """Hash the synced notebooks, stably across platforms.
+
+    ``nbformat.write`` emits platform-native line endings, so hashing raw bytes
+    would give a Windows checkout and Linux CI different answers and leave
+    ``jupyter-lite.json`` permanently dirty. Normalize before hashing.
+    """
+    digest = hashlib.sha256()
+    for path in sorted(target.glob("*.ipynb")):
+        digest.update(path.name.encode("utf-8"))
+        text = path.read_text(encoding="utf-8").replace("\r\n", "\n")
+        digest.update(text.encode("utf-8"))
+    return digest.hexdigest()[:12]
+
+
+def _write_storage_stamp(target: pathlib.Path) -> bool:
+    """Stamp ``contentsStorageName`` with a hash of the notebook content.
+
+    JupyterLite copies a notebook into browser IndexedDB the first time it is
+    opened and run, and from then on that local copy shadows whatever the site
+    serves. A reader who visited before a fix shipped keeps running the old
+    cell, with no indication anything is stale -- and no fix inside the cell can
+    reach them, because their copy contains the *old* cell.
+
+    Keying the storage name to the content sidesteps that: new notebooks mean a
+    different IndexedDB database, so the served copy wins. Reloads in between
+    deploys still persist normally.
+
+    Only contents are stamped. Settings and workspaces hold theme and layout
+    preferences that have nothing to do with staleness, so they are left alone.
+    """
+    lite_json = target.parent / "jupyter-lite.json"
+
+    config: dict = {}
+    if lite_json.is_file():
+        config = json.loads(lite_json.read_text(encoding="utf-8"))
+
+    config.setdefault("jupyter-lite-schema-version", 0)
+    config_data = config.setdefault("jupyter-config-data", {})
+
+    name = f"holonic-jlite-{_content_hash(target)}"
+    if config_data.get("contentsStorageName") == name:
+        return False
+
+    config_data["contentsStorageName"] = name
+    lite_json.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    return True
+
+
 def main() -> int:
     source = pathlib.Path("notebooks")
     target = pathlib.Path("jupyterlite/content")
@@ -117,6 +181,10 @@ def main() -> int:
 
     if _sync_landing_install_cell(target):
         print("  00_start_here.ipynb (install cell refreshed)")
+
+    # After the landing page, so its install cell is part of the hash.
+    if _write_storage_stamp(target):
+        print("  jupyter-lite.json (contents storage name restamped)")
 
     return 0
 

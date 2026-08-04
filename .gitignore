@@ -54,3 +54,4 @@ rdf_gen/
 data/render_templates/
 .devcontainer
 .mcp.json
+.tmp/
