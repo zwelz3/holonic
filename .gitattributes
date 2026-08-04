@@ -1,0 +1,9 @@
+# Notebooks are generated artifacts: scripts/sync_notebooks_to_jlite.py
+# rewrites jupyterlite/content/ on every CI docs build, and that build runs on
+# Linux. Without this, a notebook written on Windows (the pixi env here is a
+# Windows build) lands as CRLF, and the next Linux sync rewrites every line --
+# turning a one-cell change into a whole-file diff.
+#
+# After adding or changing a rule here, run once:
+#     git add --renormalize . && git commit -m "normalize notebook line endings"
+*.ipynb text eol=lf

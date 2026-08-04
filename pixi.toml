@@ -158,7 +158,7 @@ depends-on = ["lint-check", "test", "build_html_docs"]
 description = "Build the JupyterLite static site into docs/source/_extra/jupyterlite so Sphinx html_extra_path picks it up"
 cmd = "mkdir -p ../docs/source/_extra && jupyter lite build --output-dir ../docs/source/_extra/jupyterlite"
 cwd = "jupyterlite"
-inputs = ["jupyterlite/content/*.ipynb", "jupyterlite/requirements.txt", "jupyterlite/jupyter_lite_config.json"]
+inputs = ["jupyterlite/content/*.ipynb", "jupyterlite/jupyter_lite_config.json"]
 outputs = ["docs/source/_extra/jupyterlite/index.html"]
 
 [feature.tasks-jlite.tasks.sync_jl]

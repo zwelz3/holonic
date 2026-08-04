@@ -1,7 +1,0 @@
-# Dependencies for the JupyterLite pyodide kernel.
-# Notebooks install holonic at runtime via %pip install cells
-# injected by scripts/sync_jl.py.
-
-holonic
-rdflib>=7.0.0
-pyshacl>=0.26.0
