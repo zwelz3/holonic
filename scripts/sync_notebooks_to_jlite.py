@@ -23,6 +23,10 @@ import nbformat
 # Marker kept out of the cell body so detection survives edits to the snippet.
 _PIP_MARKER = "# holonic-jlite-install"
 
+# Fixed cell id. ``new_code_cell`` mints a random one per call, which would
+# leave every notebook dirty after each sync even when nothing changed.
+_PIP_CELL_ID = "holonic-jlite-install"
+
 _PIP_CELL_SOURCE = """# holonic-jlite-install
 # The retry is deliberate: a stale browser cache can leave a partial wheel
 # behind, and a plain install keeps failing until the user clears the cache
@@ -35,6 +39,14 @@ except Exception:
 import holonic
 print(f"holonic {holonic.__version__}")
 """
+
+
+def _make_pip_cell() -> nbformat.NotebookNode:
+    """Build the install cell with a stable id so syncs stay reproducible."""
+    cell = nbformat.v4.new_code_cell(_PIP_CELL_SOURCE)
+    cell.metadata["tags"] = ["remove-output"]
+    cell["id"] = _PIP_CELL_ID
+    return cell
 
 
 def _has_pip_install(nb: nbformat.NotebookNode) -> bool:
@@ -69,9 +81,7 @@ def _sync_landing_install_cell(target: pathlib.Path) -> bool:
     else:
         # No install cell at all -- reinstate one. The smoke test further down
         # imports holonic, so the landing page breaks without it.
-        pip_cell = nbformat.v4.new_code_cell(_PIP_CELL_SOURCE)
-        pip_cell.metadata["tags"] = ["remove-output"]
-        nb.cells.insert(1 if nb.cells else 0, pip_cell)
+        nb.cells.insert(1 if nb.cells else 0, _make_pip_cell())
 
     nbformat.write(nb, landing)
     return True
@@ -97,9 +107,7 @@ def main() -> int:
 
         # Inject %pip install cell at the top if not already present
         if not _has_pip_install(nb):
-            pip_cell = nbformat.v4.new_code_cell(_PIP_CELL_SOURCE)
-            pip_cell.metadata["tags"] = ["remove-output"]
-            nb.cells.insert(0, pip_cell)
+            nb.cells.insert(0, _make_pip_cell())
 
         nbformat.write(nb, target / nb_path.name)
         copied += 1
