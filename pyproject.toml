@@ -6,7 +6,6 @@ requires = [
 
 [project]
 name = "holonic"
-version = "0.7.1"
 description = "Graph-native holonic RDF systems"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -29,6 +28,9 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
   "Topic :: Scientific/Engineering",
   "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dynamic = [
+  "version",
 ]
 dependencies = [
   "pyshacl>=0.25",
