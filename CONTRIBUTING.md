@@ -59,8 +59,13 @@ For style, see [STYLE_GUIDE](STYLE_GUIDE.md).
 
 ## Making Pull Requests
 
-The valid target for all pull requests is `dev`. Please ensure that your pull request includes
+The valid target for all pull requests is `main`. Please ensure that your pull request includes
 documentation and explanation for its purpose and sufficient documentation to explain its usage.
+
+> **TBD (post-1.0):** a long-lived `dev` branch is planned once the API stabilizes at `1.0`.
+> At that point `dev` becomes the default PR target and `main` tracks released versions only.
+> Until then, `main` is the single target — not to be confused with the `dev` *pixi
+> environment* (`pixi run -e dev ...`), which is unrelated.
 
 ## Versioning
 
