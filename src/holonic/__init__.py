@@ -4,7 +4,7 @@ A lightweight Python client for building holonic knowledge graphs
 backed by rdflib, Apache Jena Fuseki, or any SPARQL-compliant store.
 """
 
-__version__ = "0.7.0"
+__version__ = "0.7.1"
 
 from holonic.backends import AbstractHolonicStore, HolonicStore, RdflibBackend
 from holonic.client import HolonicDataset, classify_sparql, validate_iri

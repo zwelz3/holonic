@@ -1,5 +1,6 @@
 """Sphinx configuration for holonic documentation."""
 
+import importlib.metadata
 import os
 import pathlib
 import sys
@@ -9,7 +10,15 @@ sys.path.insert(0, os.path.abspath(".."))
 project = "holonic"
 copyright = "2026, Zachary Welz"
 author = "Zachary Welz"
-release = "0.7.1"
+
+# Single source of truth is holonic.__version__ (flit reads it into the
+# package metadata via `dynamic = ["version"]`). RTD installs the package
+# before Sphinx runs, so the lookup succeeds there; the fallback only
+# matters for a bare `sphinx-build` against an uninstalled checkout.
+try:
+    release = importlib.metadata.version("holonic")
+except importlib.metadata.PackageNotFoundError:  # pragma: no cover
+    release = "0.0.0+unknown"
 
 extensions = [
     "sphinx.ext.autodoc",
