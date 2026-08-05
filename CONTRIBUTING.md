@@ -61,3 +61,49 @@ For style, see [STYLE_GUIDE](STYLE_GUIDE.md).
 
 The valid target for all pull requests is `dev`. Please ensure that your pull request includes
 documentation and explanation for its purpose and sufficient documentation to explain its usage.
+
+## Versioning
+
+### There is exactly one version to edit
+
+`__version__` in [`src/holonic/__init__.py`](src/holonic/__init__.py) is the single source of
+truth. To change the version, edit that one line. Nothing else.
+
+Two files **derive** from it automatically — do not edit them, and revert them if a tool does:
+
+| File | How it derives |
+| --- | --- |
+| `pyproject.toml` | `dynamic = ["version"]`; flit reads `__version__` out of the module at build time |
+| `docs/source/conf.py` | `importlib.metadata.version("holonic")` |
+
+Two files are **checked** against it, because they are prose a human writes:
+
+| File | On mismatch |
+| --- | --- |
+| `CHANGELOG.md` (newest `## [x.y.z]` heading) | Test failure. A release whose changelog names a different version is a defect readers see on PyPI and GitHub. |
+| `docs/SPEC.md` (frontmatter `version:`) | Warning only. The spec is allowed its own cadence — a wording clarification need not imply a library release — so confirm the divergence is intentional and move on. |
+
+`docs/SPEC.ttl` is generated from `docs/SPEC.md` by `pixi run -e spec spec-translate`, so its
+`dct:hasVersion` follows the frontmatter and is never edited by hand.
+
+Both checks live in `src/holonic/test/test_version_consistency.py` and run as part of
+`pixi r -e dev test`.
+
+### The release cycle
+
+Versions follow [PEP 440](https://peps.python.org/pep-0440/). Between releases the version
+carries a `.dev0` suffix and `CHANGELOG.md` opens with `## [Unreleased]`; the changelog check
+skips while that heading is in place, so day-to-day PRs are unaffected.
+
+1. **Cut the release.** Drop the `.dev0` suffix from `__version__`, and rename the
+   `## [Unreleased]` changelog heading to `## [x.y.z] - <date>`. The two must agree or CI fails.
+2. **Merge the release PR, then tag `vx.y.z` on the merge commit and push the tag.** The tag
+   is what triggers the PyPI publish job in `.github/workflows/ci.yml`.
+3. **Open the next cycle.** File a post-release PR using the
+   [post-release template](.github/PULL_REQUEST_TEMPLATE/post-release.md): bump `__version__`
+   to the next `.dev0`, reopen `## [Unreleased]`, and record what went wrong so the next
+   release goes better. Open it with:
+
+   ```text
+   https://github.com/zwelz3/holonic/compare/main...<your-branch>?template=post-release.md
+   ```
