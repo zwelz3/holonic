@@ -71,6 +71,12 @@ optional-dependencies.notebooks = [
   "jupytext>=1.16",
 ]
 optional-dependencies.test = [
+  # ipykernel/nbclient/nbformat back scripts/test_notebooks.py, which runs
+  # every example notebook in a real kernel. Without ipykernel there is no
+  # `python3` kernelspec and the runner fails with NoSuchKernel.
+  "ipykernel",
+  "nbclient",
+  "nbformat",
   "pytest",
   "pytest-cov",
   "pytest-html",

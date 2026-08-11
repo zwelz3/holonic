@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from rdflib import Graph, Literal, Namespace, URIRef
+from rdflib import Dataset, Graph, Literal, Namespace, URIRef
 from rdflib.namespace import RDF, RDFS, XSD
 
 from holonic import sparql as Q
@@ -259,12 +259,18 @@ def _type_term(type_str: str, param_name: str = "holon_type") -> str:
     return f"<{type_str}>"
 
 
-def _run_construct_on_graph(graph: Graph, construct_query: str) -> Graph:
-    """Run a SPARQL CONSTRUCT against an in-memory Graph.
+def _run_construct_on_graph(graph: Graph | Dataset, construct_query: str) -> Graph:
+    """Run a SPARQL CONSTRUCT against an in-memory Graph or Dataset.
 
-    Used by run_projection when a step carries an inline CONSTRUCT.
-    Isolated from the dataset backend so intermediate results stay
-    ephemeral and don't pollute named-graph state.
+    Used by run_projection when a step carries an inline CONSTRUCT, and by
+    ``traverse_portal`` for the scoped path. Isolated from the dataset
+    backend so intermediate results stay ephemeral and don't pollute
+    named-graph state.
+
+    A ``Dataset`` may be passed when the CONSTRUCT needs to see named
+    graphs -- a query containing ``GRAPH ?g { ... }`` cannot run against a
+    plain ``Graph``, which raises from rdflib's ``QueryContext.dataset``.
+    See :meth:`HolonicDataset._scoped_dataset`.
 
     Raises :class:`ValueError` if ``construct_query`` is not a CONSTRUCT or
     DESCRIBE query (rdflib returns ``None`` for ``.graph`` on a SELECT/ASK,
@@ -1632,6 +1638,91 @@ class HolonicDataset:
         return None
 
     # ══════════════════════════════════════════════════════════
+    # Layer collection
+    #
+    # Shared by portal traversal (which scopes a CONSTRUCT to a subset
+    # of a holon's layers) and membrane validation (which unions a
+    # holon's interiors and boundaries). Both assemble a queryable view
+    # out of registered layer graphs, and both have to tolerate a layer
+    # that is registered but not yet materialized.
+    # ══════════════════════════════════════════════════════════
+
+    def _safe_layer_graph(
+        self,
+        graph_iri: str,
+        *,
+        missing: list[str] | None = None,
+    ) -> Graph:
+        """Fetch a registered layer graph, treating "absent" as empty.
+
+        A layer can be registered (``cga:hasInterior`` /
+        ``cga:hasBoundary``) before it holds any triples. On Fuseki that
+        layer answers 404 to a Graph Store Protocol read, so collecting
+        it raised and aborted validation -- and because
+        :meth:`validate_all` walks every holon in one loop, a single
+        unmaterialized layer anywhere took down validation for the whole
+        holarchy.
+
+        For a *union* collection an absent layer contributes no triples,
+        so the two cases are equivalent and it is returned as empty.
+        Only :class:`~holonic.backends.store.GraphNotFoundError` is
+        absorbed: auth failures, connectivity errors, and malformed
+        responses still propagate, so this cannot mask a store that is
+        merely unreachable. In-memory backends already return an empty
+        graph for an unknown IRI, so this is a no-op there.
+
+        Parameters
+        ----------
+        missing :
+            If given, the IRI of each absent graph is appended. Callers
+            collecting *shapes* pass this so an empty shapes graph can
+            report why it is empty instead of silently reading as "no
+            constraints defined" -- see :meth:`validate_membrane`.
+
+        .. versionadded:: 0.8.0
+        """
+        try:
+            return self.backend.get_graph(graph_iri)
+        except GraphNotFoundError:
+            log.debug("layer graph %s is registered but not materialized", graph_iri)
+            if missing is not None:
+                missing.append(graph_iri)
+            return Graph()
+
+    def _scoped_dataset(self, graph_iris: Iterable[str]) -> Dataset:
+        """Materialize the given named graphs as a standalone queryable dataset.
+
+        Portal traversal is scoped to a subset of the store's graphs (S5).
+        Scoping must narrow *which graphs are visible* without changing the
+        *query model*: a portal CONSTRUCT written as
+        ``WHERE { GRAPH ?g { ... } }`` -- the idiom every portal used before
+        0.8.0, when CONSTRUCTs ran against the whole dataset -- has to keep
+        working. Merging the scope into a single ``Graph`` silently broke
+        that, since rdflib raises "requires a dataset (i.e. ConjunctiveGraph)"
+        for a ``GRAPH`` clause evaluated against one graph.
+
+        So the scope is rebuilt as a ``Dataset`` holding each in-scope graph
+        under its own IRI. ``default_union=True`` mirrors
+        :class:`~holonic.backends.rdflib_backend.RdflibBackend`: patterns
+        outside a ``GRAPH`` clause see the union of the in-scope graphs, and
+        ``GRAPH ?g { ... }`` binds ``?g`` to in-scope graph IRIs *only* --
+        never to a graph the portal was not scoped to.
+
+        Layers are fetched through :meth:`_safe_layer_graph`, so a layer that
+        is registered but not yet materialized contributes nothing instead of
+        aborting the traversal (this is reachable on Fuseki, where an empty
+        graph answers 404).
+
+        .. versionadded:: 0.8.0
+        """
+        scoped = Dataset(default_union=True)
+        for graph_iri in graph_iris:
+            target = scoped.graph(URIRef(graph_iri))
+            for triple in self._safe_layer_graph(graph_iri):
+                target.add(triple)
+        return scoped
+
+    # ══════════════════════════════════════════════════════════
     # Portal traversal
     # ══════════════════════════════════════════════════════════
 
@@ -1765,10 +1856,10 @@ class HolonicDataset:
         if run_whole_dataset:
             projected = self.backend.construct(construct_query)
         elif scope_graphs:
-            scoped = Graph()
-            for g in scope_graphs:
-                scoped += self.backend.get_graph(g)
-            projected = _run_construct_on_graph(scoped, construct_query)
+            # Named graphs are preserved (not merged into one Graph) so a
+            # CONSTRUCT carrying `GRAPH ?g { ... }` still resolves -- scoping
+            # narrows visibility, not the query model. See _scoped_dataset.
+            projected = _run_construct_on_graph(self._scoped_dataset(scope_graphs), construct_query)
         else:
             raise ValueError(
                 f"Portal {portal_iri} cannot be scoped: its source holon "
@@ -2101,48 +2192,6 @@ class HolonicDataset:
     # ══════════════════════════════════════════════════════════
     # Membrane validation
     # ══════════════════════════════════════════════════════════
-
-    def _safe_layer_graph(
-        self,
-        graph_iri: str,
-        *,
-        missing: list[str] | None = None,
-    ) -> Graph:
-        """Fetch a registered layer graph, treating "absent" as empty.
-
-        A layer can be registered (``cga:hasInterior`` /
-        ``cga:hasBoundary``) before it holds any triples. On Fuseki that
-        layer answers 404 to a Graph Store Protocol read, so collecting
-        it raised and aborted validation -- and because
-        :meth:`validate_all` walks every holon in one loop, a single
-        unmaterialized layer anywhere took down validation for the whole
-        holarchy.
-
-        For a *union* collection an absent layer contributes no triples,
-        so the two cases are equivalent and it is returned as empty.
-        Only :class:`~holonic.backends.store.GraphNotFoundError` is
-        absorbed: auth failures, connectivity errors, and malformed
-        responses still propagate, so this cannot mask a store that is
-        merely unreachable. In-memory backends already return an empty
-        graph for an unknown IRI, so this is a no-op there.
-
-        Parameters
-        ----------
-        missing :
-            If given, the IRI of each absent graph is appended. Callers
-            collecting *shapes* pass this so an empty shapes graph can
-            report why it is empty instead of silently reading as "no
-            constraints defined" -- see :meth:`validate_membrane`.
-
-        .. versionadded:: 0.8.0
-        """
-        try:
-            return self.backend.get_graph(graph_iri)
-        except GraphNotFoundError:
-            log.debug("layer graph %s is registered but not materialized", graph_iri)
-            if missing is not None:
-                missing.append(graph_iri)
-            return Graph()
 
     @staticmethod
     def _no_shapes_report(missing: list[str]) -> str:

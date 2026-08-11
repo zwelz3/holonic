@@ -284,6 +284,16 @@ pytest-cov = "*"
 pytest-html = "*"
 pytest-xdist = "*"
 pytest-json-report = "*"
+# The `test-notebooks` task executes notebooks through nbclient against the
+# `python3` kernelspec, which only exists if ipykernel is installed. It used
+# to arrive transitively — via jupyterlab in `dev`, and via nbconvert in
+# `deps-lint` for nbclient/nbformat — so the py311/py313 CI environments
+# (neither `deps-lab` nor `deps-jlite`) had no kernel and every notebook
+# failed with `NoSuchKernel` before executing a cell. `test-notebooks` lives
+# in `tasks-test`, so its dependencies belong here.
+ipykernel = "*"
+nbclient = "*"
+nbformat = "*"
 # aiohttp is a runtime dependency of the Fuseki backend. Without it every
 # Fuseki test hits `pytest.importorskip("aiohttp")` and silently skips, so
 # the backend shipped at 0% coverage. Installing it here un-skips them.

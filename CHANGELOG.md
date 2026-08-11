@@ -62,6 +62,11 @@ match) at release time — see the Phase 6 release gate.
   source has neither projections nor interiors. Pass
   `unscoped_portals_allowed=True` (or declare `cga:sourceLayer
   cga:DatasetRole` on the portal) to restore the legacy behaviour.
+  Scoping narrows **which graphs are visible**, not how the CONSTRUCT is
+  evaluated: the in-scope layers are still presented as named graphs, so a
+  portal written as `WHERE { GRAPH ?g { ... } }` — the idiom every portal
+  used when CONSTRUCTs ran against the whole dataset — keeps working, with
+  `?g` binding to in-scope graph IRIs only. Portal queries need no rewrite.
 - `add_holon(holon_type=...)` / `add_portal(portal_type=...)` raise
   `ValueError` on a type term that is neither a valid PNAME nor a valid IRI.
 - **`ProjectionPipeline` execution methods dropped their `backend` parameter
@@ -81,6 +86,33 @@ match) at release time — see the Phase 6 release gate.
 
 ### Fixed
 
+- **Scoped portal traversal no longer flattens named graphs.** The first cut
+  of the S5 scoping fix merged the in-scope layers into a single
+  `rdflib.Graph`, which made any portal CONSTRUCT containing
+  `GRAPH ?g { ... }` unevaluable — rdflib raises "You performed a query
+  operation requiring a dataset (i.e. ConjunctiveGraph), but operating
+  currently on a single graph." That is the shape every portal written
+  before 0.8.0 uses, since CONSTRUCTs then ran against the whole dataset, so
+  the break was broad and the error message pointed nowhere near the cause.
+  The scope is now rebuilt as an `rdflib.Dataset` holding each in-scope layer
+  under its own IRI (`default_union=True`, matching `RdflibBackend`), so both
+  idioms work and `?g` still binds only to in-scope graphs. Scope graphs are
+  collected through `_safe_layer_graph`, so an unmaterialized layer in the
+  scope no longer aborts the traversal on Fuseki.
+  Note the remaining asymmetry: `run_projection` merges a holon's interiors
+  into one unnamed graph before running pipeline CONSTRUCT steps, so a
+  `GRAPH` clause is not available there. That is longstanding and
+  intentional — transform steps operate on a flat graph and intermediate
+  results have no named-graph identity.
+- **yFiles visualizations work on `yfiles-jupyter-graphs` 2.x.** 2.0 renamed
+  `hierarchic_layout` to `hierarchical_layout`; the viz widgets called the
+  1.x name unconditionally, so every hierarchic render — the default for all
+  four widget families — raised `AttributeError`. Layout dispatch now lives
+  in `holonic.viz._layout.apply_layout`, which resolves whichever spelling
+  the installed version provides, so 1.x and 2.x are both supported. holonic's
+  own `"hierarchic"` token is unchanged (`"hierarchical"` is accepted as an
+  alias), and an unknown token now raises `ValueError` instead of silently
+  falling through to the default layout.
 - **An unmaterialized layer graph no longer aborts validation for the whole
   holarchy.** A layer can be registered (`cga:hasInterior` /
   `cga:hasBoundary`) before it holds any triples; Fuseki's Graph Store
@@ -230,6 +262,13 @@ match) at release time — see the Phase 6 release gate.
   (`pixi run test-integration`, opt-in `--integration` marker).
 - The notebook harness now executes every example in a real IPython kernel
   (nbclient) instead of a substring heuristic that produced false greens.
+- **`ipykernel` / `nbclient` / `nbformat` are declared test dependencies.**
+  The notebook harness needs a `python3` kernelspec, which used to arrive
+  transitively (jupyterlab in the `dev` environment, nbconvert in
+  `deps-lint`). The `py311` / `py313` CI environments pull neither, so every
+  notebook failed with `NoSuchKernel` before executing a cell. They are now
+  declared in `feature.deps-test` and in the `test` extra, next to the task
+  that needs them.
 - **Release gate (packaging).** The "Verify package" CI step now runs
   `twine check dist/*` and, on a `refs/tags/v*` build, asserts the git tag
   equals `holonic.__version__` (failing the job on a mismatch) — the check that

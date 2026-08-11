@@ -33,6 +33,18 @@ now raises `ValueError` instead of silently running against everything.
 `unscoped_portals_allowed=True`, or declare
 `<portal> cga:sourceLayer cga:DatasetRole` on the portal.
 
+**Your portal queries do not need rewriting.** Scoping changes which graphs
+a CONSTRUCT can see, not how it is evaluated. The in-scope layers are still
+presented as named graphs, so the common shape
+
+```sparql
+CONSTRUCT { ... } WHERE { GRAPH ?g { ... } }
+```
+
+keeps working — `?g` simply binds to the in-scope graph IRIs instead of
+every graph in the dataset. A CONSTRUCT with no `GRAPH` clause sees the
+union of the in-scope graphs, as before.
+
 ### Sealed-portal enforcement is fail-closed (S6)
 
 The seal check no longer uses a nondeterministic `SELECT ?type ... LIMIT 1`

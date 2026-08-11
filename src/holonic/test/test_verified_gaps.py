@@ -356,6 +356,80 @@ class TestPortalConstructScope:
         projected = ds.traverse_portal("urn:portal:opt", unscoped_portals_allowed=True)
         assert len(projected) >= 1, "Opt-in should run against the whole dataset."
 
+    # ── Scoping must not change the query model ──────────────
+    #
+    # S5 narrows *which graphs* a portal CONSTRUCT can see. It must not
+    # change *how* the CONSTRUCT is evaluated. Before 0.8.0 portals ran
+    # against the whole dataset, so `WHERE { GRAPH ?g { ... } }` was the
+    # natural idiom and is what the example notebooks and existing
+    # downstream portals use. The first cut of S5 merged the scope into a
+    # single rdflib Graph, which raises "requires a dataset (i.e.
+    # ConjunctiveGraph)" for any GRAPH clause. Every test above uses a
+    # GRAPH-less CONSTRUCT, which is exactly why that regression shipped.
+
+    @pytest.fixture
+    def ds_graph_clause_portal(self, ds):
+        """Two holons with interiors; a scoped portal whose CONSTRUCT uses GRAPH."""
+        ds.add_holon("urn:holon:src", "Src")
+        ds.add_interior(
+            "urn:holon:src",
+            '@prefix ex: <urn:ex:> . <urn:person:pub> a ex:Employee ; ex:name "Pub" .',
+        )
+        ds.add_holon("urn:holon:other", "Other")
+        ds.add_interior(
+            "urn:holon:other",
+            '@prefix ex: <urn:ex:> . <urn:person:spy> a ex:Employee ; ex:name "Spy" .',
+        )
+        ds.add_holon("urn:holon:dir", "Dir")
+        ds.add_portal(
+            "urn:portal:graph-clause",
+            "urn:holon:src",
+            "urn:holon:dir",
+            "PREFIX ex: <urn:ex:> "
+            "CONSTRUCT { ?s ex:name ?n } "
+            "WHERE { GRAPH ?g { ?s a ex:Employee ; ex:name ?n } }",
+        )
+        return ds
+
+    def test_scoped_portal_supports_graph_clause(self, ds_graph_clause_portal):
+        projected = ds_graph_clause_portal.traverse_portal("urn:portal:graph-clause")
+        ttl = projected.serialize(format="ntriples")
+        assert "Pub" in ttl, (
+            "A scoped portal CONSTRUCT using `GRAPH ?g { }` returned nothing. "
+            "Scoping narrows which graphs are visible; it must not flatten "
+            "them away, which makes any GRAPH clause unevaluable."
+        )
+
+    def test_graph_clause_does_not_widen_scope(self, ds_graph_clause_portal):
+        # The GRAPH clause must bind only to in-scope graphs -- supporting it
+        # must not reintroduce the whole-dataset leak S5 closed.
+        projected = ds_graph_clause_portal.traverse_portal("urn:portal:graph-clause")
+        ttl = projected.serialize(format="ntriples")
+        assert "Spy" not in ttl, (
+            "Another holon's interior leaked through `GRAPH ?g`; the scoped "
+            "dataset must contain only the source holon's layers."
+        )
+
+    def test_scoped_dataset_binds_only_scope_graphs(self, ds_graph_clause_portal):
+        # Asserted through SPARQL rather than rdflib's quads()/graphs() API:
+        # what `?g` can bind to *is* the security property, and the internal
+        # accessors changed shape across the supported rdflib 7.x range.
+        scoped = ds_graph_clause_portal._scoped_dataset(["urn:holon:src/interior"])
+        rows = scoped.query("SELECT DISTINCT ?g WHERE { GRAPH ?g { ?s ?p ?o } }")
+        bound = {str(r[0]) for r in rows}
+        assert bound == {"urn:holon:src/interior"}, (
+            f"`?g` should bind only to the in-scope layer, got {bound}."
+        )
+
+    def test_scoped_dataset_tolerates_unmaterialized_layer(self, ds_graph_clause_portal):
+        # A registered-but-empty layer answers 404 on Fuseki. Collecting it
+        # must contribute nothing rather than abort the traversal.
+        scoped = ds_graph_clause_portal._scoped_dataset(
+            ["urn:holon:src/interior", "urn:holon:src/never-materialized"]
+        )
+        rows = scoped.query("SELECT DISTINCT ?g WHERE { GRAPH ?g { ?s ?p ?o } }")
+        assert {str(r[0]) for r in rows} == {"urn:holon:src/interior"}
+
 
 # ══════════════════════════════════════════════════════════
 # [1.4] Fail-closed traversal
