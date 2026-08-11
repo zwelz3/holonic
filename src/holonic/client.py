@@ -2098,6 +2098,68 @@ class HolonicDataset:
 
         return results
 
+    # ══════════════════════════════════════════════════════════
+    # Membrane validation
+    # ══════════════════════════════════════════════════════════
+
+    def _safe_layer_graph(
+        self,
+        graph_iri: str,
+        *,
+        missing: list[str] | None = None,
+    ) -> Graph:
+        """Fetch a registered layer graph, treating "absent" as empty.
+
+        A layer can be registered (``cga:hasInterior`` /
+        ``cga:hasBoundary``) before it holds any triples. On Fuseki that
+        layer answers 404 to a Graph Store Protocol read, so collecting
+        it raised and aborted validation -- and because
+        :meth:`validate_all` walks every holon in one loop, a single
+        unmaterialized layer anywhere took down validation for the whole
+        holarchy.
+
+        For a *union* collection an absent layer contributes no triples,
+        so the two cases are equivalent and it is returned as empty.
+        Only :class:`~holonic.backends.store.GraphNotFoundError` is
+        absorbed: auth failures, connectivity errors, and malformed
+        responses still propagate, so this cannot mask a store that is
+        merely unreachable. In-memory backends already return an empty
+        graph for an unknown IRI, so this is a no-op there.
+
+        Parameters
+        ----------
+        missing :
+            If given, the IRI of each absent graph is appended. Callers
+            collecting *shapes* pass this so an empty shapes graph can
+            report why it is empty instead of silently reading as "no
+            constraints defined" -- see :meth:`validate_membrane`.
+
+        .. versionadded:: 0.8.0
+        """
+        try:
+            return self.backend.get_graph(graph_iri)
+        except GraphNotFoundError:
+            log.debug("layer graph %s is registered but not materialized", graph_iri)
+            if missing is not None:
+                missing.append(graph_iri)
+            return Graph()
+
+    @staticmethod
+    def _no_shapes_report(missing: list[str]) -> str:
+        """Explain an empty shapes graph, naming unmaterialized layers.
+
+        "No boundary shapes defined" and "every boundary graph a holon
+        registered is empty" are operationally different situations that
+        produce an identical INTACT result; the report text is the only
+        place the difference survives.
+        """
+        if not missing:
+            return "No boundary shapes defined."
+        return (
+            f"No boundary shapes defined: {len(missing)} registered boundary "
+            f"graph(s) hold no triples ({', '.join(sorted(missing))})."
+        )
+
     def dry_run(
         self,
         source_iri: str,
@@ -2187,68 +2249,6 @@ class HolonicDataset:
             violations=violations,
             warnings=warnings_list,
             shape_violations=shape_viols,
-        )
-
-    # ══════════════════════════════════════════════════════════
-    # Membrane validation
-    # ══════════════════════════════════════════════════════════
-
-    def _safe_layer_graph(
-        self,
-        graph_iri: str,
-        *,
-        missing: list[str] | None = None,
-    ) -> Graph:
-        """Fetch a registered layer graph, treating "absent" as empty.
-
-        A layer can be registered (``cga:hasInterior`` /
-        ``cga:hasBoundary``) before it holds any triples. On Fuseki that
-        layer answers 404 to a Graph Store Protocol read, so collecting
-        it raised and aborted validation -- and because
-        :meth:`validate_all` walks every holon in one loop, a single
-        unmaterialized layer anywhere took down validation for the whole
-        holarchy.
-
-        For a *union* collection an absent layer contributes no triples,
-        so the two cases are equivalent and it is returned as empty.
-        Only :class:`~holonic.backends.store.GraphNotFoundError` is
-        absorbed: auth failures, connectivity errors, and malformed
-        responses still propagate, so this cannot mask a store that is
-        merely unreachable. In-memory backends already return an empty
-        graph for an unknown IRI, so this is a no-op there.
-
-        Parameters
-        ----------
-        missing :
-            If given, the IRI of each absent graph is appended. Callers
-            collecting *shapes* pass this so an empty shapes graph can
-            report why it is empty instead of silently reading as "no
-            constraints defined" -- see :meth:`validate_membrane`.
-
-        .. versionadded:: 0.8.0
-        """
-        try:
-            return self.backend.get_graph(graph_iri)
-        except GraphNotFoundError:
-            log.debug("layer graph %s is registered but not materialized", graph_iri)
-            if missing is not None:
-                missing.append(graph_iri)
-            return Graph()
-
-    @staticmethod
-    def _no_shapes_report(missing: list[str]) -> str:
-        """Explain an empty shapes graph, naming unmaterialized layers.
-
-        "No boundary shapes defined" and "every boundary graph a holon
-        registered is empty" are operationally different situations that
-        produce an identical INTACT result; the report text is the only
-        place the difference survives.
-        """
-        if not missing:
-            return "No boundary shapes defined."
-        return (
-            f"No boundary shapes defined: {len(missing)} registered boundary "
-            f"graph(s) hold no triples ({', '.join(sorted(missing))})."
         )
 
     def validate_membrane(self, holon_iri: str) -> MembraneResult:

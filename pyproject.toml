@@ -139,6 +139,22 @@ module = [
 ]
 ignore_missing_imports = true
 
+# numpy is not a holonic dependency; mypy only reaches it transitively
+# (holonic.viz -> IPython, which is py.typed and imports numpy). Its
+# stubs use PEP 695 `type` statements, which mypy reports as a syntax
+# error while python_version targets 3.11 — and a syntax error aborts
+# the whole run. Skip following numpy rather than dropping 3.11 as the
+# check target. follow_imports_for_stubs is required: without it the
+# skip is not applied to numpy's inline .pyi files, which is where the
+# error is raised. Revisit when 3.11 support is dropped (python/mypy#21178).
+[[tool.mypy.overrides]]
+module = [
+  "numpy",
+  "numpy.*",
+]
+follow_imports = "skip"
+follow_imports_for_stubs = true
+
 # Tests are exempt from strict-typing noise (missing annotations etc.).
 [[tool.mypy.overrides]]
 module = [
