@@ -5,6 +5,225 @@ introduces. Sections are newest-first.
 
 ---
 
+## 0.7.x → 0.8.0
+
+Security- and correctness-hardening release. The breaking changes below
+all close audit-confirmed defects; each has a narrow, explicit escape
+hatch where legacy behaviour is still needed.
+
+### Portals no longer widen to the whole dataset (S5)
+
+`traverse_portal()` and `traverse()` previously ran a portal's CONSTRUCT
+against **every** graph in the dataset when the source holon had no
+projections. A broad `WHERE` clause could therefore pull in unrelated
+holons' interiors — a cross-holon PII leak.
+
+Now the CONSTRUCT is scoped to the source holon:
+
+1. explicit `cga:sourceLayer` on the portal wins
+   (`cga:DatasetRole` → whole dataset, `cga:ProjectionRole` /
+   `cga:InteriorRole` → that layer of the source);
+2. otherwise the source's projections (the governed view), if any;
+3. otherwise the source's own interior graphs.
+
+If the source has neither projections nor interiors, `traverse_portal()`
+now raises `ValueError` instead of silently running against everything.
+
+**To restore the old behaviour** for a specific call, pass
+`unscoped_portals_allowed=True`, or declare
+`<portal> cga:sourceLayer cga:DatasetRole` on the portal.
+
+### Sealed-portal enforcement is fail-closed (S6)
+
+The seal check no longer uses a nondeterministic `SELECT ?type ... LIMIT 1`
+plus a substring test. It is now an exact `ASK { GRAPH ?g { <portal> a
+cga:SealedPortal } }`. A portal typed as both `cga:SealedPortal` and some
+other portal type is now reliably blocked. If you relied on a dual-typed
+portal being traversable, remove the `cga:SealedPortal` type.
+
+### Type terms are validated (S2)
+
+`add_holon(holon_type=...)` and `add_portal(portal_type=...)` now raise
+`ValueError` unless the value is a prefixed name (`prefix:Local`) or a
+valid full IRI. Values that previously slipped through the loose
+`":" in holon_type` check (and could inject Turtle) are rejected.
+
+### Backend query bindings take rdflib terms (A1/A2)
+
+The `**bindings` keyword on `backend.query()` / `construct()` / `ask()` now
+binds by explicit rdflib term type instead of guessing from the string:
+
+- a value that is already an rdflib `Node` (`URIRef` / `Literal` / `BNode`)
+  binds verbatim, and
+- any other Python value binds as a typed `Literal`.
+
+So an IRI must be passed as `rdflib.URIRef` — of **any** scheme:
+
+```python
+from rdflib import URIRef
+
+# 0.7.x: only urn: strings became IRIs; http:// silently bound as a literal
+backend.query(q, holon="urn:holon:1")          # was OK by accident
+backend.query(q, holon="http://example.org/1") # silently matched nothing
+
+# 0.8.0: explicit and scheme-agnostic
+backend.query(q, holon=URIRef("urn:holon:1"))
+backend.query(q, holon=URIRef("http://example.org/1"))
+```
+
+`FusekiBackend` previously ignored `**bindings` entirely (turning a
+parameterized lookup into an unfiltered scan); it now honors them via
+injection-safe `n3()` substitution, matching `RdflibBackend`.
+
+### FusekiBackend holds a pooled session; prefer `close()` / `with` (C1/P5)
+
+`FusekiBackend` now dispatches every operation onto a long-lived
+worker-thread event loop and reuses one `FusekiClient` / `aiohttp`
+session for its lifetime. Two consequences:
+
+- **It now works inside a running event loop** (Jupyter, FastAPI/aiohttp
+  handlers). Previously every call raised `RuntimeError: Cannot run the
+  event loop while another loop is running`. No code change is required to
+  benefit.
+- **It owns a background thread and an open socket pool** until released.
+  Close it deterministically when done:
+
+  ```python
+  with FusekiBackend("http://localhost:3030", dataset="ds") as be:
+      ...  # be.query(...), be.update(...)
+  # session + worker loop torn down on exit
+
+  # or, without a context manager:
+  be = FusekiBackend("http://localhost:3030", dataset="ds")
+  try:
+      ...
+  finally:
+      be.close()
+  ```
+
+  A `weakref.finalize` handler closes the session best-effort at GC, and
+  the thread is a daemon (so it never blocks interpreter exit), but calling
+  `close()` avoids "Unclosed client session" warnings and frees sockets
+  promptly. Calling any method after `close()` raises `RuntimeError`.
+
+### Fail-closed traversal rollback is delta-based (C2)
+
+`traverse(..., fail_on_breach=True)` now rolls a breach back by deleting
+exactly the triples it injected, rather than replacing the whole target
+interior from a pre-injection snapshot. Concurrent writes to the same
+interior therefore survive a rollback. **Caveat:** `DELETE DATA` cannot
+name blank nodes, so a projection that injects blank-node-bearing triples
+still requires exclusive access to the target interior for the duration of
+a `fail_on_breach=True` call. If you traverse concurrently into a shared
+target with blank-node projections, serialize those calls yourself.
+
+### `holarchy_summary()` health comes from persisted records (P4)
+
+For dashboards, `holarchy_summary()` no longer re-validates every membrane on
+each call. The `health_distribution` is now built from each holon's
+most-recent persisted `ValidationRecord` in a single aggregate query. Two
+consequences:
+
+- A holon that has **never** been recorded via `record_validation()` (directly
+  or through a `traverse()`/`validate_membrane()` flow that persists a record)
+  does not appear in any health bucket. On a holarchy with no validation
+  history the distribution is all-zero — where 0.7.x would have re-derived it
+  live.
+- To restore the old semantics (re-run pyshacl for every holon on every call),
+  pass `live_health=True`:
+
+  ```python
+  # 0.8.0: recompute health live, as 0.7.x always did
+  summary = ds.holarchy_summary(live_health=True)
+  ```
+
+The counts, root count, staleness count, and recent activities are unchanged.
+
+### All library exceptions now derive from `HolonicError` (A1)
+
+A new base class, `holonic.HolonicError`, sits under every exception the
+library raises. You can now catch the whole family at once:
+
+```python
+from holonic import HolonicError
+
+try:
+    ds.traverse(source, target, fail_on_breach=True)
+except HolonicError as exc:  # membrane breach, sealed portal, backend error...
+    log.warning("holonic operation failed: %s", exc)
+```
+
+This is **additive**. Each exception keeps the builtin base it subclassed
+before 0.8.0, so existing handlers continue to work unchanged:
+
+| Exception | Pre-0.8.0 base | 0.8.0 bases |
+| --- | --- | --- |
+| `MembraneBreachError` | `Exception` | `HolonicError` |
+| `SealedPortalError` | `ValueError` | `HolonicError, ValueError` |
+| `FusekiError` | `RuntimeError` | `HolonicError, RuntimeError` |
+| `TransformNotFoundError` | `KeyError` | `HolonicError, KeyError` |
+
+No code change is required unless you want to adopt the broader
+`except HolonicError` catch. The only observable break is for code that
+asserted an exact base (e.g. `Type.__bases__ == (ValueError,)`) or that
+registered `MembraneBreachError` as a *non*-library error -- it is now a
+`HolonicError`.
+
+### Projection pipeline steps run against the source graph (A3)
+
+`ProjectionStep.apply`, `ProjectionPipeline.apply`, `apply_to_graph`, and
+`apply_to_lpg` no longer take a `backend` argument. A CONSTRUCT step now
+always runs against the graph it is handed -- the previous step's output --
+rather than, when a backend was passed, against the entire backend dataset.
+
+That old behaviour was a bug: `apply_pipeline()` would fold triples from
+*other* holons into a single holon's projection, and multi-step pipelines
+did not actually chain (each CONSTRUCT re-read the whole dataset).
+
+```python
+# 0.7.x -- backend passed through; CONSTRUCT steps hit the whole dataset
+result = pipeline.apply(source_graph, backend=ds.backend)
+
+# 0.8.0 -- materialize the source, then apply; steps stay scoped to it
+result = pipeline.apply(source_graph)
+```
+
+`HolonicDataset.apply_pipeline(holon_iri, pipeline)` is unchanged and now
+correctly scopes to the named holon's merged interiors -- prefer it over
+calling `pipeline.apply` with a hand-built graph.
+
+New: `ProjectionPipeline.to_spec(iri, description=None)` converts a
+code-built pipeline into a declarative `ProjectionPipelineSpec` you can
+`register_pipeline()` and later `run_projection()`. Transform steps must be
+registered (via `@projection_transform` or the `holonic.projections`
+entry-point group); an unregistered inline callable raises `ValueError`.
+
+### `HolonicDataset` pipeline internals moved to a delegate (AR1/CQ1)
+
+The projection-pipeline registry and execution logic now live on a
+`holonic._pipelines.PipelineManager` reached via `ds._pipelines`, part of the
+0.8.0 decomposition of the `HolonicDataset` god class. The public methods
+(`register_pipeline`, `register_pipeline_ttl`, `attach_pipeline`,
+`list_pipelines`, `get_pipeline`, `run_projection`) are unchanged and require
+no migration.
+
+Only affected: code reaching into **private** helpers that were previously
+attributes of `HolonicDataset` -- `_pipeline_to_ttl`, `_step_from_node`,
+`_read_pipeline_steps_ordered`, and `_record_projection_activity`. These are
+now methods of `PipelineManager`; call them via `ds._pipelines.<name>(...)`.
+
+### `HolonicDataset` console reads moved to a delegate (AR1/CQ1)
+
+The console-oriented read methods (`list_holons_summary`, `get_holon_detail`,
+`holon_interior_classes`, `holon_neighborhood`, `list_portals`, `get_portal`)
+now carry their logic on a `holonic._console.ConsoleReads` delegate reached via
+`ds._console`. The public methods are unchanged thin wrappers and require no
+migration; only code that reached into the (private) implementation is
+affected. This lifts the presentation-shaped reads out of the core dataset
+surface (the audit's "core -> console layering" concern).
+
+---
+
 ## 0.6.0 → 0.7.0
 
 No breaking changes. All additions are backward-compatible.

@@ -6,6 +6,8 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any
 
+from .exceptions import HolonicError
+
 
 class _DictMixin:
     """Adds ``to_dict()`` for JSON-ready serialization.
@@ -198,7 +200,7 @@ class HolarchyTree(_DictMixin):
         return "\n".join(lines)
 
 
-class MembraneBreachError(Exception):
+class MembraneBreachError(HolonicError):
     """Raised when a portal traversal would produce membrane-invalid data."""
 
     def __init__(self, result: MembraneResult):
@@ -208,13 +210,17 @@ class MembraneBreachError(Exception):
         )
 
 
-class SealedPortalError(ValueError):
+class SealedPortalError(HolonicError, ValueError):
     """Raised when traversal is attempted on a SealedPortal.
 
-    Subclasses ValueError for backward compatibility with code that
-    catches ValueError from traverse_portal().
+    Subclasses both :class:`HolonicError` and ``ValueError``: the latter is
+    retained for backward compatibility with code that catches ``ValueError``
+    from traverse_portal().
 
     .. versionadded:: 0.6.0
+    .. versionchanged:: 0.8.0
+       Also derives from :class:`HolonicError`; existing ``except ValueError``
+       handlers are unaffected.
     """
 
     def __init__(self, portal_iri: str):

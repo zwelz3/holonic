@@ -309,3 +309,67 @@ class TestFusekiBackendExtraHeaders:
 
         client = FusekiClient("http://fuseki.test:3030", "ds")
         assert client.extra_headers == {}
+
+
+# ══════════════════════════════════════════════════════════════
+# holarchy_summary (P4: aggregate queries + persisted health)
+# ══════════════════════════════════════════════════════════════
+
+
+class TestHolarchySummary:
+    def test_counts_and_roots(self, populated_ds):
+        s = populated_ds.holarchy_summary()
+        assert s.holon_count == 3
+        assert s.portal_count == 2
+        # Only the parent has no cga:memberOf.
+        assert s.root_count == 1
+
+    def test_never_traversed_holons_are_stale(self, populated_ds):
+        # No traversal has run, so every holon is stale under any max_age.
+        assert populated_ds.holarchy_summary().stale_count == 3
+
+    def test_persisted_health_empty_without_records(self, populated_ds):
+        # Default reads persisted ValidationRecords; none exist yet, so no
+        # holon contributes to the distribution.
+        s = populated_ds.holarchy_summary()
+        assert s.health_distribution == {
+            "intact": 0,
+            "weakened": 0,
+            "compromised": 0,
+        }
+
+    def test_persisted_health_counts_latest_records(self, populated_ds):
+        from holonic.model import MembraneHealth
+
+        populated_ds.record_validation(
+            "urn:holon:alpha", MembraneHealth.COMPROMISED, "urn:agent:t"
+        )
+        populated_ds.record_validation(
+            "urn:holon:beta", MembraneHealth.WEAKENED, "urn:agent:t"
+        )
+        dist = populated_ds.holarchy_summary().health_distribution
+        assert dist["compromised"] == 1
+        assert dist["weakened"] == 1
+        assert dist["intact"] == 0
+
+    def test_persisted_health_uses_most_recent_record(self, populated_ds):
+        from holonic.model import MembraneHealth
+
+        # Earlier record: compromised; later record: intact -> latest wins.
+        populated_ds.record_validation(
+            "urn:holon:alpha", MembraneHealth.COMPROMISED, "urn:agent:t"
+        )
+        populated_ds.record_validation(
+            "urn:holon:alpha", MembraneHealth.INTACT, "urn:agent:t"
+        )
+        dist = populated_ds.holarchy_summary().health_distribution
+        assert dist["intact"] == 1
+        assert dist["compromised"] == 0
+
+    def test_live_health_revalidates_every_holon(self, populated_ds):
+        # Opt-in path re-runs pyshacl for all holons rather than reading
+        # persisted records, so every holon lands in some bucket.
+        dist = populated_ds.holarchy_summary(
+            live_health=True
+        ).health_distribution
+        assert sum(dist.values()) == 3

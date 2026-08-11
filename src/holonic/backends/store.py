@@ -130,19 +130,36 @@ class HolonicStore(Protocol):
     # ── SPARQL ────────────────────────────────────────────────
 
     def query(self, sparql: str, **bindings: Any) -> list[dict[str, Any]]:
-        """Execute a SELECT query. Return list of binding dicts.
+        """Execute a SELECT query. Return a list of binding dicts.
 
-        Each dict maps variable names (without ``?``) to their values.
-        Values are strings (IRIs/literals) -- callers convert as needed.
+        Each dict maps variable names (without the leading ``?``) to
+        their bound values. Literals are returned as native Python
+        scalars (``str``/``int``/``float``/``bool``/``datetime``); IRIs
+        are returned as ``str``. Unbound variables are omitted from a
+        row's dict. See ``ask`` for the ``**bindings`` contract.
         """
         ...
 
     def construct(self, sparql: str, **bindings: Any) -> Graph:
-        """Execute a CONSTRUCT query. Return results as an rdflib.Graph."""
+        """Execute a CONSTRUCT query. Return results as an rdflib.Graph.
+
+        See ``ask`` for the ``**bindings`` contract.
+        """
         ...
 
     def ask(self, sparql: str, **bindings: Any) -> bool:
-        """Execute an ASK query. Return boolean."""
+        """Execute an ASK query. Return boolean.
+
+        ``**bindings`` parameterizes the query: each keyword pre-binds the
+        SPARQL variable of the same name. Values follow the explicit
+        term-wrapper contract -- rdflib ``Node`` values bind verbatim and
+        any other Python value binds as a typed ``Literal``, so an IRI
+        MUST be passed as ``rdflib.URIRef``. Backends honor bindings
+        without string interpolation (rdflib ``initBindings`` or
+        ``n3()``-escaped substitution); this is the injection-safe
+        parameterization path and the same contract holds for ``query``
+        and ``construct``.
+        """
         ...
 
     def update(self, sparql: str) -> None:
@@ -325,9 +342,12 @@ class AbstractHolonicStore(ABC):
         literals (strings, ints, floats, booleans, ``datetime``
         objects for ``xsd:dateTime``) and strings for IRIs.
 
-        ``bindings`` is reserved for future parameterized-query
-        support; implementations MAY raise ``NotImplementedError``
-        on non-empty bindings in 0.4.x.
+        ``**bindings`` parameterizes the query (0.8.0, normative):
+        each keyword pre-binds the SPARQL variable of the same name.
+        A value that is an rdflib ``Node`` binds verbatim; any other
+        Python value binds as a typed ``Literal``, so IRIs MUST be
+        passed as ``rdflib.URIRef``. Backends bind without string
+        interpolation, making this the injection-safe query path.
         """
         ...
 
@@ -340,7 +360,7 @@ class AbstractHolonicStore(ABC):
         graph in the store; callers wanting to persist it use
         ``put_graph`` or ``post_graph``.
 
-        ``bindings``: see ``query``.
+        ``**bindings``: see ``query`` (same normative contract).
         """
         ...
 
@@ -349,7 +369,8 @@ class AbstractHolonicStore(ABC):
         """Execute a SPARQL ASK query.
 
         Returns True if the query has at least one solution,
-        False otherwise. ``bindings``: see ``query``.
+        False otherwise. ``**bindings``: see ``query`` (same
+        normative contract).
         """
         ...
 

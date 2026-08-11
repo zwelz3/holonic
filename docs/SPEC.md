@@ -22,25 +22,25 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
   - priority: MUST
   - constrains: HolonicDataset, cga:Holon
   - acceptance: Given a fresh HolonicDataset, when add_holon(iri, label) is called, then the holon's IRI is registered as cga:Holon and its four layer graphs resolve via cga:hasInterior, cga:hasBoundary, cga:hasProjection, and cga:hasContext.
-  - verifiedBy: src/holonic/test/test_holon.py::test_add_holon_registers_four_layers
+  - verifiedBy: src/holonic/test/test_deprecation_and_dispatch.py::test_add_holon_without_holon_type
 
 - R1.2 A holon MAY have multiple named graphs in any one layer role (e.g. `urn:holon:x/interior/radar` and `urn:holon:x/interior/fusion`); operations that read a layer MUST treat the set as a union.
   - priority: MUST
   - constrains: HolonicDataset, cga:LayerRole
   - acceptance: Given a holon with two interior graphs added with different graph_iri values, when a SPARQL union query ranges over GRAPH ?g patterns, then triples from both graphs match.
-  - verifiedBy: src/holonic/test/test_holon.py::test_multi_interior_union_read
+  - verifiedBy: src/holonic/test/test_client_projections.py::TestProjectHolon::test_multiple_interiors_are_merged
 
 - R1.3 Layer membership MUST be declared via `cga:hasInterior`, `cga:hasBoundary`, `cga:hasProjection`, `cga:hasContext`. Layer graph IRIs MUST be discoverable by SPARQL from the holon IRI; discovery by IRI suffix convention is forbidden as a correctness mechanism.
   - priority: MUST
   - constrains: HolonicDataset, cga.ttl
   - acceptance: Given a holon with all four layers populated, when the registry is queried with SPARQL following cga:hasInterior et al., then every layer graph IRI is returned without relying on string patterns.
-  - verifiedBy: src/holonic/test/test_holon.py::test_layer_discovery_via_sparql
+  - verifiedBy: src/holonic/test/test_holon.py::TestAllLayers::test_all_four_layers_on_one_holon
 
 - R1.4 The library MUST NOT flatten named graphs to a single default graph at any layer in the stack. Every triple belongs to a named graph.
   - priority: MUST
   - constrains: HolonicDataset, HolonicStore
   - acceptance: Given any library-mediated write, when inspecting the backend's default graph, then no triples produced by the library appear there.
-  - verifiedBy: src/holonic/test/test_backend.py::test_writes_never_hit_default_graph
+  - verifiedBy: none
 
 ## R2 Store Protocol
 
@@ -48,7 +48,7 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
   - priority: MUST
   - constrains: HolonicStore, RdflibBackend, FusekiBackend
   - acceptance: Given an RdflibBackend instance, when isinstance checked against HolonicStore, then the check passes; every listed method exists and accepts the declared signature.
-  - verifiedBy: src/holonic/test/test_backend.py::test_rdflib_backend_implements_protocol
+  - verifiedBy: src/holonic/test/test_backend.py::TestProtocolConformance::test_rdflib_backend_implements_protocol
 
 - R2.2 An in-memory backend (`RdflibBackend`) MUST be shipped so the library is usable with no running server.
   - priority: MUST
@@ -60,13 +60,13 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
   - priority: MUST
   - constrains: FusekiBackend
   - acceptance: Given a running Fuseki server, when FusekiBackend(url, dataset=ds) is instantiated and used with HolonicDataset, then CRUD and SPARQL operations round-trip through HTTP against the server.
-  - verifiedBy: src/holonic/test/test_console_methods.py::TestFusekiBackend
+  - verifiedBy: src/holonic/test/test_fuseki_integration.py::TestFusekiRoundTrip
 
 - R2.4 `FusekiBackend` MUST accept `extra_headers` at construction so external orchestrators can pass bearer tokens, mTLS hints, or tenant identifiers through to Fuseki.
   - priority: MUST
   - constrains: FusekiBackend, _fuseki_client
   - acceptance: Given FusekiBackend(url, dataset=ds, extra_headers={"Authorization": "Bearer x"}), when any HTTP request is issued, then the header is present on the outbound request.
-  - verifiedBy: src/holonic/test/test_console_methods.py::test_fuseki_client_stores_extra_headers
+  - verifiedBy: src/holonic/test/test_console_methods.py::TestFusekiBackendExtraHeaders::test_fuseki_client_stores_extra_headers
 
 - R2.5 The protocol MUST remain synchronous. Async consumers wrap calls in their own thread-pool bridge; an async variant, if added, MUST be a separate protocol and not replace the sync one.
   - priority: MUST
@@ -78,7 +78,7 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
   - priority: MUST
   - constrains: HolonicStore, RdflibBackend, FusekiBackend
   - acceptance: Given store.get_graph() or store.construct() is called, when the return value is inspected, then it is an rdflib.Graph instance supporting serialize(), iteration, and further SPARQL queries.
-  - verifiedBy: src/holonic/test/test_backend.py::test_get_graph_returns_rdflib_Graph
+  - verifiedBy: src/holonic/test/test_client_projections.py::TestRawSparqlPassthrough::test_construct_returns_graph
 
 ## R3 CGA Ontology and Membrane Validation
 
@@ -86,13 +86,13 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
   - priority: MUST
   - constrains: cga.ttl, cga-shapes.ttl, package-data declaration
   - acceptance: Given `pip install holonic`, when the package is introspected, then both TTL files are present as resources under holonic.ontology and parse cleanly with rdflib.
-  - verifiedBy: src/holonic/test/test_ontology.py::test_cga_ttl_packaged_and_parseable
+  - verifiedBy: src/holonic/test/test_ontology.py::TestOntologyFilesExist
 
 - R3.2 The ontology MUST define `cga:Holon` and its functional subclasses (`cga:DataHolon`, `cga:AlignmentHolon`, `cga:AgentHolon`, `cga:GovernanceHolon`, `cga:AggregateHolon`, `cga:IndexHolon`), `cga:Portal` and its subclasses (`cga:TransformPortal`, `cga:IconPortal`, `cga:SealedPortal`), `cga:LayerGraph`, and `cga:LayerRole`. Portal subtype semantics MUST be enforced by SHACL shapes in `cga-shapes.ttl`: `cga:TransformPortal` requires exactly one `cga:constructQuery`; `cga:IconPortal` and `cga:SealedPortal` must not carry `cga:constructQuery` (carrying one is semantically incoherent because an IconPortal is purely referential and a SealedPortal blocks traversal).
   - priority: MUST
   - constrains: cga.ttl
   - acceptance: Given cga.ttl, when SPARQL queries every declared class, then all listed class IRIs are returned with their subclass relationships intact.
-  - verifiedBy: src/holonic/test/test_ontology.py::test_ontology_declares_expected_classes
+  - verifiedBy: src/holonic/test/test_ontology.py::TestOntologyAutoLoaded
 
 - R3.3 The ontology MUST use RDFS plus minimal OWL (class hierarchy, domain/range). The library MUST NOT depend on an OWL reasoner for correctness of any method.
   - priority: MUST
@@ -104,13 +104,13 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
   - priority: MUST
   - constrains: HolonicDataset.validate_membrane, MembraneResult
   - acceptance: Given a holon whose interior violates a boundary shape, when validate_membrane is called, then result.health is MembraneHealth.Compromised and result.violations lists the specific SHACL failures.
-  - verifiedBy: src/holonic/test/test_membrane.py::test_validate_membrane_compromised
+  - verifiedBy: src/holonic/test/test_membrane.py::TestMembraneValidation::test_compromised_membrane
 
 - R3.5 Membrane health MUST be recordable in the context graph as `cga:membraneHealth` on a `prov:Activity`.
   - priority: MUST
   - constrains: HolonicDataset.record_validation, cga.ttl
   - acceptance: Given a governed traversal with validate=True, when the activity is read from the context graph, then cga:membraneHealth is present and matches the MembraneResult.health value.
-  - verifiedBy: src/holonic/test/test_audit.py::test_membrane_health_on_activity
+  - verifiedBy: src/holonic/test/test_audit.py::TestCollectAuditTrail::test_validation_recorded_in_trail
 
 ## R4 Portal and Traversal Semantics
 
@@ -118,31 +118,31 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
   - priority: MUST
   - constrains: HolonicDataset.add_portal, cga:Portal, cga:TransformPortal
   - acceptance: Given add_portal(iri, source, target, construct_query, label), when the registry is queried, then the portal is found with cga:sourceHolon, cga:targetHolon, and cga:constructQuery as RDF triples.
-  - verifiedBy: src/holonic/test/test_portal.py::test_portal_is_first_class_rdf
+  - verifiedBy: src/holonic/test/test_console_methods.py::TestGetPortal::test_returns_construct_query
 
 - R4.2 Portal discovery MUST be SPARQL-driven (`find_portals_from`, `find_portals_to`, `find_portal`, `find_path`). Python-side iteration over cached portal objects is forbidden.
   - priority: MUST
   - constrains: HolonicDataset discovery methods, sparql.py templates
   - acceptance: Given portals in the registry, when find_portals_from(iri) is called, then results come from a SPARQL SELECT executed against the store, not from a Python cache.
-  - verifiedBy: src/holonic/test/test_portal.py::test_find_portals_uses_sparql
+  - verifiedBy: src/holonic/test/test_portal.py::TestPortalDiscovery::test_find_portals_from
 
 - R4.3 `traverse_portal(portal_iri)` MUST execute the portal's CONSTRUCT query against the quad store and MAY inject the result into a target named graph.
   - priority: MUST
   - constrains: HolonicDataset.traverse_portal
   - acceptance: Given a registered portal and inject_into=target_graph, when traverse_portal is called, then the CONSTRUCT's triples appear in the target graph and the CONSTRUCT result Graph is returned.
-  - verifiedBy: src/holonic/test/test_portal.py::test_traverse_portal_injects_into_target
+  - verifiedBy: src/holonic/test/test_portal.py::TestPortalTraversal::test_traverse_portal_injects_into_target
 
 - R4.4 `traverse(source, target, validate=True)` MUST compose discovery, traversal, membrane validation, and provenance recording as one governed operation. Validation failure MUST NOT inject data into the target interior.
   - priority: MUST
   - constrains: HolonicDataset.traverse
   - acceptance: Given a boundary shape that rejects the source data, when traverse(source, target, validate=True) is called, then the target interior contains no new triples and the returned membrane result is Compromised.
-  - verifiedBy: src/holonic/test/test_portal.py::test_governed_traverse_blocks_on_compromise
+  - verifiedBy: src/holonic/test/test_verified_gaps.py::TestFailClosedTraversal::test_fail_on_breach_leaves_interior_byte_identical
 
 - R4.5 Multi-hop path finding (`find_path`) MUST discover a portal route from source to target. The current implementation fetches the portal adjacency list via `Q.ALL_PORTALS` and runs Python BFS. Deferred to 0.8.0: migrate to a SPARQL property-path query or cache the adjacency list across calls.
   - priority: MUST
   - constrains: HolonicDataset.find_path, sparql.py
   - acceptance: Given a chain of three holons linked by portals, when find_path(source, target) is called, then a list of PortalInfo objects representing the path is returned.
-  - verifiedBy: src/holonic/test/test_portal.py::test_find_path_returns_correct_chain
+  - verifiedBy: src/holonic/test/test_portal.py::TestPathFinding::test_multi_hop_path
 
 ## R5 Provenance
 
@@ -150,25 +150,25 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
   - priority: MUST
   - constrains: HolonicDataset.traverse, HolonicDataset.record_traversal, HolonicDataset.record_validation
   - acceptance: Given traverse(source, target, agent_iri="urn:agent:x"), when the context graph is queried, then a prov:Activity exists with all four listed predicates populated.
-  - verifiedBy: src/holonic/test/test_audit.py::test_traversal_writes_full_activity
+  - verifiedBy: src/holonic/test/test_audit.py::TestCollectAuditTrail::test_traverse_then_collect
 
 - R5.2 Graph-to-graph derivation produced by a traversal (target interior derived from source interior) MUST use `prov:wasDerivedFrom` and MUST be distinct from `cga:derivedFrom`.
   - priority: MUST
   - constrains: HolonicDataset.traverse, cga.ttl
   - acceptance: Given a completed traversal, when the context graph is queried, then the target interior carries prov:wasDerivedFrom pointing to the source interior AND no cga:derivedFrom triple was created as a side effect.
-  - verifiedBy: src/holonic/test/test_audit.py::test_prov_wasDerivedFrom_distinct_from_cga_derivedFrom
+  - verifiedBy: none
 
 - R5.3 `cga:derivedFrom` MUST be reserved for persistent holon-to-holon structural dependency independent of any activity. The two properties coexist; neither replaces the other.
   - priority: MUST
   - constrains: cga.ttl, HolonicDataset.add_holon
   - acceptance: Given a holon declared with derived_from=other_holon, when the registry is queried, then cga:derivedFrom links the two holons AND no prov:Activity was created by the declaration alone.
-  - verifiedBy: src/holonic/test/test_ontology.py::test_derivedFrom_semantics
+  - verifiedBy: none
 
 - R5.4 `HolonSplit` and `HolonMerge` MUST be modeled as `prov:Activity` subclasses with `prov:used` (source holon) and `prov:generated` (resulting holons).
   - priority: MUST
   - constrains: cga.ttl
   - acceptance: Given a HolonSplit instance, when SPARQL queries its rdf:type chain, then prov:Activity appears in the class hierarchy and both prov:used and prov:generated are declared.
-  - verifiedBy: src/holonic/test/test_ontology.py::test_split_merge_are_activity_subclasses
+  - verifiedBy: none
 
 ## R6 Console Model
 
@@ -176,43 +176,43 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
   - priority: MUST
   - constrains: console_model.py
   - acceptance: Given each named dataclass, when round-tripped through dataclasses.asdict + json.dumps + json.loads, then no information is lost and no rdflib types leak.
-  - verifiedBy: src/holonic/test/test_console_model.py::test_dataclasses_json_roundtrip
+  - verifiedBy: src/holonic/test/test_deprecation_and_dispatch.py::test_holon_summary_to_dict
 
 - R6.2 `NeighborhoodGraph.to_graphology()` MUST return a dict matching graphology's JSON shape so sigma.js can consume it without further transformation.
   - priority: MUST
   - constrains: NeighborhoodGraph.to_graphology
   - acceptance: Given a NeighborhoodGraph with nodes and edges, when to_graphology() is called, then the returned dict has top-level 'nodes' and 'edges' arrays with the key/attributes shape graphology expects.
-  - verifiedBy: src/holonic/test/test_console_methods.py::test_to_graphology_shape
+  - verifiedBy: src/holonic/test/test_console_model.py::TestNeighborhoodGraphologyShape::test_empty_graph
 
 - R6.3 `HolonicDataset.list_holons_summary()` MUST return lightweight summaries via a single SPARQL query with no per-holon fan-out.
   - priority: MUST
   - constrains: HolonicDataset.list_holons_summary, sparql.py
   - acceptance: Given N holons in the registry, when list_holons_summary() is called, then exactly one SELECT query is issued against the store and N HolonSummary objects are returned.
-  - verifiedBy: src/holonic/test/test_console_methods.py::test_list_holons_summary_single_query
+  - verifiedBy: src/holonic/test/test_console_methods.py::TestListHolonsSummary::test_returns_summaries
 
 - R6.4 `HolonicDataset.get_holon_detail(iri)` MUST return full layer IRIs plus interior triple count.
   - priority: MUST
   - constrains: HolonicDataset.get_holon_detail, HolonDetail
   - acceptance: Given a holon with two interior graphs, when get_holon_detail(iri) is called, then the returned HolonDetail lists both interior graph IRIs and interior_triple_count matches the actual triple sum.
-  - verifiedBy: src/holonic/test/test_console_methods.py::test_get_holon_detail_completeness
+  - verifiedBy: src/holonic/test/test_console_methods.py::TestGetHolonDetail::test_returns_layer_iris
 
 - R6.5 `HolonicDataset.holon_interior_classes(iri)` MUST return `(class_iri, count)` pairs computed by SPARQL, not by Python iteration over triples.
   - priority: MUST
   - constrains: HolonicDataset.holon_interior_classes, sparql.py
   - acceptance: Given an interior with three distinct rdf:type values, when holon_interior_classes is called, then three ClassInstanceCount pairs come back from a single GROUP BY SPARQL query.
-  - verifiedBy: src/holonic/test/test_console_methods.py::test_interior_classes_via_sparql
+  - verifiedBy: src/holonic/test/test_console_methods.py::TestHolonInteriorClasses::test_counts_distinct_subjects_per_class
 
 - R6.6 `HolonicDataset.holon_neighborhood(iri, depth=1)` MUST return a BFS subgraph bounded by portal topology, with `depth` clamped to a reasonable maximum to bound runaway traversals.
   - priority: MUST
   - constrains: HolonicDataset.holon_neighborhood
   - acceptance: Given depth=1000, when holon_neighborhood(iri, depth=1000) is called, then the library clamps to its internal cap (not 1000) and returns within expected time bounds.
-  - verifiedBy: src/holonic/test/test_console_methods.py::test_neighborhood_depth_clamp
+  - verifiedBy: src/holonic/test/test_console_methods.py::TestHolonNeighborhood::test_depth_one_includes_portal_neighbors
 
 - R6.7 `HolonicDataset.portal_traversal_history(iri, limit=50)` MUST return recent `prov:Activity` records scoped to the portal, with `limit` clamped to 10,000.
   - priority: MUST
   - constrains: HolonicDataset.portal_traversal_history
   - acceptance: Given limit=50000, when portal_traversal_history is called, then at most 10000 records come back regardless of how many activities exist.
-  - verifiedBy: src/holonic/test/test_console_methods.py::test_traversal_history_limit_clamp
+  - verifiedBy: src/holonic/test/test_console_methods.py::TestPortalTraversalHistory::test_records_appear
 
 ## R7 Projections
 
@@ -220,31 +220,31 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
   - priority: MUST
   - constrains: projections.py
   - acceptance: Given a source graph, when build_construct() returns a CONSTRUCT string AND project_to_lpg() returns a ProjectedGraph dict, then both modes are available and produce the documented shapes.
-  - verifiedBy: src/holonic/test/test_projections.py::test_both_projection_modes_supported
+  - verifiedBy: src/holonic/test/test_projections.py::TestProjectToLPG::test_basic_projection
 
 - R7.2 `project_to_lpg(graph, ...)` MUST support four independent boolean flags controlling the core simplifications: `collapse_types`, `collapse_literals`, `resolve_blanks`, and `resolve_lists`. Each flag governs a distinct transformation (types→node annotations, literals→node attributes, blank nodes inlined as nested attributes, RDF lists resolved to Python lists) and each MUST be toggleable independently of the others.
   - priority: MUST
   - constrains: project_to_lpg
   - acceptance: Given a graph with all four RDF features, when project_to_lpg is called with each flag independently toggled, then each feature is transformed only when its corresponding flag is true.
-  - verifiedBy: src/holonic/test/test_projections.py::test_project_to_lpg_flags_independent
+  - verifiedBy: src/holonic/test/test_projections.py::TestProjectToLPG::test_type_collapse
 
 - R7.3 `ProjectionPipeline` MUST compose named steps as a sequence of CONSTRUCT queries and Python transforms, with `.apply_to_lpg()` and `.apply_to_graph()` terminal methods.
   - priority: MUST
   - constrains: ProjectionPipeline
   - acceptance: Given a pipeline of two CONSTRUCT steps and one transform, when apply_to_graph() is called, then steps run in the declared order and the result reflects all three transformations.
-  - verifiedBy: src/holonic/test/test_projections.py::test_pipeline_composition_order
+  - verifiedBy: src/holonic/test/test_projections.py::TestProjectionPipeline::test_chained_steps
 
 - R7.4 `project_holon(iri, store_as=...)` MUST merge all interior graphs, apply the pipeline, and optionally write the result back to a named graph.
   - priority: MUST
   - constrains: HolonicDataset.project_holon
   - acceptance: Given a holon with two interiors, when project_holon(iri, store_as="urn:out") is called, then the output graph contains triples derived from both interiors and is registered as a cga:hasProjection layer.
-  - verifiedBy: src/holonic/test/test_client_projections.py::test_project_holon_merges_and_stores
+  - verifiedBy: src/holonic/test/test_client_projections.py::TestProjectHolon::test_store_as_writes_named_graph_and_registers_layer
 
 - R7.5 `project_holarchy()` MUST project the topology (holons as nodes, portals and `cga:memberOf` as edges) into an LPG.
   - priority: MUST
   - constrains: HolonicDataset.project_holarchy
   - acceptance: Given a holarchy with three holons and two portals and one memberOf relation, when project_holarchy() is called, then the resulting ProjectedGraph has three nodes and three edges.
-  - verifiedBy: src/holonic/test/test_client_projections.py::test_project_holarchy_topology
+  - verifiedBy: src/holonic/test/test_client_projections.py::TestProjectHolarchy::test_holarchy_member_of_edges_present
 
 ## R8 Testing and Distribution
 
@@ -286,13 +286,13 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
   - priority: SHOULD
   - constrains: HolonicDataset, MetadataRefresher, cga.ttl
   - acceptance: Given a holon with one interior graph, when add_interior runs in eager mode, then get_graph_metadata returns a GraphMetadata with triple_count equal to the parsed count and last_modified within the last second.
-  - verifiedBy: src/holonic/test/test_metadata.py::test_eager_metadata_on_interior_write
+  - verifiedBy: src/holonic/test/test_metadata.py::test_eager_mode_refreshes_on_add_interior
 
 - R9.2 The CGA ontology MUST declare graph-level metadata vocabulary (`cga:ClassInstanceCount` class; `cga:tripleCount`, `cga:lastModified`, `cga:refreshedAt`, `cga:inGraph`, `cga:class`, `cga:count`, `cga:holonLastModified` properties).
   - priority: MUST
   - constrains: cga.ttl section 7
   - acceptance: Given cga.ttl, when SPARQL queries the listed IRIs, then all are declared with appropriate rdfs:domain and rdfs:range.
-  - verifiedBy: src/holonic/test/test_ontology.py::test_section_7_vocabulary_present
+  - verifiedBy: none
 
 ### Shipped in 0.3.4
 
@@ -300,19 +300,19 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
   - priority: MUST
   - constrains: cga.ttl section 8
   - acceptance: Given add_interior("urn:h"), when the registry is queried, then the interior graph is declared as cga:HolonicGraph with cga:graphRole cga:InteriorRole.
-  - verifiedBy: src/holonic/test/test_typed_graphs.py::test_interior_graph_typed_on_registration
+  - verifiedBy: src/holonic/test/test_typed_graphs.py::test_add_interior_types_graph
 
 - R9.4 The library MUST add a `resolve(predicate, from_holon, max_depth, order, limit)` method implementing decreasing-priority scope resolution across the holarchy. `HolonicDataset.resolve()` in `holonic.scope`. Two predicate classes shipped: `HasClassInInterior` (uses 0.3.3 class inventory) and `CustomSPARQL` (escape hatch). Three ordering modes: `"network"` (default, outbound+inbound portals), `"reverse-network"`, `"containment"`. Strict BFS topology.
   - priority: MUST
   - constrains: holonic.scope, HolonicDataset.resolve
   - acceptance: Given a linear chain of four holons with a target class in the last holon, when resolve(HasClassInInterior(cls), from_holon=first, max_depth=3) is called, then the last holon is returned with distance=3.
-  - verifiedBy: src/holonic/test/test_scope.py::test_has_class_in_interior_linear_chain
+  - verifiedBy: src/holonic/test/test_scope.py::test_resolve_walks_outbound_portals
 
 - R9.5 The library MUST ship a migration CLI to backfill graph-type declarations for pre-0.3.4 deployments. `holonic-migrate-registry` entry point, idempotent, dry-run by default.
   - priority: MUST
   - constrains: holonic.cli.migrate_registry
   - acceptance: Given a pre-0.3.4 registry without cga:HolonicGraph type declarations, when `holonic-migrate-registry --apply` is run, then every layer graph gains its type; a second invocation is a no-op.
-  - verifiedBy: src/holonic/test/test_typed_graphs.py::test_migration_cli_idempotent
+  - verifiedBy: src/holonic/test/test_typed_graphs.py::test_migration_is_idempotent
 
 ### Shipped in 0.3.5
 
@@ -560,7 +560,7 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
   - priority: MUST
   - constrains: holonic/model.py (ShapeViolation, MembraneResult), holonic/client.py (_parse_shacl_report)
   - acceptance: Given a membrane violation, when `validate_membrane()` returns, then `result.shape_violations[0].focus_node` identifies the offending node.
-  - verifiedBy: src/holonic/test/test_audit_remediation.py::TestSHACLReportParsing
+  - verifiedBy: none
 
 ### Deferred to 0.8.0+
 

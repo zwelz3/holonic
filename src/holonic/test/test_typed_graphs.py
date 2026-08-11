@@ -190,3 +190,27 @@ def test_migration_main_dry_run(capsys):
 def test_migration_rejects_unknown_backend():
     rc = main(["ftp://bogus/bad"])
     assert rc != 0
+
+
+def test_migration_requires_backend_argument():
+    # cli-default-noop: a bare invocation must not silently migrate a
+    # throwaway in-memory dataset. The positional is required, so argparse
+    # exits 2 rather than defaulting to 'rdflib'.
+    with pytest.raises(SystemExit) as exc:
+        main([])
+    assert exc.value.code == 2
+
+
+def test_apply_skips_unsafe_store_derived_iri(capsys):
+    # S3 (store-derived): a graph IRI that reached the plan carrying
+    # characters unsafe for SPARQL/Turtle must be skipped with a warning,
+    # never spliced into the UPDATE template.
+    ds = HolonicDataset(RdflibBackend())
+    plan = [
+        ("urn:safe:graph", "InteriorRole"),
+        ("urn:bad> .} ; DROP ALL {", "InteriorRole"),
+    ]
+    n = _apply(ds, plan)
+    captured = capsys.readouterr()
+    assert n == 1, "only the safe graph should be typed"
+    assert "skipping" in captured.err.lower()

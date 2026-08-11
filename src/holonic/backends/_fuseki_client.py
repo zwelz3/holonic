@@ -9,11 +9,24 @@ import aiohttp
 from aiohttp import ClientResponse
 from rdflib import Graph
 
+from ..exceptions import HolonicError
+
 log = logging.getLogger(__name__)
 
+# Sentinel distinguishing "no per-call timeout override" (fall back to the
+# session default) from an explicit ``timeout=None`` (disable the timeout).
+_UNSET: Any = object()
 
-class FusekiError(RuntimeError):
-    pass
+
+class FusekiError(HolonicError, RuntimeError):
+    """Raised when a Fuseki HTTP request fails.
+
+    Subclasses both :class:`HolonicError` and ``RuntimeError``; the latter is
+    retained for backward compatibility.
+
+    .. versionchanged:: 0.8.0
+       Also derives from :class:`HolonicError`.
+    """
 
 
 class FusekiClient:
@@ -27,7 +40,13 @@ class FusekiClient:
         Optional default dataset name, e.g. "mydataset".
         Can be omitted and supplied per-call instead.
     session_kwargs:
-        Extra kwargs forwarded to aiohttp.ClientSession.
+        Extra kwargs forwarded to aiohttp.ClientSession. A ``timeout`` key
+        here takes precedence over the ``timeout`` parameter below.
+    timeout:
+        Default total request timeout in seconds, applied to the session
+        so it bounds every request (default 30s). Without a default,
+        requests could hang forever and the 5xx/timeout retry loop was
+        effectively dead. Pass ``None`` to disable.
     max_retries:
         Number of retry attempts on 5xx / timeout errors.
     retry_backoff:
@@ -49,6 +68,7 @@ class FusekiClient:
         dataset: str | None = None,
         *,
         session_kwargs: dict | None = None,
+        timeout: float | None = 30.0,
         max_retries: int = 3,
         retry_backoff: float = 0.5,
         default_graph_content_type: str = "text/turtle",
@@ -57,6 +77,11 @@ class FusekiClient:
         self.base_url = base_url.rstrip("/")
         self.dataset = dataset  # default dataset; may be None
         self._session_kwargs = session_kwargs or {}
+        # A default session-level timeout so every request is bounded. An
+        # explicit ``timeout`` in session_kwargs wins; otherwise install
+        # one built from the ``timeout`` parameter (None => disabled).
+        if "timeout" not in self._session_kwargs and timeout is not None:
+            self._session_kwargs["timeout"] = aiohttp.ClientTimeout(total=timeout)
         self._session: aiohttp.ClientSession | None = None
         self.max_retries = max_retries
         self.retry_backoff = retry_backoff
@@ -119,7 +144,7 @@ class FusekiClient:
         expected_status: Iterable[int] = (200,),
         allow_redirects: bool = True,
         raise_for_status: bool = True,
-        timeout: int | None = None,
+        timeout: Any = _UNSET,
     ) -> ClientResponse:
         """Issue an HTTP request with automatic retry on 5xx / timeout.
         Returns the aiohttp ClientResponse.
@@ -136,6 +161,19 @@ class FusekiClient:
                 merged.update(headers)
             headers = merged
 
+        # Only pass ``timeout`` to aiohttp when a per-call override was
+        # supplied; otherwise let the session-level default apply. Passing
+        # ``timeout=None`` unconditionally (the old behaviour) overrode the
+        # session default on every request, so no request was ever bounded.
+        request_kwargs: dict[str, Any] = dict(
+            params=params,
+            headers=headers,
+            data=data,
+            allow_redirects=allow_redirects,
+        )
+        if timeout is not _UNSET:
+            request_kwargs["timeout"] = timeout
+
         expected = set(expected_status)
         attempt = 0
         while True:
@@ -144,11 +182,7 @@ class FusekiClient:
                 async with self._session.request(
                     method,
                     url,
-                    params=params,
-                    headers=headers,
-                    data=data,
-                    allow_redirects=allow_redirects,
-                    timeout=timeout,
+                    **request_kwargs,
                 ) as resp:
                     # Read the body so the connection is released
                     body = await resp.read()
@@ -640,7 +674,10 @@ class FusekiClient:
     # ------------------------------------------------------------------
 
     async def __aenter__(self):
-        self._session = aiohttp.ClientSession(**self._session_kwargs)
+        # Guard like open(): re-entering (or entering after open()) must not
+        # orphan an already-live session by silently overwriting it.
+        if self._session is None:
+            self._session = aiohttp.ClientSession(**self._session_kwargs)
         return self
 
     async def __aexit__(self, exc_type, exc, tb):

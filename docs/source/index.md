@@ -14,12 +14,11 @@ dom-comparison
 ```{toctree}
 :maxdepth: 1
 :caption: Project
-:glob:
 
-../SPEC
-../DECISIONS
-../MIGRATION
-../../CHANGELOG
+spec
+decisions
+migration
+changelog
 ```
 
 ## Overview
@@ -89,7 +88,7 @@ See [`backends`](./backends) for the full protocol surface.
 
 `GraphBackend` was renamed to `HolonicStore` in 0.4.0; the old name
 remains as a deprecated alias through all of 0.4.x. Migration guide:
-[`docs/MIGRATION.md`](../MIGRATION).
+[`docs/MIGRATION.md`](migration).
 
 ## Generating Documentation
 
@@ -109,4 +108,4 @@ This launches JupyterLab with the thirteen example notebooks in `notebooks/` ava
 
 ## Roadmap
 
-See the project README for the headline roadmap. Full requirements tracked in [`SPEC`](../SPEC) under R9.11–R9.22.
+See the project README for the headline roadmap. Full requirements tracked in [`SPEC`](spec) under R9.11–R9.22.

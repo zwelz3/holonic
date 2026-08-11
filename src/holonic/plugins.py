@@ -28,9 +28,11 @@ from __future__ import annotations
 import platform
 import socket
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from importlib import metadata
 from typing import TYPE_CHECKING
+
+from .exceptions import HolonicError
 
 if TYPE_CHECKING:
     from rdflib import Graph
@@ -49,8 +51,15 @@ _REGISTERED: dict[str, Callable[[Graph], Graph]] = {}
 _NAMES_FOR_ID: dict[int, str] = {}
 
 
-class TransformNotFoundError(KeyError):
-    """Raised when a pipeline references an unknown transform name."""
+class TransformNotFoundError(HolonicError, KeyError):
+    """Raised when a pipeline references an unknown transform name.
+
+    Subclasses both :class:`HolonicError` and ``KeyError``; the latter is
+    retained for backward compatibility.
+
+    .. versionchanged:: 0.8.0
+       Also derives from :class:`HolonicError`.
+    """
 
 
 def projection_transform(
@@ -91,6 +100,7 @@ def _discover_entry_points() -> dict[str, Callable[[Graph], Graph]]:
     so entry-point metadata is not scanned during package import.
     """
     discovered: dict[str, Callable[[Graph], Graph]] = {}
+    eps: Iterable[metadata.EntryPoint]
     try:
         eps = metadata.entry_points(group=ENTRY_POINT_GROUP)
     except TypeError:
@@ -161,6 +171,24 @@ def transform_version(name: str) -> str | None:
         except metadata.PackageNotFoundError:
             # Try a shorter module path
             parts = parts[:-1]
+    return None
+
+
+def name_for_transform(func: Callable[[Graph], Graph]) -> str | None:
+    """Return the registered name for a transform callable, or ``None``.
+
+    Consults the first-party reverse index populated by
+    ``@projection_transform`` first, then falls back to identity-matching
+    against the full (first-party + entry-point) registry. Used by
+    :meth:`ProjectionPipeline.to_spec` to translate inline transform callables
+    into the name references a declarative ``ProjectionPipelineSpec`` uses.
+    """
+    name = _NAMES_FOR_ID.get(id(func))
+    if name is not None:
+        return name
+    for candidate_name, candidate in get_registered_transforms().items():
+        if candidate is func:
+            return candidate_name
     return None
 
 

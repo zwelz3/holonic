@@ -12,6 +12,7 @@ Expected:  ALL tests FAIL
 """
 
 import pytest
+from rdflib import URIRef
 
 from holonic import (
     HolonicDataset,
@@ -295,6 +296,69 @@ class TestPortalConstructScope:
         ttl = projected.serialize(format="ntriples")
         assert "123-45-6789" not in ttl, "Scoped portal should not see SSN."
 
+    def test_no_projection_portal_does_not_leak_other_holon_pii(self, ds):
+        # S5: a portal whose source has an interior but NO projection must
+        # scope to that interior, not the whole dataset. Previously it ran
+        # the CONSTRUCT against every graph, so an unrelated holon's PII
+        # leaked through a broad WHERE clause.
+        ds.add_holon("urn:holon:a", "A")
+        ds.add_interior(
+            "urn:holon:a",
+            '@prefix ex: <urn:ex:> . <urn:person:pub> a ex:Employee ; ex:name "Pub" .',
+        )
+        ds.add_holon("urn:holon:secret", "Secret")
+        ds.add_interior(
+            "urn:holon:secret",
+            '@prefix ex: <urn:ex:> . <urn:person:spy> a ex:Employee ; ex:ssn "999-99-9999" .',
+        )
+        ds.add_holon("urn:holon:dir", "Dir")
+        ds.add_portal(
+            "urn:portal:a-to-dir",
+            "urn:holon:a",
+            "urn:holon:dir",
+            "PREFIX ex: <urn:ex:> "
+            "CONSTRUCT { ?s ?p ?o } WHERE { ?s a ex:Employee ; ?p ?o }",
+        )
+        projected = ds.traverse_portal("urn:portal:a-to-dir")
+        ttl = projected.serialize(format="ntriples")
+        assert "999-99-9999" not in ttl, (
+            "Other holon's SSN leaked through an unscoped whole-dataset CONSTRUCT."
+        )
+        assert "Pub" in ttl, "Source holon's own interior should still be visible."
+
+    def test_source_with_nothing_to_scope_raises(self, ds):
+        # Fail-closed: a source with neither projection nor interior must
+        # not silently widen to the whole dataset.
+        ds.add_holon("urn:holon:empty", "Empty")
+        ds.add_holon("urn:holon:dir2", "Dir2")
+        ds.add_portal(
+            "urn:portal:empty",
+            "urn:holon:empty",
+            "urn:holon:dir2",
+            "CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o }",
+        )
+        with pytest.raises(ValueError, match="scoped"):
+            ds.traverse_portal("urn:portal:empty")
+
+    def test_unscoped_opt_in_allows_whole_dataset(self, ds):
+        # The explicit opt-in restores the legacy whole-dataset behaviour.
+        ds.add_holon("urn:holon:empty2", "Empty2")
+        ds.add_holon("urn:holon:dir3", "Dir3")
+        ds.add_interior(
+            "urn:holon:dir3",
+            "@prefix ex: <urn:ex:> . <urn:o> a ex:Thing .",
+        )
+        ds.add_portal(
+            "urn:portal:opt",
+            "urn:holon:empty2",
+            "urn:holon:dir3",
+            "PREFIX ex: <urn:ex:> CONSTRUCT { ?s ?p ?o } WHERE { ?s a ex:Thing ; ?p ?o }",
+        )
+        projected = ds.traverse_portal(
+            "urn:portal:opt", unscoped_portals_allowed=True
+        )
+        assert len(projected) >= 1, "Opt-in should run against the whole dataset."
+
 
 # ══════════════════════════════════════════════════════════
 # [1.4] Fail-closed traversal
@@ -370,6 +434,123 @@ class TestFailClosedTraversal:
             pass
         after = len(ds.backend.get_graph("urn:holon:tgt/interior"))
         assert after == before, f"Rollback failed. Before: {before}, After: {after}."
+
+    # ── E1: genuine SHACL Violation drives fail-closed (passing) ──
+    #
+    # The two xfails above document SPEC OQ11: sh:targetClass reports
+    # conformant when the *target class has no instances*. These tests avoid
+    # that gap by projecting an actual instance of the targeted class that
+    # violates a sh:minCount, so SHACL reports a real Violation -- exercising
+    # the advertised restore-and-raise guarantee end to end.
+
+    @staticmethod
+    def _setup_breaching_traversal(ds):
+        """Source projects a req:Widget instance missing its mandatory serial."""
+        ds.add_holon("urn:holon:src", "Src")
+        ds.add_interior(
+            "urn:holon:src",
+            "@prefix req: <urn:req:> . <urn:thing:1> a req:Widget .",
+        )
+        ds.add_holon("urn:holon:tgt", "Tgt")
+        ds.add_interior(
+            "urn:holon:tgt",
+            "@prefix req: <urn:req:> . <urn:existing> a req:Widget ; req:serial \"ok\" .",
+            graph_iri="urn:holon:tgt/interior",
+        )
+        ds.add_boundary(
+            "urn:holon:tgt",
+            """
+            @prefix req: <urn:req:> .
+            <urn:shapes:Widget> a sh:NodeShape ; sh:targetClass req:Widget ;
+                sh:property [ sh:path req:serial ; sh:minCount 1 ; sh:severity sh:Violation ] .
+        """,
+        )
+        # Portal copies req:Widget instances (which lack req:serial) into the
+        # target interior -- a genuine minCount violation once injected.
+        ds.add_portal(
+            "urn:portal:widget",
+            "urn:holon:src",
+            "urn:holon:tgt",
+            "PREFIX req: <urn:req:> "
+            "CONSTRUCT { ?s a req:Widget . } WHERE { ?s a req:Widget . }",
+        )
+
+    def test_fail_on_breach_raises_on_genuine_violation(self, ds):
+        self._setup_breaching_traversal(ds)
+        with pytest.raises(MembraneBreachError):
+            ds.traverse(
+                "urn:holon:src", "urn:holon:tgt", validate=True, fail_on_breach=True
+            )
+
+    def test_fail_on_breach_leaves_interior_byte_identical(self, ds):
+        self._setup_breaching_traversal(ds)
+        before = self.backend_nt(ds, "urn:holon:tgt/interior")
+        with pytest.raises(MembraneBreachError):
+            ds.traverse(
+                "urn:holon:src", "urn:holon:tgt", validate=True, fail_on_breach=True
+            )
+        after = self.backend_nt(ds, "urn:holon:tgt/interior")
+        assert after == before, "Breach rollback must leave the interior unchanged."
+
+    def test_rollback_preserves_concurrent_write(self, ds):
+        # C2: rollback removes only the injected delta, not a triple another
+        # writer added to the same interior between snapshot and restore.
+        self._setup_breaching_traversal(ds)
+        ds.backend.parse_into(
+            "urn:holon:tgt/interior",
+            '@prefix req: <urn:req:> . <urn:concurrent> a req:Widget ; req:serial "z" .',
+            "turtle",
+        )
+        with pytest.raises(MembraneBreachError):
+            ds.traverse(
+                "urn:holon:src", "urn:holon:tgt", validate=True, fail_on_breach=True
+            )
+        interior = ds.backend.get_graph("urn:holon:tgt/interior")
+        assert any(s == URIRef("urn:concurrent") for s, _, _ in interior), (
+            "Concurrently-added triple must survive a delta rollback "
+            "(a whole-graph put_graph rollback would clobber it)."
+        )
+
+    def test_breach_does_not_poison_noop_cache(self, ds):
+        # E2: a rolled-back breach must NOT persist the projection hash, so a
+        # retry (after fixing the boundary) re-injects instead of no-op'ing.
+        self._setup_breaching_traversal(ds)
+        with pytest.raises(MembraneBreachError):
+            ds.traverse(
+                "urn:holon:src",
+                "urn:holon:tgt",
+                validate=True,
+                fail_on_breach=True,
+                agent_iri="urn:agent:e2",
+            )
+        hash_rows = ds.backend.query("""
+            PREFIX cga: <urn:holonic:ontology:>
+            SELECT ?hash WHERE { GRAPH ?g { ?s cga:lastProjectionHash ?hash . } }
+        """)
+        assert not hash_rows, "Rolled-back breach must not persist a projection hash."
+
+        # Relax the boundary, then retry: the projection must actually inject.
+        ds.backend.update("""
+            PREFIX req: <urn:req:>
+            DELETE WHERE { GRAPH <urn:holon:tgt/boundary> { ?s ?p ?o } }
+        """)
+        projected, result = ds.traverse(
+            "urn:holon:src",
+            "urn:holon:tgt",
+            validate=True,
+            fail_on_breach=False,
+            agent_iri="urn:agent:e2",
+        )
+        interior = ds.backend.get_graph("urn:holon:tgt/interior")
+        assert any(s == URIRef("urn:thing:1") for s, _, _ in interior), (
+            "Retry after a breach must re-inject, not report a phantom no-op."
+        )
+
+    @staticmethod
+    def backend_nt(ds, graph_iri):
+        return sorted(
+            ds.backend.get_graph(graph_iri).serialize(format="nt").splitlines()
+        )
 
 
 # ══════════════════════════════════════════════════════════
@@ -463,6 +644,36 @@ class TestSealedPortalEnforcement:
         )
         with pytest.raises(Exception, match="(?i)seal"):
             ds.traverse("urn:holon:s", "urn:holon:t", validate=False)
+
+    def test_dual_typed_sealed_portal_fails_closed(self, ds):
+        # S6: a portal typed as BOTH cga:SealedPortal and another portal
+        # type must still be blocked. The old check did SELECT ?type ...
+        # LIMIT 1 and a substring test, so whichever type row the store
+        # returned first decided the seal -- letting a dual-typed portal
+        # be traversed nondeterministically. The fail-closed ASK catches
+        # the seal regardless of what else the portal is typed as.
+        ds.add_holon("urn:holon:s", "S")
+        ds.add_interior("urn:holon:s", "<urn:x> a <urn:T> .")
+        ds.add_holon("urn:holon:t", "T")
+        ds.add_portal(
+            "urn:portal:dual",
+            "urn:holon:s",
+            "urn:holon:t",
+            portal_type="cga:SealedPortal",
+            construct_query="CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o }",
+        )
+        # Add a competing type in a *separate* graph, so a LIMIT 1 could
+        # return it instead of the seal.
+        ds.backend.update("""
+            PREFIX cga: <urn:holonic:ontology:>
+            INSERT DATA {
+                GRAPH <urn:extra:types> {
+                    <urn:portal:dual> a cga:TransformPortal
+                }
+            }
+        """)
+        with pytest.raises(Exception, match="(?i)seal"):
+            ds.traverse_portal("urn:portal:dual")
 
 
 # ══════════════════════════════════════════════════════════

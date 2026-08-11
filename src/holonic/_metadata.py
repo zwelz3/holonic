@@ -170,37 +170,66 @@ class MetadataRefresher:
         return _GraphStats(graph_iri=graph_iri, triple_count=n, classes=classes)
 
     def _write_graph(self, stats: _GraphStats, when_iso: str) -> None:
-        """Clear existing metadata for the graph, then insert fresh."""
-        self._backend.update(
-            sparql.CLEAR_GRAPH_METADATA_TEMPLATE.format(
-                registry_iri=self._registry_iri,
-                graph_iri=stats.graph_iri,
-            )
-        )
+        """Replace the graph's metadata in one ``DELETE/INSERT/WHERE``.
+
+        Collapses the prior clear-then-insert pair into a single UPDATE
+        (audit P2): halves the round-trips on the eager per-write path and
+        closes the read-then-write window between the two statements.
+        """
+        reg = self._registry_iri
+        graph_iri = stats.graph_iri
         inventory_lines: list[str] = []
         for c in stats.classes:
-            inv_iri = _inventory_iri(stats.graph_iri, c.class_iri)
+            inv_iri = _inventory_iri(graph_iri, c.class_iri)
             inventory_lines.append(
-                f"<{inv_iri}> a cga:ClassInstanceCount ;\n"
-                f"    cga:inGraph <{stats.graph_iri}> ;\n"
-                f"    cga:class <{c.class_iri}> ;\n"
-                f"    cga:count {c.count} ;\n"
-                f'    cga:refreshedAt "{when_iso}"^^xsd:dateTime .'
+                f"    <{inv_iri}> a cga:ClassInstanceCount ;\n"
+                f"        cga:inGraph <{graph_iri}> ;\n"
+                f"        cga:class <{c.class_iri}> ;\n"
+                f"        cga:count {c.count} ;\n"
+                f'        cga:refreshedAt "{when_iso}"^^xsd:dateTime .'
             )
         inventory_block = "\n".join(inventory_lines)
-        insert = (
+        # Delete the prior scalar triples + every ClassInstanceCount record
+        # for this graph, then insert the freshly-computed values. DELETE is
+        # evaluated before INSERT (SPARQL 1.1), so a re-inserted inventory
+        # record with an unchanged IRI ends up carrying the new counts.
+        update = (
             "PREFIX cga: <urn:holonic:ontology:>\n"
             "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>\n"
-            "INSERT DATA {\n"
-            f"  GRAPH <{self._registry_iri}> {{\n"
-            f"    <{stats.graph_iri}> cga:tripleCount {stats.triple_count} ;\n"
+            "DELETE {\n"
+            f"  GRAPH <{reg}> {{\n"
+            f"    <{graph_iri}> cga:tripleCount ?old_count .\n"
+            f"    <{graph_iri}> cga:lastModified ?old_modified .\n"
+            "    ?inv a cga:ClassInstanceCount ;\n"
+            f"         cga:inGraph <{graph_iri}> ;\n"
+            "         cga:class ?cls ;\n"
+            "         cga:count ?n ;\n"
+            "         cga:refreshedAt ?r .\n"
+            "  }\n"
+            "}\n"
+            "INSERT {\n"
+            f"  GRAPH <{reg}> {{\n"
+            f"    <{graph_iri}> cga:tripleCount {stats.triple_count} ;\n"
             f'      cga:lastModified "{when_iso}"^^xsd:dateTime ;\n'
             f'      cga:refreshedAt "{when_iso}"^^xsd:dateTime .\n'
-            f"    {inventory_block}\n"
+            f"{inventory_block}\n"
+            "  }\n"
+            "}\n"
+            "WHERE {\n"
+            f"  GRAPH <{reg}> {{\n"
+            f"    OPTIONAL {{ <{graph_iri}> cga:tripleCount ?old_count }}\n"
+            f"    OPTIONAL {{ <{graph_iri}> cga:lastModified ?old_modified }}\n"
+            "    OPTIONAL {\n"
+            "      ?inv a cga:ClassInstanceCount ;\n"
+            f"           cga:inGraph <{graph_iri}> ;\n"
+            "           cga:class ?cls ;\n"
+            "           cga:count ?n .\n"
+            "      OPTIONAL { ?inv cga:refreshedAt ?r }\n"
+            "    }\n"
             "  }\n"
             "}\n"
         )
-        self._backend.update(insert)
+        self._backend.update(update)
 
     def _layer_graphs_of(self, holon_iri: str) -> list[str]:
         """Return all layer graph IRIs for a holon across all layers."""
@@ -242,23 +271,32 @@ class MetadataRefresher:
 
         last_modified = max(layer_modified_times) if layer_modified_times else when_iso
 
-        self._backend.update(
-            sparql.CLEAR_HOLON_METADATA_TEMPLATE.format(
-                registry_iri=self._registry_iri,
-                holon_iri=holon_iri,
-            )
-        )
-        insert = (
+        # Single DELETE/INSERT/WHERE replaces the prior clear-then-insert
+        # pair (audit P2).
+        reg = self._registry_iri
+        update = (
             "PREFIX cga: <urn:holonic:ontology:>\n"
             "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>\n"
-            "INSERT DATA {\n"
-            f"  GRAPH <{self._registry_iri}> {{\n"
+            "DELETE {\n"
+            f"  GRAPH <{reg}> {{\n"
+            f"    <{holon_iri}> cga:interiorTripleCount ?old_count .\n"
+            f"    <{holon_iri}> cga:holonLastModified ?old_modified .\n"
+            "  }\n"
+            "}\n"
+            "INSERT {\n"
+            f"  GRAPH <{reg}> {{\n"
             f"    <{holon_iri}> cga:interiorTripleCount {interior_sum} ;\n"
             f'      cga:holonLastModified "{last_modified}"^^xsd:dateTime .\n'
             "  }\n"
             "}\n"
+            "WHERE {\n"
+            f"  GRAPH <{reg}> {{\n"
+            f"    OPTIONAL {{ <{holon_iri}> cga:interiorTripleCount ?old_count }}\n"
+            f"    OPTIONAL {{ <{holon_iri}> cga:holonLastModified ?old_modified }}\n"
+            "  }\n"
+            "}\n"
         )
-        self._backend.update(insert)
+        self._backend.update(update)
 
     # ── public entry points ──────────────────────────────────
 
@@ -273,6 +311,14 @@ class MetadataRefresher:
         Native dispatch is duck-typed via ``hasattr`` per D-0.4.0-5
         in docs/DECISIONS.md.
         """
+        # ``graph_iri`` may be store-derived (``refresh_holon`` feeds the
+        # layer graphs it read back from the registry). The COUNT reads
+        # bind it, but the clear/insert writes are SPARQL UPDATE and splice
+        # it as text, so validate here -- the single read+write chokepoint
+        # that closes second-order injection on this path (S3).
+        from holonic.client import _validate_iri
+
+        _validate_iri(graph_iri, "graph_iri")
         self._ensure_registry_typed()
         native = getattr(self._backend, "refresh_graph_metadata", None)
         if callable(native):
@@ -296,6 +342,9 @@ class MetadataRefresher:
 
     def refresh_holon(self, holon_iri: str) -> list[GraphMetadata]:
         """Refresh all layer graphs of a holon, then the per-holon rollup."""
+        from holonic.client import _validate_iri
+
+        _validate_iri(holon_iri, "holon_iri")
         layer_graphs = self._layer_graphs_of(holon_iri)
         results: list[GraphMetadata] = []
         layer_times: list[str] = []
@@ -318,6 +367,9 @@ class MetadataRefresher:
 
         Returns ``None`` if no metadata has been written yet.
         """
+        from holonic.client import _validate_iri
+
+        _validate_iri(graph_iri, "graph_iri")
         scalar_rows = self._backend.query(
             sparql.READ_GRAPH_METADATA_TEMPLATE.format(
                 registry_iri=self._registry_iri,

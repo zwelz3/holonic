@@ -78,6 +78,36 @@ jobs:
           retention-days: 14
 
   # ════════════════════════════════════════════════════════════
+  # pip-install — verify the documented onboarding path works in a
+  # clean venv (no pixi). Guards README "Tests" section:
+  #   pip install .[dev] && pytest
+  # The audit found this broken because addopts referenced
+  # pytest-html / pytest-json-report, which were absent from [dev].
+  # ════════════════════════════════════════════════════════════
+  pip-install:
+    name: pip install .[dev] + pytest
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Create clean venv and install
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          python -m pip install --upgrade pip
+          pip install .[dev]
+
+      - name: Run the documented test command
+        run: |
+          . .venv/bin/activate
+          pytest
+
+  # ════════════════════════════════════════════════════════════
   # Docs — build Sphinx (always) + deploy to Pages (if green)
   # ════════════════════════════════════════════════════════════
   docs:
@@ -167,8 +197,23 @@ jobs:
 
       - name: Verify package
         run: |
-          pip install dist/*.whl
-          python -c "import holonic; print(f'holonic {holonic.__version__}')"
+          pip install dist/*.whl twine
+          VERSION=$(python -c "import holonic; print(holonic.__version__)")
+          echo "Built holonic ${VERSION}"
+          # Wheel + sdist metadata must be well-formed (long-description
+          # render, classifiers, etc.) before we ever reach PyPI.
+          twine check dist/*
+          # On a tagged build, the git tag and __version__ must agree. This
+          # is the gate that would have caught the 0.7.1 artifact mismatch
+          # (see CHANGELOG); a bare `import` print never could.
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/v}"
+            if [[ "${TAG}" != "${VERSION}" ]]; then
+              echo "::error::tag v${TAG} does not match __version__ ${VERSION}"
+              exit 1
+            fi
+            echo "tag v${TAG} matches __version__ ${VERSION}"
+          fi
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -202,3 +247,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         # Uses trusted publishing — configure at:
         # https://pypi.org/manage/project/holonic/settings/publishing/
+        with:
+          # A re-run of a partially-published tag must not hard-fail on
+          # files PyPI already has (PyPI releases are immutable).
+          skip-existing: true

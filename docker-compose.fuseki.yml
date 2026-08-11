@@ -1,0 +1,36 @@
+# Apache Jena Fuseki for holonic's Fuseki-backend integration tests.
+#
+# The audit found the Fuseki backend shipped at 0% coverage because every
+# test skipped for a missing aiohttp / no server. This compose file provides
+# the real server those tests need.
+#
+#   docker compose -f docker-compose.fuseki.yml up -d
+#   HOLONIC_FUSEKI_URL=http://localhost:3030 pytest --integration \
+#       src/holonic/test/test_fuseki_integration.py
+#   docker compose -f docker-compose.fuseki.yml down
+#
+# Or simply: `pixi run test-integration` (wraps up + test + down).
+#
+# The `--mem /holonic_itest` command pre-creates an in-memory dataset so the
+# test suite needs no admin credentials — only the anonymous data/query/
+# update endpoints. Data is discarded when the container stops, which is
+# exactly what a test dataset wants.
+services:
+  fuseki:
+    image: apache/jena-fuseki:5.2.0
+    container_name: holonic-fuseki-itest
+    ports:
+      - "3030:3030"
+    environment:
+      # An admin password is required by the image entrypoint; the tests do
+      # not use it (they only touch anonymous data endpoints), but set a
+      # fixed one so runs are reproducible and the container starts cleanly.
+      ADMIN_PASSWORD: holonic-itest
+    command: ["--mem", "/holonic_itest"]
+    healthcheck:
+      # Root UI is anonymous; a 200 here means the server is serving.
+      test: ["CMD", "curl", "-fsS", "http://localhost:3030/"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s

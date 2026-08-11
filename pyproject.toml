@@ -34,12 +34,18 @@ dynamic = [
 ]
 dependencies = [
   "pyshacl>=0.25",
-  "rdflib>=7",
+  # Cap rdflib below 8 explicitly. pyshacl currently enforces this bound
+  # transitively, but the library binds directly against rdflib 7 APIs
+  # (Dataset default_union, initBindings term semantics), so declare it
+  # here rather than inheriting an implicit ceiling (audit: rdflib pin).
+  "rdflib>=7,<8",
 ]
 optional-dependencies.dev = [
-  "holonic[docs,entailment,fuseki,notebooks,viz]",
-  "pytest>=8",
-  "pytest-cov",
+  # Include the full test extra so a bare `pytest` works out of the box:
+  # the default addopts reference pytest-html / pytest-json-report, which
+  # ship in [test]. Keeping them out of [dev] made `pip install .[dev] &&
+  # pytest` fail on unknown --html / --json-report options.
+  "holonic[docs,entailment,fuseki,notebooks,test,viz]",
   "ruff",
 ]
 optional-dependencies.docs = [
@@ -73,10 +79,10 @@ optional-dependencies.test = [
 ]
 optional-dependencies.viz = [
   "ipywidgets>=8",
+  "networkx>=3",
   "yfiles-jupyter-graphs>=1.7",
 ]
 scripts.holonic-migrate-registry = "holonic.cli.migrate_registry:main"
-entry-points."holonic.projections".collapse_reification = "holonic.projections:collapse_reification"
 entry-points."holonic.projections".localize_predicates = "holonic.projections:localize_predicates"
 # First-party projection transforms. Third-party packages register
 # their own transforms under this group in their pyproject.toml;
@@ -115,7 +121,6 @@ lint.per-file-ignores."src/holonic/test/test*.py" = [
 lint.pydocstyle.convention = "google"
 
 [tool.mypy]
-# broken by ipywidgetsplugins = "pydantic.mypy"
 cache_dir = "build/.mypy_cache"
 sqlite_cache = true
 python_version = "3.11"
@@ -127,15 +132,41 @@ show_error_codes = true
 warn_return_any = true
 warn_unused_ignores = true
 disable_error_code = "type-abstract"
-overrides = [
-  # disallow_any_unimported = true
-  # exclude = [
-  #  "^.+/holonic/test.+\\.py$",
-  # ]
-  { module = [
-    "importlib.metadata",
-  ], ignore_missing_imports = true },
+
+[[tool.mypy.overrides]]
+module = [
+  "importlib.metadata",
 ]
+ignore_missing_imports = true
+
+# Tests are exempt from strict-typing noise (missing annotations etc.).
+[[tool.mypy.overrides]]
+module = [
+  "holonic.test.*",
+]
+disallow_untyped_defs = false
+check_untyped_defs = false
+ignore_errors = true
+
+# ── mypy ratchet ────────────────────────────────────────────────────
+# These modules still carry legacy mypy errors and are ignored until the
+# audit-remediation phase that owns each one cleans it. As a module goes
+# green, DELETE its entry here so mypy guards it permanently thereafter.
+# Already cleaned and now guarded: backends.rdflib_backend, plugins.
+[[tool.mypy.overrides]]
+module = [
+  "holonic.backends._fuseki_client",
+  "holonic.backends.fuseki_backend",
+  "holonic.client",
+  "holonic._pipelines",
+  "holonic._console",
+  "holonic.model",
+  "holonic.projections",
+  "holonic.viz.graph_builder",
+  "holonic.viz.provenance",
+  "holonic.viz.widgets",
+]
+ignore_errors = true
 
 [tool.pytest]
 ini_options.junit_family = "xunit2"

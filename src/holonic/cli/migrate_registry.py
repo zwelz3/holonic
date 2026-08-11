@@ -35,12 +35,12 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "backend",
-        nargs="?",
-        default="rdflib",
         help=(
-            "Backend to migrate. Either 'rdflib' for an in-memory "
-            "dataset (useful for testing), or a Fuseki URL like "
-            "'http://localhost:3030/holarchy'."
+            "Backend to migrate (required). Either 'rdflib' for an "
+            "in-memory dataset (useful for testing), or a Fuseki URL like "
+            "'http://localhost:3030/holarchy'. A bare invocation with no "
+            "backend is an error -- migrating a throwaway in-memory dataset "
+            "silently is never what the caller wants."
         ),
     )
     parser.add_argument(
@@ -94,8 +94,22 @@ def _plan(ds: HolonicDataset) -> list[tuple[str, str]]:
 
 
 def _apply(ds: HolonicDataset, plan: list[tuple[str, str]]) -> int:
-    """Apply the typing plan. Returns the number of graphs typed."""
+    """Apply the typing plan. Returns the number of graphs typed.
+
+    The graph IRIs come from the store, not the caller, but they are still
+    interpolated into a SPARQL UPDATE. A graph whose IRI carries characters
+    unsafe for SPARQL/Turtle is skipped with a warning rather than spliced
+    into the template (S3: second-order, store-derived injection).
+    """
+    from holonic.client import _validate_iri
+
+    typed = 0
     for graph_iri, role_local in plan:
+        try:
+            _validate_iri(graph_iri, "graph_iri")
+        except ValueError as e:
+            print(f"warning: skipping graph with unsafe IRI: {e}", file=sys.stderr)
+            continue
         ds.backend.update(
             Q.TYPE_GRAPH_TEMPLATE.format(
                 registry_iri=ds.registry_iri,
@@ -103,7 +117,8 @@ def _apply(ds: HolonicDataset, plan: list[tuple[str, str]]) -> int:
                 role=role_local,
             )
         )
-    return len(plan)
+        typed += 1
+    return typed
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -116,24 +131,25 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 2
 
+    target = args.backend
     plan = _plan(ds)
     if not plan:
-        print("nothing to do -- every layer graph is already typed.")
+        print(f"nothing to do -- every layer graph in {target!r} is already typed.")
         return 0
 
-    print(f"plan ({len(plan)} graphs to type):")
+    print(f"plan for {target!r} ({len(plan)} graphs to type):")
     for graph_iri, role_local in plan:
         print(f"  + <{graph_iri}>")
         print(f"      a cga:HolonicGraph ; cga:graphRole cga:{role_local} .")
 
     if not args.apply:
         print()
-        print("dry run -- pass --apply to write these triples.")
+        print(f"dry run against {target!r} -- pass --apply to write these triples.")
         return 0
 
     n = _apply(ds, plan)
     print()
-    print(f"applied: {n} graphs typed.")
+    print(f"applied to {target!r}: {n} graphs typed.")
     return 0
 
 

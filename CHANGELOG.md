@@ -2,6 +2,234 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+_Targeting 0.8.0._ Security- and correctness-hardening release driven by the
+v0.7.1 holonic audit. This release contains **breaking changes**; see
+`docs/MIGRATION.md`. The heading becomes `[0.8.0]` (and `__version__` bumps to
+match) at release time — see the Phase 6 release gate.
+
+### Security
+
+- **Turtle/SPARQL injection in provenance writes (S1).** `record_traversal`
+  and `record_validation` (including the no-op path) now validate every IRI
+  argument and escape the label literal before templating, closing an
+  injection vector where a crafted IRI could append arbitrary triples.
+- **Type-term injection (S2).** `holon_type` / `portal_type` are now checked
+  against a strict PNAME shape or validated as a full IRI. A `':'`-containing
+  value is no longer spliced raw into the Turtle body; malformed values raise
+  `ValueError`.
+- **`_escape_construct` backslash blindness (S4).** Backslashes are escaped
+  before quotes so a trailing backslash can no longer break out of a
+  triple-quoted CONSTRUCT literal.
+- **Portal CONSTRUCT fail-open (S5).** A portal is now scoped to its source
+  holon (projections, else interior) and **never** silently widened to the
+  whole dataset. Whole-dataset traversal requires an explicit opt-in. See
+  *Breaking* below.
+- **Sealed-portal bypass (S6).** The seal check is now a fail-closed exact
+  `ASK { ?g { <portal> a cga:SealedPortal } }`, so a dual-typed portal can no
+  longer slip past the previous nondeterministic `SELECT ... LIMIT 1`.
+- **Second-order store-derived IRI injection (S3).** The read path no longer
+  splices result-row IRIs back into fresh query text. The ~30 `?holon` /
+  `?from_holon` / `?graph` sites in `client.py` and the `ScopeResolver` BFS
+  walk in `scope.py` now pass IRIs as validated `rdflib.URIRef` bindings
+  through a single `_bind_iri` chokepoint; the write-only metadata refresh
+  path (SPARQL UPDATE, no `initBindings`) validates every graph/holon IRI at
+  entry. An IRI that reached the store via raw ingestion (bypassing the
+  validating `add_*` methods) is now rejected with `ValueError` or
+  `n3()`-escaped rather than becoming a delayed injection primitive.
+
+### Breaking
+
+- `traverse_portal()` / `traverse()` no longer run a portal's CONSTRUCT
+  against the entire dataset when the source holon has no projections. They
+  scope to the source's interior instead, and raise `ValueError` when the
+  source has neither projections nor interiors. Pass
+  `unscoped_portals_allowed=True` (or declare `cga:sourceLayer
+  cga:DatasetRole` on the portal) to restore the legacy behaviour.
+- `add_holon(holon_type=...)` / `add_portal(portal_type=...)` raise
+  `ValueError` on a type term that is neither a valid PNAME nor a valid IRI.
+- **`ProjectionPipeline` execution methods dropped their `backend` parameter
+  (A3).** `ProjectionStep.apply`, `ProjectionPipeline.apply`,
+  `apply_to_graph`, and `apply_to_lpg` no longer accept `backend=`. The
+  parameter existed only to redirect CONSTRUCT steps to `backend.construct()`,
+  which ran them against the whole dataset and caused the scope-leak/chaining
+  bug fixed above. Materialize the source graph first, then call `apply`
+  (as `HolonicDataset.apply_pipeline` already does). See MIGRATION.md.
+- **Backend `**bindings` value contract (A1/A2).** `query`/`construct`/`ask`
+  now bind values by explicit rdflib term type: a value that is already an
+  rdflib `Node` binds verbatim, and any other Python value binds as a typed
+  `Literal`. IRIs must therefore be passed as `rdflib.URIRef` (of any scheme).
+  This replaces the 0.7.x heuristic that promoted only `urn:`-prefixed strings
+  to IRIs and silently mis-bound `http://` strings — and `FusekiBackend`, which
+  previously discarded bindings entirely, now honors them safely.
+
+### Fixed
+
+- `RdflibBackend` caches parsed SPARQL for reused template strings
+  (`prepareQuery` LRU), removing the per-call reparse cost on the parameterized
+  read path (audit P1).
+- **Fail-closed traversal is now verified (E1).** `traverse(fail_on_breach=True)`
+  has passing tests that drive a genuine SHACL `Violation` (an injected instance
+  of the boundary's `sh:targetClass` that violates a `sh:minCount`) and assert
+  both `MembraneBreachError` and a byte-identical target interior. The two
+  `sh:targetClass`-with-no-instances cases remain documented `xfail`s (SPEC
+  OQ11).
+- **Breach rollback no longer poisons the no-op cache (E2).** The
+  `cga:lastProjectionHash` is now written only *after* validation passes, so a
+  rolled-back breach leaves no stored hash; a retry after fixing the boundary
+  re-injects instead of reporting a phantom no-op. The hash is written in a
+  single `DELETE/INSERT WHERE` (replacing the prior read + delete + parse).
+- **Breach rollback preserves concurrent writes (C2).** Rollback now removes
+  exactly the triples the call injected (via targeted `DELETE DATA`) instead of
+  replacing the whole interior graph, so a triple written to the same interior
+  by another writer is no longer clobbered. (Blank-node-bearing projections
+  still assume exclusive access — see `docs/MIGRATION.md`.)
+- **`FusekiBackend` works inside a running event loop (C1).** Operations now run
+  on a dedicated worker-thread loop, so calls from a Jupyter kernel or an async
+  web handler no longer raise `RuntimeError: Cannot run the event loop while
+  another loop is running`.
+- **`FusekiClient.__aenter__` no longer orphans a live session** by
+  unconditionally overwriting `self._session`; it now guards like `open()`.
+- **Projection pipeline CONSTRUCT steps no longer leak the whole dataset
+  (A3).** A `ProjectionPipeline` CONSTRUCT step now always runs against the
+  graph it is handed (the previous step's output), instead of, when a backend
+  was present, running against the entire backend dataset. This fixes two
+  bugs at once: `apply_pipeline()` no longer folds triples from *other* holons
+  into a single holon's projection, and multi-step pipelines now chain
+  correctly (step *n* sees step *n-1*'s output). See Breaking, below, for the
+  signature change this required.
+
+### Changed
+
+- **`FusekiBackend` reuses one client/session for its lifetime (P5)** instead of
+  opening and tearing down an `aiohttp.ClientSession` (and TCP/TLS connection)
+  per call. Call `close()` — or use the backend as a context manager
+  (`with FusekiBackend(...) as be:`) — to release the pooled session and worker
+  loop deterministically; a `weakref.finalize` handler does so best-effort at
+  garbage-collection time.
+- **`holarchy_summary()` reads health from persisted records by default (P4).**
+  The health distribution is now derived from each holon's most-recent
+  persisted `ValidationRecord` in a single aggregate query instead of
+  re-running pyshacl on every holon. Holons that have never been validated no
+  longer contribute to the distribution. Pass `live_health=True` for the old
+  re-validate-every-holon behaviour. See `docs/MIGRATION.md`.
+
+### Performance
+
+- **`holarchy_summary()` no longer makes ~4+N round-trips (P4).** Counts and
+  roots come from one `list_holons_summary()` pass plus an aggregate portal
+  `COUNT`; health from one `LATEST_HEALTH` query; staleness from the P7
+  aggregate. Per-holon `memberOf` probes and per-holon `validate_membrane`
+  calls are gone.
+- **`iter_holons()` runs 2 queries instead of 1+4N (P3).** Layer graphs for a
+  page of holons are fetched in one `LIST_HOLON_LAYERS` query and grouped in
+  Python rather than four per-holon layer queries each. Return type is
+  unchanged (`HolonInfo`).
+- **`stale_holons()` uses one aggregate query instead of ~5N (P7).** A single
+  `MAX(?timestamp)`-per-holon query (`LATEST_TRAVERSALS`) determines staleness;
+  materialization then rides the 2-query `iter_holons()`.
+- **Graph metadata refresh issues one UPDATE instead of two (P2).** The eager
+  per-write path now runs a single `DELETE/INSERT/WHERE` per graph (and per
+  holon rollup) rather than a separate clear-then-insert, halving the update
+  round-trips and closing the window between them. `batch()` remains the
+  recommended wrapper for bulk ingestion.
+- **The CGA ontology + shapes are parsed once per process (P6).** The bundled
+  Turtle sources are parsed into a module-level cached `rdflib.Graph` and their
+  triples copied into each new dataset's backend; a persistent backend that
+  already holds the ontology graph skips the upload (`graph_exists` guard).
+
+### Added
+
+- `FusekiBackend.close()` and context-manager support (`__enter__`/`__exit__`).
+- **`HolonicError` exception base (audit A1).** A new top-level
+  `holonic.HolonicError` is the common base for every exception the library
+  raises. `MembraneBreachError`, `SealedPortalError`, `FusekiError`, and
+  `TransformNotFoundError` now derive from it, so `except HolonicError`
+  catches the whole family. Each also keeps the builtin base it already
+  subclassed (`SealedPortalError`→`ValueError`, `FusekiError`→`RuntimeError`,
+  `TransformNotFoundError`→`KeyError`), so existing handlers are unaffected —
+  see MIGRATION.md.
+- **`ProjectionPipeline.to_spec(iri, description=None)` (audit A3).** Converts
+  a code-assembled pipeline into a declarative, registry-persistable
+  `ProjectionPipelineSpec` — the canonical pipeline model — so a pipeline can be
+  registered via `register_pipeline()` and executed through `run_projection()`.
+  Transform steps are translated to their registered names; an unregistered
+  inline transform callable raises `ValueError`. New helper
+  `holonic.plugins.name_for_transform()` backs the callable→name lookup.
+
+### Internal
+
+- `HolonicDataset.traverse()` decomposed into focused helpers
+  (`_resolve_target_interior`, `_projection_hash`, `_inject_projection`,
+  `_rollback_injection`, `_store_projection_hash`, `_record_traversal_outcome`),
+  cutting its cyclomatic complexity (audit CQ2).
+- `project_to_lpg()` decomposed into `_find_list_heads`, `_find_blank_parents`,
+  and `_build_nodes_and_edges` (with per-triple `_project_triple`), and its six
+  keyword knobs bundled into an internal `ProjectionOptions` dataclass — cutting
+  the function's cyclomatic complexity from ~48 (audit CQ3). Behavior is
+  unchanged; the existing projection tests cover it.
+- Projection-pipeline registry and execution extracted from the `HolonicDataset`
+  god class into a new `holonic._pipelines.PipelineManager` delegate (audit
+  AR1/CQ1), following the existing `MetadataRefresher`/`ScopeResolver` pattern.
+  The public methods (`register_pipeline`, `register_pipeline_ttl`,
+  `attach_pipeline`, `list_pipelines`, `get_pipeline`, `run_projection`) are
+  unchanged thin wrappers; the private helpers `_pipeline_to_ttl`,
+  `_step_from_node`, `_read_pipeline_steps_ordered`, and
+  `_record_projection_activity` moved off `HolonicDataset` onto the manager.
+  Behavior is unchanged; the plugin/pipeline tests cover it.
+- Console-oriented read projections extracted from `HolonicDataset` into a new
+  `holonic._console.ConsoleReads` delegate (audit AR1/CQ1, "core → console
+  layering"): `list_holons_summary`, `get_holon_detail`, `holon_interior_classes`,
+  `holon_neighborhood`, `list_portals`, and `get_portal` now carry their logic on
+  the delegate, with unchanged thin wrappers on `HolonicDataset`. Behavior is
+  unchanged; the console/browser tests cover it.
+
+### CI / tooling
+
+- mypy is now part of `lint-check` (ratcheted per-module as code is cleaned).
+- `aiohttp` is available in the dev environment; the Fuseki backend tests no
+  longer skip unconditionally.
+- Added a dockerized Apache Jena Fuseki integration suite
+  (`pixi run test-integration`, opt-in `--integration` marker).
+- The notebook harness now executes every example in a real IPython kernel
+  (nbclient) instead of a substring heuristic that produced false greens.
+- **Release gate (packaging).** The "Verify package" CI step now runs
+  `twine check dist/*` and, on a `refs/tags/v*` build, asserts the git tag
+  equals `holonic.__version__` (failing the job on a mismatch) — the check that
+  would have caught the 0.7.1 artifact drift. The PyPI publish step gained
+  `skip-existing: true` so a re-run of a partially-published tag no longer
+  hard-fails on immutable files.
+
+### Documentation
+
+- **Core project docs are no longer dropped from the site (audit
+  "toctree drops core docs").** `SPEC`, `DECISIONS`, `MIGRATION`, and
+  `CHANGELOG` are now first-class Sphinx pages via include-shims
+  (`docs/source/{spec,decisions,migration,changelog}.md`); `index.md`'s
+  "Project" toctree and its inline links point at them instead of the
+  unresolvable `../SPEC`/`../DECISIONS`/`../MIGRATION`/`../../CHANGELOG` paths
+  that silently omitted them. A new `test_docs_structure.py` guard fails if any
+  `index.md` toctree entry stops resolving to a real document. (`fail_on_warning`
+  is intentionally left `false`: rendering these large docs surfaces a
+  pre-existing content-formatting warning class that is out of scope for this
+  release; the toctree regression is guarded by the test instead of by `-W`.)
+- **Dangling `verifiedBy:` traceability repaired (audit
+  "spec-verifiedby dangling").** 39 of the requirement→test citations in
+  `docs/SPEC.md` (and the generated `docs/SPEC.ttl`) named test node IDs that
+  no longer existed after tests were reorganized into classes; each is now
+  repointed to the current node ID, or marked `verifiedBy: none` where no test
+  genuinely covers the requirement (6 such gaps: R1.4, R5.2, R5.3, R5.4, R9.2,
+  R9.44). A new `test_docs_structure.py` guard statically resolves every
+  node-form citation, so a future rename that orphans a link fails CI.
+
+### Dependencies
+
+- Declared the effective `rdflib>=7,<8` ceiling explicitly in `pyproject.toml`
+  and `pixi.toml` rather than inheriting it transitively from `pyshacl`; the
+  library binds directly against rdflib 7 APIs (`Dataset` `default_union`,
+  `initBindings` term semantics).
+
 ## [0.7.1] - 2026-05-25 (bugfix)
 
 - Fix jlite by adding explicit holonic install for each `.ipynb`. 

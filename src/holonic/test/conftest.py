@@ -1,8 +1,51 @@
-"""Shared pytest fixtures for holonic tests."""
+"""Shared pytest fixtures for holonic tests.
+
+Also defines the ``integration`` marker and the ``--integration`` opt-in
+flag. Integration tests talk to real external services (an Apache Jena
+Fuseki server) and are therefore *deselected by default*: they run only
+when ``--integration`` is passed AND the target server is reachable (the
+fixtures skip themselves otherwise). This keeps the default ``pytest`` /
+``pixi run test`` invocation hermetic while still giving the Fuseki
+backend real end-to-end coverage on demand::
+
+    pixi run test-integration              # boots dockerized Jena, runs them
+    pytest --integration -m integration    # against an already-running server
+"""
 
 import pytest
 
 from holonic import HolonicDataset, RdflibBackend
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """Register the ``--integration`` opt-in flag."""
+    parser.addoption(
+        "--integration",
+        action="store_true",
+        default=False,
+        help="run integration tests that require external services (e.g. Fuseki)",
+    )
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Register the ``integration`` marker so ``--strict-markers`` is happy."""
+    config.addinivalue_line(
+        "markers",
+        "integration: test requires a live external service (deselected "
+        "unless --integration is passed).",
+    )
+
+
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    """Skip integration-marked tests unless ``--integration`` was given."""
+    if config.getoption("--integration"):
+        return
+    skip_integration = pytest.mark.skip(reason="need --integration option to run")
+    for item in items:
+        if "integration" in item.keywords:
+            item.add_marker(skip_integration)
 
 
 @pytest.fixture

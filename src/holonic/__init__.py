@@ -22,6 +22,7 @@ from holonic.console_model import (
     ProjectionPipelineStep,
     ProjectionPipelineSummary,
 )
+from holonic.exceptions import HolonicError
 from holonic.model import (
     AuditTrail,
     HolonInfo,
@@ -73,6 +74,8 @@ from holonic.scope import (
 __all__ = [
     # Client
     "HolonicDataset",
+    # Exceptions
+    "HolonicError",
     # Models
     "AuditTrail",
     "SurfaceReport",

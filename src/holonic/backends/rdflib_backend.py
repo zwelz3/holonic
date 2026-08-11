@@ -8,11 +8,15 @@ as the quad store.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from functools import lru_cache
+from typing import Any, cast
 
 from rdflib import Dataset, Graph, Literal, URIRef
+from rdflib.plugins.sparql import prepareQuery
+from rdflib.plugins.sparql.sparql import Query
 from rdflib.term import Node
 
+from holonic.backends._bindings import as_init_bindings
 from holonic.backends.store import AbstractHolonicStore
 
 log = logging.getLogger(__name__)
@@ -25,6 +29,18 @@ def _node_to_value(node: Node) -> Any:
     if isinstance(node, Literal):
         return node.toPython()
     return str(node)
+
+
+@lru_cache(maxsize=256)
+def _prepare(sparql: str) -> Query:
+    """Parse a SPARQL SELECT/ASK/CONSTRUCT once and cache the algebra.
+
+    Callers that reuse a constant template string (the parameterized
+    ``**bindings`` path) reparse it exactly once; before parameterization
+    every string-spliced query was unique and reparsed on each call. This
+    cache is the P1 reparse win the audit measured.
+    """
+    return prepareQuery(sparql)
 
 
 class RdflibBackend(AbstractHolonicStore):
@@ -92,13 +108,23 @@ class RdflibBackend(AbstractHolonicStore):
 
     # ── SPARQL ────────────────────────────────────────────────
 
+    def _run(self, sparql: str, bindings: dict[str, Any]) -> Any:
+        """Prepare (cached) and execute a read query with rdflib bindings.
+
+        Binding values follow the shared explicit-wrapper contract
+        (``_bindings.as_init_bindings``): rdflib terms pass through, bare
+        Python values become literals, so IRIs must arrive as ``URIRef``.
+        """
+        return self.ds.query(_prepare(sparql), initBindings=as_init_bindings(bindings))
+
     def query(self, sparql: str, **bindings: Any) -> list[dict[str, Any]]:
         """Execute query against the dataset."""
-        init = {
-            k: URIRef(v) if isinstance(v, str) and v.startswith("urn:") else v
-            for k, v in bindings.items()
-        }
-        result = self.ds.query(sparql, initBindings=init)
+        result = self._run(sparql, bindings)
+        if result.vars is None:
+            raise ValueError(
+                "query() expects a SELECT query (result has no bindings); "
+                "use construct() for CONSTRUCT/DESCRIBE or ask() for ASK"
+            )
         rows = []
         for row in result:
             d = {}
@@ -111,20 +137,22 @@ class RdflibBackend(AbstractHolonicStore):
 
     def construct(self, sparql: str, **bindings: Any) -> Graph:
         """Execute CONSTRUCT query on the dataset."""
-        init = {
-            k: URIRef(v) if isinstance(v, str) and v.startswith("urn:") else v
-            for k, v in bindings.items()
-        }
-        result = self.ds.query(sparql, initBindings=init)
-        return result.graph
+        result = self._run(sparql, bindings)
+        if result.graph is None:
+            raise ValueError(
+                "construct() expects a CONSTRUCT or DESCRIBE query "
+                "(result has no graph); use query() for SELECT or ask() for ASK"
+            )
+        return cast(Graph, result.graph)
 
     def ask(self, sparql: str, **bindings: Any) -> bool:
         """Execute ASK query on the dataset."""
-        init = {
-            k: URIRef(v) if isinstance(v, str) and v.startswith("urn:") else v
-            for k, v in bindings.items()
-        }
-        result = self.ds.query(sparql, initBindings=init)
+        result = self._run(sparql, bindings)
+        if result.askAnswer is None:
+            raise ValueError(
+                "ask() expects an ASK query (result has no boolean answer); "
+                "use query() for SELECT or construct() for CONSTRUCT/DESCRIBE"
+            )
         return bool(result.askAnswer)
 
     def update(self, sparql: str) -> None:
