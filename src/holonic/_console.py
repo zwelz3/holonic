@@ -156,9 +156,7 @@ class ConsoleReads:
         """
         from holonic.client import _bind_iri
 
-        interior_rows = self._ds.backend.query(
-            Q.GET_HOLON_INTERIORS, holon=_bind_iri(holon_iri)
-        )
+        interior_rows = self._ds.backend.query(Q.GET_HOLON_INTERIORS, holon=_bind_iri(holon_iri))
         if not interior_rows:
             return []
 

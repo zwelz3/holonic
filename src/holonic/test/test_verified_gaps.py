@@ -316,8 +316,7 @@ class TestPortalConstructScope:
             "urn:portal:a-to-dir",
             "urn:holon:a",
             "urn:holon:dir",
-            "PREFIX ex: <urn:ex:> "
-            "CONSTRUCT { ?s ?p ?o } WHERE { ?s a ex:Employee ; ?p ?o }",
+            "PREFIX ex: <urn:ex:> CONSTRUCT { ?s ?p ?o } WHERE { ?s a ex:Employee ; ?p ?o }",
         )
         projected = ds.traverse_portal("urn:portal:a-to-dir")
         ttl = projected.serialize(format="ntriples")
@@ -354,9 +353,7 @@ class TestPortalConstructScope:
             "urn:holon:dir3",
             "PREFIX ex: <urn:ex:> CONSTRUCT { ?s ?p ?o } WHERE { ?s a ex:Thing ; ?p ?o }",
         )
-        projected = ds.traverse_portal(
-            "urn:portal:opt", unscoped_portals_allowed=True
-        )
+        projected = ds.traverse_portal("urn:portal:opt", unscoped_portals_allowed=True)
         assert len(projected) >= 1, "Opt-in should run against the whole dataset."
 
 
@@ -454,7 +451,7 @@ class TestFailClosedTraversal:
         ds.add_holon("urn:holon:tgt", "Tgt")
         ds.add_interior(
             "urn:holon:tgt",
-            "@prefix req: <urn:req:> . <urn:existing> a req:Widget ; req:serial \"ok\" .",
+            '@prefix req: <urn:req:> . <urn:existing> a req:Widget ; req:serial "ok" .',
             graph_iri="urn:holon:tgt/interior",
         )
         ds.add_boundary(
@@ -471,24 +468,19 @@ class TestFailClosedTraversal:
             "urn:portal:widget",
             "urn:holon:src",
             "urn:holon:tgt",
-            "PREFIX req: <urn:req:> "
-            "CONSTRUCT { ?s a req:Widget . } WHERE { ?s a req:Widget . }",
+            "PREFIX req: <urn:req:> CONSTRUCT { ?s a req:Widget . } WHERE { ?s a req:Widget . }",
         )
 
     def test_fail_on_breach_raises_on_genuine_violation(self, ds):
         self._setup_breaching_traversal(ds)
         with pytest.raises(MembraneBreachError):
-            ds.traverse(
-                "urn:holon:src", "urn:holon:tgt", validate=True, fail_on_breach=True
-            )
+            ds.traverse("urn:holon:src", "urn:holon:tgt", validate=True, fail_on_breach=True)
 
     def test_fail_on_breach_leaves_interior_byte_identical(self, ds):
         self._setup_breaching_traversal(ds)
         before = self.backend_nt(ds, "urn:holon:tgt/interior")
         with pytest.raises(MembraneBreachError):
-            ds.traverse(
-                "urn:holon:src", "urn:holon:tgt", validate=True, fail_on_breach=True
-            )
+            ds.traverse("urn:holon:src", "urn:holon:tgt", validate=True, fail_on_breach=True)
         after = self.backend_nt(ds, "urn:holon:tgt/interior")
         assert after == before, "Breach rollback must leave the interior unchanged."
 
@@ -502,9 +494,7 @@ class TestFailClosedTraversal:
             "turtle",
         )
         with pytest.raises(MembraneBreachError):
-            ds.traverse(
-                "urn:holon:src", "urn:holon:tgt", validate=True, fail_on_breach=True
-            )
+            ds.traverse("urn:holon:src", "urn:holon:tgt", validate=True, fail_on_breach=True)
         interior = ds.backend.get_graph("urn:holon:tgt/interior")
         assert any(s == URIRef("urn:concurrent") for s, _, _ in interior), (
             "Concurrently-added triple must survive a delta rollback "
@@ -548,9 +538,7 @@ class TestFailClosedTraversal:
 
     @staticmethod
     def backend_nt(ds, graph_iri):
-        return sorted(
-            ds.backend.get_graph(graph_iri).serialize(format="nt").splitlines()
-        )
+        return sorted(ds.backend.get_graph(graph_iri).serialize(format="nt").splitlines())
 
 
 # ══════════════════════════════════════════════════════════

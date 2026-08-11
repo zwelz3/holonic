@@ -325,9 +325,7 @@ class PipelineManager:
         started = datetime.now(UTC)
 
         # Merge interiors
-        interior_rows = self._ds.backend.query(
-            Q.GET_HOLON_INTERIORS, holon=_bind_iri(holon_iri)
-        )
+        interior_rows = self._ds.backend.query(Q.GET_HOLON_INTERIORS, holon=_bind_iri(holon_iri))
         merged = Graph()
         for row in interior_rows:
             g = self._ds.backend.get_graph(row["graph"])

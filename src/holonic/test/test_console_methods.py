@@ -341,12 +341,8 @@ class TestHolarchySummary:
     def test_persisted_health_counts_latest_records(self, populated_ds):
         from holonic.model import MembraneHealth
 
-        populated_ds.record_validation(
-            "urn:holon:alpha", MembraneHealth.COMPROMISED, "urn:agent:t"
-        )
-        populated_ds.record_validation(
-            "urn:holon:beta", MembraneHealth.WEAKENED, "urn:agent:t"
-        )
+        populated_ds.record_validation("urn:holon:alpha", MembraneHealth.COMPROMISED, "urn:agent:t")
+        populated_ds.record_validation("urn:holon:beta", MembraneHealth.WEAKENED, "urn:agent:t")
         dist = populated_ds.holarchy_summary().health_distribution
         assert dist["compromised"] == 1
         assert dist["weakened"] == 1
@@ -356,12 +352,8 @@ class TestHolarchySummary:
         from holonic.model import MembraneHealth
 
         # Earlier record: compromised; later record: intact -> latest wins.
-        populated_ds.record_validation(
-            "urn:holon:alpha", MembraneHealth.COMPROMISED, "urn:agent:t"
-        )
-        populated_ds.record_validation(
-            "urn:holon:alpha", MembraneHealth.INTACT, "urn:agent:t"
-        )
+        populated_ds.record_validation("urn:holon:alpha", MembraneHealth.COMPROMISED, "urn:agent:t")
+        populated_ds.record_validation("urn:holon:alpha", MembraneHealth.INTACT, "urn:agent:t")
         dist = populated_ds.holarchy_summary().health_distribution
         assert dist["intact"] == 1
         assert dist["compromised"] == 0
@@ -369,7 +361,5 @@ class TestHolarchySummary:
     def test_live_health_revalidates_every_holon(self, populated_ds):
         # Opt-in path re-runs pyshacl for all holons rather than reading
         # persisted records, so every holon lands in some bucket.
-        dist = populated_ds.holarchy_summary(
-            live_health=True
-        ).health_distribution
+        dist = populated_ds.holarchy_summary(live_health=True).health_distribution
         assert sum(dist.values()) == 3

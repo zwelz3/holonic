@@ -75,9 +75,7 @@ def _live_dataset():
     try:
         probe.ask("ASK { ?s ?p ?o }")
     except Exception as exc:  # noqa: BLE001 - any failure ⇒ dataset unusable
-        pytest.skip(
-            f"dataset {FUSEKI_DATASET!r} not reachable on {FUSEKI_URL}: {exc}"
-        )
+        pytest.skip(f"dataset {FUSEKI_DATASET!r} not reachable on {FUSEKI_URL}: {exc}")
     return FUSEKI_DATASET
 
 
@@ -162,13 +160,9 @@ class TestFusekiRoundTrip:
         assert not backend.ask("ASK { GRAPH <urn:g:1> { <urn:x> <urn:y> <urn:z> } }")
 
     def test_update_then_query(self, backend):
-        backend.update(
-            'INSERT DATA { GRAPH <urn:g:new> { <urn:a> <urn:b> "inserted" } }'
-        )
+        backend.update('INSERT DATA { GRAPH <urn:g:new> { <urn:a> <urn:b> "inserted" } }')
         assert backend.graph_exists("urn:g:new")
-        rows = backend.query(
-            "SELECT ?o WHERE { GRAPH <urn:g:new> { <urn:a> <urn:b> ?o } }"
-        )
+        rows = backend.query("SELECT ?o WHERE { GRAPH <urn:g:new> { <urn:a> <urn:b> ?o } }")
         assert len(rows) == 1
         assert rows[0]["o"] == "inserted"
 

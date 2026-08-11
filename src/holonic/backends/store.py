@@ -47,8 +47,34 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
+from ..exceptions import HolonicError
+
 if TYPE_CHECKING:
     from rdflib import Graph
+
+
+# ══════════════════════════════════════════════════════════════
+# Store-contract errors
+# ══════════════════════════════════════════════════════════════
+
+
+class GraphNotFoundError(HolonicError):
+    """Raised when a named graph is absent from the store.
+
+    Lives here, rather than beside the backend that raises it, because
+    it is a **contract** of the store interface: callers need to catch
+    "this graph is not there" without importing a concrete backend (and
+    thus its optional transport dependency, e.g. ``aiohttp``).
+
+    Backends SHOULD prefer returning an empty graph from ``get_graph``
+    (see :meth:`AbstractHolonicStore.get_graph`). Where a backend cannot
+    distinguish absent from empty and chooses to raise --
+    ``FusekiBackend`` does, because the Graph Store Protocol answers 404
+    for both -- it raises this type (or a subclass) so callers can
+    handle absence without matching on an error message.
+
+    .. versionadded:: 0.8.0
+    """
 
 
 # ══════════════════════════════════════════════════════════════
@@ -108,7 +134,12 @@ class HolonicStore(Protocol):
         ...
 
     def get_graph(self, graph_iri: str) -> Graph:
-        """Return the named graph as an rdflib.Graph (for local processing)."""
+        """Return the named graph as an rdflib.Graph (for local processing).
+
+        Returns an empty graph for a graph that does not exist, or raises
+        :class:`GraphNotFoundError` -- see
+        :meth:`AbstractHolonicStore.get_graph`.
+        """
         ...
 
     def put_graph(self, graph_iri: str, g: Graph) -> None:
@@ -285,7 +316,17 @@ class AbstractHolonicStore(ABC):
         ``post_graph`` / ``parse_into`` / ``update``.
 
         If the named graph does not exist, implementations SHOULD
-        return an empty ``rdflib.Graph`` rather than raise.
+        return an empty ``rdflib.Graph`` rather than raise. A backend
+        that cannot honour that -- ``FusekiBackend`` cannot, since the
+        Graph Store Protocol answers 404 for both "absent" and "empty"
+        -- MUST raise :class:`GraphNotFoundError` (or a subclass) so
+        callers can detect absence by type instead of by parsing an
+        error message.
+
+        .. versionchanged:: 0.8.0
+           Specified the typed-error alternative. Previously the SHOULD
+           had no stated fallback, and the one backend that diverged
+           raised an untyped transport error.
         """
         ...
 
@@ -438,4 +479,4 @@ class AbstractHolonicStore(ABC):
     #   execute_pipeline_native(holon_iri, spec_iri) -> Graph
 
 
-__all__ = ["AbstractHolonicStore", "HolonicStore"]
+__all__ = ["AbstractHolonicStore", "GraphNotFoundError", "HolonicStore"]

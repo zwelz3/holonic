@@ -47,8 +47,7 @@ def test_registered_transforms_return_graphs():
     for name, func in get_registered_transforms().items():
         result = func(g)
         assert isinstance(result, Graph), (
-            f"registered transform {name!r} returned {type(result).__name__}, "
-            "not a Graph"
+            f"registered transform {name!r} returned {type(result).__name__}, not a Graph"
         )
 
 

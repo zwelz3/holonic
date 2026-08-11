@@ -38,9 +38,24 @@ match) at release time — see the Phase 6 release gate.
   entry. An IRI that reached the store via raw ingestion (bypassing the
   validating `add_*` methods) is now rejected with `ValueError` or
   `n3()`-escaped rather than becoming a delayed injection primitive.
+- **`since` injection in `collect_audit_trail` (S7 — not an audit finding;
+  found while remediating S1–S6).** The audit-trail query
+  is assembled by string surgery, and `limit` / `offset` were already
+  `int()`-cast, but the caller's `since` string was interpolated raw into the
+  `FILTER`. A value carrying a quote closed the typed literal and appended
+  attacker-chosen patterns to a query the caller believed was a timestamp
+  filter. `since` is now validated against a strict `xsd:dateTime` shape
+  (anchored `\A`/`\Z`, so a trailing newline cannot smuggle a second line)
+  and emitted through rdflib's `n3()`, the same escaping the `**bindings`
+  contract uses.
 
 ### Breaking
 
+- `collect_audit_trail(since=...)` raises `ValueError` for a value that is not
+  a well-formed `xsd:dateTime`, including `since=""`. Previously a malformed
+  value reached the SPARQL engine, where an ill-typed comparison silently
+  matched nothing — a filter that returned an empty trail rather than an
+  error. Callers passing a `datetime` should pass `dt.isoformat()`.
 - `traverse_portal()` / `traverse()` no longer run a portal's CONSTRUCT
   against the entire dataset when the source holon has no projections. They
   scope to the source's interior instead, and raise `ValueError` when the
@@ -66,6 +81,18 @@ match) at release time — see the Phase 6 release gate.
 
 ### Fixed
 
+- **An unmaterialized layer graph no longer aborts validation for the whole
+  holarchy.** A layer can be registered (`cga:hasInterior` /
+  `cga:hasBoundary`) before it holds any triples; Fuseki's Graph Store
+  Protocol answers 404 for such a graph, which raised out of
+  `validate_membrane` and therefore out of `validate_all`, which walks every
+  holon in one loop. The membrane-collection sites now route through
+  `_safe_layer_graph`, which treats absence as "contributes no triples" —
+  equivalent for a union — while letting every other backend error
+  propagate, so an unreachable store can never be mistaken for an empty one.
+  When an *absent boundary* is the reason a holon has no shapes, the
+  `MembraneResult.report_text` names the graphs instead of reading
+  identically to "this holon defines no constraints".
 - `RdflibBackend` caches parsed SPARQL for reused template strings
   (`prepareQuery` LRU), removing the per-call reparse cost on the parameterized
   read path (audit P1).
@@ -150,6 +177,15 @@ match) at release time — see the Phase 6 release gate.
   subclassed (`SealedPortalError`→`ValueError`, `FusekiError`→`RuntimeError`,
   `TransformNotFoundError`→`KeyError`), so existing handlers are unaffected —
   see MIGRATION.md.
+- **`holonic.GraphNotFoundError`** — a backend-agnostic "this named graph is
+  not in the store" error, exported from `holonic` and
+  `holonic.backends.store`. `AbstractHolonicStore.get_graph` still says
+  backends SHOULD return an empty graph for a missing IRI; a backend that
+  cannot (Fuseki: GSP answers 404 for both absent and empty) now MUST raise
+  this type. `FusekiClient` raises `FusekiGraphNotFound`, which subclasses
+  both it and `FusekiError`, so pre-0.8.0 `except FusekiError` handlers are
+  unaffected and callers can detect absence by type rather than by matching
+  `"not found"` / `"404"` in a message.
 - **`ProjectionPipeline.to_spec(iri, description=None)` (audit A3).** Converts
   a code-assembled pipeline into a declarative, registry-persistable
   `ProjectionPipelineSpec` — the canonical pipeline model — so a pipeline can be

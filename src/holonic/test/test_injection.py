@@ -18,7 +18,12 @@ import pytest
 from rdflib import Graph
 
 from holonic import MembraneHealth
-from holonic.client import _escape_construct, _escape_ttl, _type_term
+from holonic.client import (
+    _escape_construct,
+    _escape_ttl,
+    _type_term,
+    _xsd_datetime_literal,
+)
 
 # A payload that, unescaped/unvalidated, closes the <...> IRI slot and
 # appends attacker-controlled triples to the UPDATE.
@@ -156,9 +161,7 @@ class TestHolonTypeInjection:
     def test_injection_inserts_no_extra_triples(self, ds):
         with pytest.raises(ValueError):
             ds.add_holon("urn:holon:x", "X", holon_type=TYPE_PNAME_BREAKOUT)
-        rows = ds.backend.query(
-            "SELECT ?p ?o WHERE { GRAPH ?g { <urn:evil> ?p ?o } }"
-        )
+        rows = ds.backend.query("SELECT ?p ?o WHERE { GRAPH ?g { <urn:evil> ?p ?o } }")
         assert rows == []
 
     def test_benign_pname_and_iri_still_work(self, ds):
@@ -275,3 +278,102 @@ class TestSecondOrderInjection:
         # read+write chokepoint before any splice.
         with pytest.raises(ValueError):
             ds.get_graph_metadata(payload)
+
+
+class TestAuditTrailSinceInjection:
+    """The ``since`` filter on ``collect_audit_trail``.
+
+    ``collect_audit_trail`` assembles its query textually (strip
+    ``ORDER BY``, splice a ``FILTER``, append ``LIMIT``/``OFFSET``), and
+    ``limit``/``offset`` were already ``int()``-cast. ``since`` was not:
+    it went into the ``FILTER`` raw, so a value carrying a quote closed
+    the literal and appended attacker-chosen patterns to a query the
+    caller believed was a timestamp filter.
+    """
+
+    # Closes the typed literal, drops the intended comparison, and
+    # re-opens a literal so the remaining template text still parses.
+    SINCE_BREAKOUT = (
+        '2026-01-01T00:00:00"^^<http://www.w3.org/2001/XMLSchema#dateTime>)'
+        ' UNION { ?activity ?p ?o } FILTER("x'
+    )
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            SINCE_BREAKOUT,
+            '2026-01-01T00:00:00" ',
+            "not-a-timestamp",
+            "2026-01-01",  # date only: no time component
+            "",
+            "2026-01-01T00:00:00Z\n} INSERT DATA { <urn:evil> <urn:p> <urn:o> } #",
+            # A trailing newline only: '$'-anchored patterns accept this,
+            # so the validator is anchored with \A/\Z instead.
+            "2026-01-01T00:00:00Z\n",
+        ],
+    )
+    def test_malformed_since_rejected(self, ds, payload):
+        with pytest.raises(ValueError):
+            ds.collect_audit_trail(since=payload)
+
+    def test_rejected_before_any_query(self, ds, monkeypatch):
+        # Validation happens once, up front -- a bad value must not reach
+        # the store even for the first of the two collected activity kinds.
+        def explode(*args, **kwargs):
+            raise AssertionError("backend.query called with an invalid `since`")
+
+        monkeypatch.setattr(ds.backend, "query", explode)
+        with pytest.raises(ValueError):
+            ds.collect_audit_trail(since='2026-01-01T00:00:00" ) (')
+
+    def test_canonical_since_emits_typed_literal(self):
+        assert _xsd_datetime_literal("2026-01-31T12:00:00") == (
+            '"2026-01-31T12:00:00"^^<http://www.w3.org/2001/XMLSchema#dateTime>'
+        )
+
+    def test_timezone_is_normalized_by_rdflib(self):
+        # rdflib canonicalizes the lexical form on the way out, so the
+        # emitted literal is not always byte-identical to the caller's
+        # string. 'Z' and '+00:00' denote the same instant, so this is a
+        # serialization detail -- pinned here so a future rdflib change
+        # that alters it shows up as a test failure rather than a silently
+        # different query.
+        assert _xsd_datetime_literal("2026-01-31T12:00:00Z") == (
+            '"2026-01-31T12:00:00+00:00"^^<http://www.w3.org/2001/XMLSchema#dateTime>'
+        )
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "2026-01-31T12:00:00",
+            "2026-01-31T12:00:00Z",
+            "2026-01-31T12:00:00.123456",
+            "2026-01-31T12:00:00+05:30",
+            "2026-01-31T12:00:00-08:00",
+            "-0044-03-15T12:00:00Z",  # negative year: legal xsd:dateTime
+        ],
+    )
+    def test_well_formed_since_accepted(self, value):
+        # Asserted on shape rather than exact text: rdflib owns the
+        # lexical form, and the security property is that the result is
+        # a single closed, typed literal with no bare quote inside it.
+        n3 = _xsd_datetime_literal(value)
+        assert n3.startswith('"')
+        assert n3.endswith('"^^<http://www.w3.org/2001/XMLSchema#dateTime>')
+        assert '"' not in n3[1 : n3.index('"^^')]
+
+    def test_since_filters_the_real_trail(self, ds_with_holons):
+        # End-to-end: the emitted FILTER is valid SPARQL and actually
+        # filters, so the escaping did not merely make the query inert.
+        ds_with_holons.traverse(
+            "urn:holon:source",
+            "urn:holon:target",
+            validate=False,
+            agent_iri="urn:agent:test",
+        )
+        assert len(ds_with_holons.collect_audit_trail().traversals) >= 1
+
+        past = ds_with_holons.collect_audit_trail(since="2000-01-01T00:00:00Z")
+        future = ds_with_holons.collect_audit_trail(since="2999-01-01T00:00:00Z")
+        assert len(past.traversals) >= 1
+        assert future.traversals == []

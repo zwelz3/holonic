@@ -213,3 +213,180 @@ class TestWeakenedMembrane:
         # path is exercised at all (not COMPROMISED, since severity is Warning).
         assert result.health != MembraneHealth.COMPROMISED
         assert result.health in (MembraneHealth.INTACT, MembraneHealth.WEAKENED)
+
+
+class TestMissingLayerGraph:
+    """A registered-but-unmaterialized layer must not abort validation.
+
+    Fuseki's Graph Store Protocol answers 404 both for a graph that was
+    never created and for a registered graph holding zero triples, so a
+    layer registered before it is materialized used to raise out of
+    ``validate_membrane`` -- and, since ``validate_all`` walks every holon
+    in one loop, out of validation for the entire holarchy.
+
+    Absence is now absorbed as "contributes no triples", but *only* when
+    it arrives as the typed ``GraphNotFoundError``. Anything else (auth,
+    connectivity, a malformed response) still propagates, so an
+    unreachable store can never be mistaken for an empty one.
+    """
+
+    ITEM_SHAPE = """
+        @prefix ex: <urn:ex:> .
+        <urn:shapes:ItemShape> a sh:NodeShape ;
+            sh:targetClass ex:Item ;
+            sh:property [
+                sh:path ex:name ;
+                sh:minCount 1 ;
+                sh:datatype xsd:string ;
+                sh:severity sh:Violation
+            ] .
+    """
+
+    @staticmethod
+    def _fail_on(ds, target_graph, exc):
+        """Patch ``backend.get_graph`` to raise *exc* for one graph IRI."""
+        real = ds.backend.get_graph
+
+        def fake(graph_iri):
+            if graph_iri == target_graph:
+                raise exc
+            return real(graph_iri)
+
+        return fake
+
+    def _holon_with_layers(self, ds, iri="urn:holon:partial"):
+        ds.add_holon(iri, "Partial")
+        interior = ds.add_interior(
+            iri,
+            """
+            @prefix ex: <urn:ex:> .
+            <urn:item:1> a ex:Item ;
+                ex:name "Widget" .
+        """,
+        )
+        boundary = ds.add_boundary(iri, self.ITEM_SHAPE)
+        return interior, boundary
+
+    def test_missing_interior_treated_as_empty(self, ds, monkeypatch):
+        from holonic.backends.store import GraphNotFoundError
+
+        interior, _ = self._holon_with_layers(ds)
+        monkeypatch.setattr(
+            ds.backend,
+            "get_graph",
+            self._fail_on(ds, interior, GraphNotFoundError(f"Graph {interior} not found (404).")),
+        )
+
+        # No data to validate, so the shapes have no target nodes: the
+        # holon validates as intact rather than blowing up.
+        result = ds.validate_membrane("urn:holon:partial")
+        assert result.conforms
+        assert result.health == MembraneHealth.INTACT
+
+    def test_missing_boundary_is_reported_not_silent(self, ds, monkeypatch):
+        from holonic.backends.store import GraphNotFoundError
+
+        _, boundary = self._holon_with_layers(ds)
+        monkeypatch.setattr(
+            ds.backend,
+            "get_graph",
+            self._fail_on(ds, boundary, GraphNotFoundError(f"Graph {boundary} not found (404).")),
+        )
+
+        result = ds.validate_membrane("urn:holon:partial")
+        # Same INTACT verdict a holon with no shapes at all would get --
+        # so the report text has to carry the distinction.
+        assert result.conforms
+        assert result.health == MembraneHealth.INTACT
+        assert boundary in result.report_text
+        assert "no triples" in result.report_text
+
+    def test_no_boundaries_at_all_keeps_plain_message(self, ds):
+        ds.add_holon("urn:holon:bare", "Bare")
+        ds.add_interior(
+            "urn:holon:bare",
+            """
+            @prefix ex: <urn:ex:> .
+            <urn:item:1> a ex:Item .
+        """,
+        )
+        result = ds.validate_membrane("urn:holon:bare")
+        assert result.report_text == "No boundary shapes defined."
+
+    @pytest.mark.parametrize(
+        "exc",
+        [
+            RuntimeError("Fuseki 503: service unavailable"),
+            ValueError("malformed turtle in response body"),
+        ],
+    )
+    def test_genuine_backend_error_still_raises(self, ds, monkeypatch, exc):
+        interior, _ = self._holon_with_layers(ds)
+        monkeypatch.setattr(ds.backend, "get_graph", self._fail_on(ds, interior, exc))
+
+        with pytest.raises(type(exc)):
+            ds.validate_membrane("urn:holon:partial")
+
+    def test_validate_all_survives_one_missing_layer(self, ds, monkeypatch):
+        from holonic.backends.store import GraphNotFoundError
+
+        interior, _ = self._holon_with_layers(ds, "urn:holon:partial")
+        self._holon_with_layers(ds, "urn:holon:whole")
+        monkeypatch.setattr(
+            ds.backend,
+            "get_graph",
+            self._fail_on(ds, interior, GraphNotFoundError("not materialized")),
+        )
+
+        results = ds.validate_all()
+        # The healthy holon is still validated -- one unmaterialized layer
+        # no longer takes down the whole walk.
+        assert "urn:holon:partial" in results
+        assert "urn:holon:whole" in results
+        assert results["urn:holon:whole"].conforms
+
+    def test_dry_run_tolerates_missing_layer(self, ds_with_holons, monkeypatch):
+        from holonic.backends.store import GraphNotFoundError
+
+        # The fixture's target has boundaries but no interior; register an
+        # (unmaterialized) one so the what-if collection has a layer to miss.
+        target_interior = ds_with_holons.add_interior(
+            "urn:holon:target",
+            """
+            @prefix tgt: <urn:tgt:> .
+            <urn:item:existing> a tgt:Item ;
+                tgt:label "Existing" ;
+                tgt:amount 1 .
+        """,
+        )
+        monkeypatch.setattr(
+            ds_with_holons.backend,
+            "get_graph",
+            self._fail_on(ds_with_holons, target_interior, GraphNotFoundError("not materialized")),
+        )
+
+        projected, result = ds_with_holons.dry_run("urn:holon:source", "urn:holon:target")
+        assert isinstance(result, MembraneResult)
+        # The projection still happened; only the pre-existing interior
+        # dropped out of the what-if merge.
+        assert len(projected) > 0
+
+
+class TestTypedGraphNotFound:
+    """The Fuseki 404 must be catchable by type, not by message text."""
+
+    def test_fuseki_404_subclasses_both_bases(self):
+        pytest.importorskip("aiohttp")
+
+        from holonic.backends._fuseki_client import FusekiError, FusekiGraphNotFound
+        from holonic.backends.store import GraphNotFoundError
+
+        # FusekiError keeps pre-0.8.0 handlers working; GraphNotFoundError
+        # lets client code catch absence without importing the backend.
+        assert issubclass(FusekiGraphNotFound, FusekiError)
+        assert issubclass(FusekiGraphNotFound, GraphNotFoundError)
+
+    def test_graph_not_found_is_a_holonic_error(self):
+        from holonic import GraphNotFoundError, HolonicError
+
+        assert issubclass(GraphNotFoundError, HolonicError)

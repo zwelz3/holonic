@@ -305,9 +305,7 @@ class ScopeResolver:
             return [str(r["neighbor"]) for r in rows]
 
         if order == "containment":
-            rows = self._backend.query(
-                Q.WALK_MEMBER_OF_NEIGHBORS_TEMPLATE, from_holon=frontier
-            )
+            rows = self._backend.query(Q.WALK_MEMBER_OF_NEIGHBORS_TEMPLATE, from_holon=frontier)
             return [str(r["neighbor"]) for r in rows]
 
         raise ValueError(f"unknown order: {order!r}")

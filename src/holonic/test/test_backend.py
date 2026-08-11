@@ -161,7 +161,7 @@ class TestRdflibBackendBindings:
         # Literal, so this query matched nothing. Now URIRef binds it.
         backend.parse_into(
             "urn:g:bind",
-            '<http://example.org/x> <urn:ex:knows> <urn:ex:bob> .',
+            "<http://example.org/x> <urn:ex:knows> <urn:ex:bob> .",
         )
         rows = backend.query(
             """

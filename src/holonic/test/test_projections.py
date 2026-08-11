@@ -380,7 +380,7 @@ class TestApplyPipelineScoping:
         ds.add_holon("urn:holon:a", "A")
         ds.add_interior(
             "urn:holon:a",
-            "<urn:item:a1> a <urn:type:Widget> ; <urn:prop:name> \"Alpha\" .",
+            '<urn:item:a1> a <urn:type:Widget> ; <urn:prop:name> "Alpha" .',
         )
 
         pipeline = ProjectionPipeline("strip-then-all")

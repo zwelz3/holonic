@@ -10,6 +10,7 @@ from aiohttp import ClientResponse
 from rdflib import Graph
 
 from ..exceptions import HolonicError
+from .store import GraphNotFoundError
 
 log = logging.getLogger(__name__)
 
@@ -26,6 +27,23 @@ class FusekiError(HolonicError, RuntimeError):
 
     .. versionchanged:: 0.8.0
        Also derives from :class:`HolonicError`.
+    """
+
+
+class FusekiGraphNotFound(FusekiError, GraphNotFoundError):
+    """Raised when a Graph Store Protocol read answers 404.
+
+    Fuseki returns 404 both for a graph that was never created and for a
+    registered graph holding zero triples, so this means "no triples are
+    there", not necessarily "the IRI is unknown".
+
+    Subclasses :class:`FusekiError` (so pre-0.8.0 ``except FusekiError``
+    handlers are unaffected) and the backend-agnostic
+    :class:`~holonic.backends.store.GraphNotFoundError` (so callers can
+    handle absence without depending on the Fuseki backend).
+
+    .. versionadded:: 0.8.0
+       Replaces message-sniffing for ``"not found"`` / ``"404"``.
     """
 
 
@@ -491,7 +509,9 @@ class FusekiClient:
 
     async def get_graph(self, graph_uri: str, *, format: str = "turtle") -> Graph:
         """Retrieve a named graph as an rdflib.Graph.
-        Raises FusekiError on 404 or other failure.
+
+        Raises :class:`FusekiGraphNotFound` on 404 (which is also a
+        :class:`FusekiError`), or :class:`FusekiError` on other failures.
         """
         params = {"graph": graph_uri}
         headers = {"Accept": self._format_to_mime(format)}
@@ -499,7 +519,7 @@ class FusekiClient:
             "GET", self.gsp_endpoint(), params=params, headers=headers, expected_status=(200, 404)
         )
         if resp.status == 404:
-            raise FusekiError(f"Graph {graph_uri} not found (404).")
+            raise FusekiGraphNotFound(f"Graph {graph_uri} not found (404).")
         g = Graph()
         g.parse(data=body.decode("utf-8"), format=format)
         return g

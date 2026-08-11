@@ -58,9 +58,13 @@ def _templates() -> list[tuple[str, str]]:
         if not name.isupper():
             continue
         value = getattr(Q, name)
-        if isinstance(value, str) and ("SELECT" in value or "ASK" in value
-                                       or "CONSTRUCT" in value or "DESCRIBE" in value
-                                       or any(k in value for k in _UPDATE_KEYWORDS)):
+        if isinstance(value, str) and (
+            "SELECT" in value
+            or "ASK" in value
+            or "CONSTRUCT" in value
+            or "DESCRIBE" in value
+            or any(k in value for k in _UPDATE_KEYWORDS)
+        ):
             out.append((name, value))
     return out
 

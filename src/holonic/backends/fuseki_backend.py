@@ -173,12 +173,6 @@ class FusekiBackend(AbstractHolonicStore):
             self._finalizer()  # runs _shutdown_worker exactly once
         self._closed = True
 
-    def __enter__(self) -> FusekiBackend:
-        return self
-
-    def __exit__(self, *exc: object) -> None:
-        self.close()
-
     # ── Named-graph CRUD ──────────────────────────────────────
     def graph_exists(self, graph_iri: str) -> bool:
         """Check if named graph exists in the dataset."""
@@ -265,3 +259,9 @@ class FusekiBackend(AbstractHolonicStore):
             return await c.list_named_graphs()
 
         return self._call(_q)
+
+    def __enter__(self) -> FusekiBackend:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()

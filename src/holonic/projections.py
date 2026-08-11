@@ -469,9 +469,7 @@ def project_to_lpg(
     # Pass 1/2 are prerequisites for Pass 3, and each is a no-op when its
     # feature is disabled (preserving the original short-circuits).
     list_heads = _find_list_heads(graph) if opts.resolve_lists else set()
-    blank_parents = (
-        _find_blank_parents(graph, list_heads) if opts.resolve_blanks else {}
-    )
+    blank_parents = _find_blank_parents(graph, list_heads) if opts.resolve_blanks else {}
     _build_nodes_and_edges(graph, projected, opts, list_heads, blank_parents)
     return projected
 

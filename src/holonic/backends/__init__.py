@@ -7,8 +7,13 @@ The ``GraphBackend`` alias was removed in 0.5.0. Use ``HolonicStore``.
 """
 
 from holonic.backends.rdflib_backend import RdflibBackend
-from holonic.backends.store import AbstractHolonicStore, HolonicStore
+from holonic.backends.store import AbstractHolonicStore, GraphNotFoundError, HolonicStore
 
-__all__ = ["AbstractHolonicStore", "HolonicStore", "RdflibBackend"]
+__all__ = [
+    "AbstractHolonicStore",
+    "GraphNotFoundError",
+    "HolonicStore",
+    "RdflibBackend",
+]
 
 # FusekiBackend is imported on demand to avoid requiring aiohttp
