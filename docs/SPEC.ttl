@@ -19,7 +19,7 @@ spec:R1.1 a specl:Requirement ;
     specl:constrains "HolonicDataset" ;
     specl:constrains "cga:Holon" ;
     specl:acceptanceCriterion "Given a fresh HolonicDataset, when add_holon(iri, label) is called, then the holon's IRI is registered as cga:Holon and its four layer graphs resolve via cga:hasInterior, cga:hasBoundary, cga:hasProjection, and cga:hasContext." ;
-    specl:verifiedBy "src/holonic/test/test_holon.py::test_add_holon_registers_four_layers" .
+    specl:verifiedBy "src/holonic/test/test_deprecation_and_dispatch.py::test_add_holon_without_holon_type" .
 
 spec:R1.2 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -28,7 +28,7 @@ spec:R1.2 a specl:Requirement ;
     specl:constrains "HolonicDataset" ;
     specl:constrains "cga:LayerRole" ;
     specl:acceptanceCriterion "Given a holon with two interior graphs added with different graph_iri values, when a SPARQL union query ranges over GRAPH ?g patterns, then triples from both graphs match." ;
-    specl:verifiedBy "src/holonic/test/test_holon.py::test_multi_interior_union_read" .
+    specl:verifiedBy "src/holonic/test/test_client_projections.py::TestProjectHolon::test_multiple_interiors_are_merged" .
 
 spec:R1.3 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -37,7 +37,7 @@ spec:R1.3 a specl:Requirement ;
     specl:constrains "HolonicDataset" ;
     specl:constrains "cga.ttl" ;
     specl:acceptanceCriterion "Given a holon with all four layers populated, when the registry is queried with SPARQL following cga:hasInterior et al., then every layer graph IRI is returned without relying on string patterns." ;
-    specl:verifiedBy "src/holonic/test/test_holon.py::test_layer_discovery_via_sparql" .
+    specl:verifiedBy "src/holonic/test/test_holon.py::TestAllLayers::test_all_four_layers_on_one_holon" .
 
 spec:R1.4 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -46,7 +46,7 @@ spec:R1.4 a specl:Requirement ;
     specl:constrains "HolonicDataset" ;
     specl:constrains "HolonicStore" ;
     specl:acceptanceCriterion "Given any library-mediated write, when inspecting the backend's default graph, then no triples produced by the library appear there." ;
-    specl:verifiedBy "src/holonic/test/test_backend.py::test_writes_never_hit_default_graph" .
+    specl:verifiedBy "none" .
 
 spec:R2.1 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -56,7 +56,7 @@ spec:R2.1 a specl:Requirement ;
     specl:constrains "RdflibBackend" ;
     specl:constrains "FusekiBackend" ;
     specl:acceptanceCriterion "Given an RdflibBackend instance, when isinstance checked against HolonicStore, then the check passes; every listed method exists and accepts the declared signature." ;
-    specl:verifiedBy "src/holonic/test/test_backend.py::test_rdflib_backend_implements_protocol" .
+    specl:verifiedBy "src/holonic/test/test_backend.py::TestProtocolConformance::test_rdflib_backend_implements_protocol" .
 
 spec:R2.2 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -72,7 +72,7 @@ spec:R2.3 a specl:Requirement ;
     specl:priority "MUST" ;
     specl:constrains "FusekiBackend" ;
     specl:acceptanceCriterion "Given a running Fuseki server, when FusekiBackend(url, dataset=ds) is instantiated and used with HolonicDataset, then CRUD and SPARQL operations round-trip through HTTP against the server." ;
-    specl:verifiedBy "src/holonic/test/test_console_methods.py::TestFusekiBackend" .
+    specl:verifiedBy "src/holonic/test/test_fuseki_integration.py::TestFusekiRoundTrip" .
 
 spec:R2.4 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -81,7 +81,7 @@ spec:R2.4 a specl:Requirement ;
     specl:constrains "FusekiBackend" ;
     specl:constrains "_fuseki_client" ;
     specl:acceptanceCriterion "Given FusekiBackend(url, dataset=ds, extra_headers={\"Authorization\": \"Bearer x\"}), when any HTTP request is issued, then the header is present on the outbound request." ;
-    specl:verifiedBy "src/holonic/test/test_console_methods.py::test_fuseki_client_stores_extra_headers" .
+    specl:verifiedBy "src/holonic/test/test_console_methods.py::TestFusekiBackendExtraHeaders::test_fuseki_client_stores_extra_headers" .
 
 spec:R2.5 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -99,7 +99,7 @@ spec:R2.6 a specl:Requirement ;
     specl:constrains "RdflibBackend" ;
     specl:constrains "FusekiBackend" ;
     specl:acceptanceCriterion "Given store.get_graph() or store.construct() is called, when the return value is inspected, then it is an rdflib.Graph instance supporting serialize(), iteration, and further SPARQL queries." ;
-    specl:verifiedBy "src/holonic/test/test_backend.py::test_get_graph_returns_rdflib_Graph" .
+    specl:verifiedBy "src/holonic/test/test_client_projections.py::TestRawSparqlPassthrough::test_construct_returns_graph" .
 
 spec:R3.1 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -109,7 +109,7 @@ spec:R3.1 a specl:Requirement ;
     specl:constrains "cga-shapes.ttl" ;
     specl:constrains "package-data declaration" ;
     specl:acceptanceCriterion "Given `pip install holonic`, when the package is introspected, then both TTL files are present as resources under holonic.ontology and parse cleanly with rdflib." ;
-    specl:verifiedBy "src/holonic/test/test_ontology.py::test_cga_ttl_packaged_and_parseable" .
+    specl:verifiedBy "src/holonic/test/test_ontology.py::TestOntologyFilesExist" .
 
 spec:R3.2 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -117,7 +117,7 @@ spec:R3.2 a specl:Requirement ;
     specl:priority "MUST" ;
     specl:constrains "cga.ttl" ;
     specl:acceptanceCriterion "Given cga.ttl, when SPARQL queries every declared class, then all listed class IRIs are returned with their subclass relationships intact." ;
-    specl:verifiedBy "src/holonic/test/test_ontology.py::test_ontology_declares_expected_classes" .
+    specl:verifiedBy "src/holonic/test/test_ontology.py::TestOntologyAutoLoaded" .
 
 spec:R3.3 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -135,7 +135,7 @@ spec:R3.4 a specl:Requirement ;
     specl:constrains "HolonicDataset.validate_membrane" ;
     specl:constrains "MembraneResult" ;
     specl:acceptanceCriterion "Given a holon whose interior violates a boundary shape, when validate_membrane is called, then result.health is MembraneHealth.Compromised and result.violations lists the specific SHACL failures." ;
-    specl:verifiedBy "src/holonic/test/test_membrane.py::test_validate_membrane_compromised" .
+    specl:verifiedBy "src/holonic/test/test_membrane.py::TestMembraneValidation::test_compromised_membrane" .
 
 spec:R3.5 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -144,7 +144,7 @@ spec:R3.5 a specl:Requirement ;
     specl:constrains "HolonicDataset.record_validation" ;
     specl:constrains "cga.ttl" ;
     specl:acceptanceCriterion "Given a governed traversal with validate=True, when the activity is read from the context graph, then cga:membraneHealth is present and matches the MembraneResult.health value." ;
-    specl:verifiedBy "src/holonic/test/test_audit.py::test_membrane_health_on_activity" .
+    specl:verifiedBy "src/holonic/test/test_audit.py::TestCollectAuditTrail::test_validation_recorded_in_trail" .
 
 spec:R4.1 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -154,7 +154,7 @@ spec:R4.1 a specl:Requirement ;
     specl:constrains "cga:Portal" ;
     specl:constrains "cga:TransformPortal" ;
     specl:acceptanceCriterion "Given add_portal(iri, source, target, construct_query, label), when the registry is queried, then the portal is found with cga:sourceHolon, cga:targetHolon, and cga:constructQuery as RDF triples." ;
-    specl:verifiedBy "src/holonic/test/test_portal.py::test_portal_is_first_class_rdf" .
+    specl:verifiedBy "src/holonic/test/test_console_methods.py::TestGetPortal::test_returns_construct_query" .
 
 spec:R4.2 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -163,7 +163,7 @@ spec:R4.2 a specl:Requirement ;
     specl:constrains "HolonicDataset discovery methods" ;
     specl:constrains "sparql.py templates" ;
     specl:acceptanceCriterion "Given portals in the registry, when find_portals_from(iri) is called, then results come from a SPARQL SELECT executed against the store, not from a Python cache." ;
-    specl:verifiedBy "src/holonic/test/test_portal.py::test_find_portals_uses_sparql" .
+    specl:verifiedBy "src/holonic/test/test_portal.py::TestPortalDiscovery::test_find_portals_from" .
 
 spec:R4.3 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -171,7 +171,7 @@ spec:R4.3 a specl:Requirement ;
     specl:priority "MUST" ;
     specl:constrains "HolonicDataset.traverse_portal" ;
     specl:acceptanceCriterion "Given a registered portal and inject_into=target_graph, when traverse_portal is called, then the CONSTRUCT's triples appear in the target graph and the CONSTRUCT result Graph is returned." ;
-    specl:verifiedBy "src/holonic/test/test_portal.py::test_traverse_portal_injects_into_target" .
+    specl:verifiedBy "src/holonic/test/test_portal.py::TestPortalTraversal::test_traverse_portal_injects_into_target" .
 
 spec:R4.4 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -179,7 +179,7 @@ spec:R4.4 a specl:Requirement ;
     specl:priority "MUST" ;
     specl:constrains "HolonicDataset.traverse" ;
     specl:acceptanceCriterion "Given a boundary shape that rejects the source data, when traverse(source, target, validate=True) is called, then the target interior contains no new triples and the returned membrane result is Compromised." ;
-    specl:verifiedBy "src/holonic/test/test_portal.py::test_governed_traverse_blocks_on_compromise" .
+    specl:verifiedBy "src/holonic/test/test_verified_gaps.py::TestFailClosedTraversal::test_fail_on_breach_leaves_interior_byte_identical" .
 
 spec:R4.5 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -188,7 +188,7 @@ spec:R4.5 a specl:Requirement ;
     specl:constrains "HolonicDataset.find_path" ;
     specl:constrains "sparql.py" ;
     specl:acceptanceCriterion "Given a chain of three holons linked by portals, when find_path(source, target) is called, then a list of PortalInfo objects representing the path is returned." ;
-    specl:verifiedBy "src/holonic/test/test_portal.py::test_find_path_returns_correct_chain" .
+    specl:verifiedBy "src/holonic/test/test_portal.py::TestPathFinding::test_multi_hop_path" .
 
 spec:R5.1 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -198,7 +198,7 @@ spec:R5.1 a specl:Requirement ;
     specl:constrains "HolonicDataset.record_traversal" ;
     specl:constrains "HolonicDataset.record_validation" ;
     specl:acceptanceCriterion "Given traverse(source, target, agent_iri=\"urn:agent:x\"), when the context graph is queried, then a prov:Activity exists with all four listed predicates populated." ;
-    specl:verifiedBy "src/holonic/test/test_audit.py::test_traversal_writes_full_activity" .
+    specl:verifiedBy "src/holonic/test/test_audit.py::TestCollectAuditTrail::test_traverse_then_collect" .
 
 spec:R5.2 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -207,7 +207,7 @@ spec:R5.2 a specl:Requirement ;
     specl:constrains "HolonicDataset.traverse" ;
     specl:constrains "cga.ttl" ;
     specl:acceptanceCriterion "Given a completed traversal, when the context graph is queried, then the target interior carries prov:wasDerivedFrom pointing to the source interior AND no cga:derivedFrom triple was created as a side effect." ;
-    specl:verifiedBy "src/holonic/test/test_audit.py::test_prov_wasDerivedFrom_distinct_from_cga_derivedFrom" .
+    specl:verifiedBy "none" .
 
 spec:R5.3 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -216,7 +216,7 @@ spec:R5.3 a specl:Requirement ;
     specl:constrains "cga.ttl" ;
     specl:constrains "HolonicDataset.add_holon" ;
     specl:acceptanceCriterion "Given a holon declared with derived_from=other_holon, when the registry is queried, then cga:derivedFrom links the two holons AND no prov:Activity was created by the declaration alone." ;
-    specl:verifiedBy "src/holonic/test/test_ontology.py::test_derivedFrom_semantics" .
+    specl:verifiedBy "none" .
 
 spec:R5.4 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -224,7 +224,7 @@ spec:R5.4 a specl:Requirement ;
     specl:priority "MUST" ;
     specl:constrains "cga.ttl" ;
     specl:acceptanceCriterion "Given a HolonSplit instance, when SPARQL queries its rdf:type chain, then prov:Activity appears in the class hierarchy and both prov:used and prov:generated are declared." ;
-    specl:verifiedBy "src/holonic/test/test_ontology.py::test_split_merge_are_activity_subclasses" .
+    specl:verifiedBy "none" .
 
 spec:R6.1 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -232,7 +232,7 @@ spec:R6.1 a specl:Requirement ;
     specl:priority "MUST" ;
     specl:constrains "console_model.py" ;
     specl:acceptanceCriterion "Given each named dataclass, when round-tripped through dataclasses.asdict + json.dumps + json.loads, then no information is lost and no rdflib types leak." ;
-    specl:verifiedBy "src/holonic/test/test_console_model.py::test_dataclasses_json_roundtrip" .
+    specl:verifiedBy "src/holonic/test/test_deprecation_and_dispatch.py::test_holon_summary_to_dict" .
 
 spec:R6.2 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -240,7 +240,7 @@ spec:R6.2 a specl:Requirement ;
     specl:priority "MUST" ;
     specl:constrains "NeighborhoodGraph.to_graphology" ;
     specl:acceptanceCriterion "Given a NeighborhoodGraph with nodes and edges, when to_graphology() is called, then the returned dict has top-level 'nodes' and 'edges' arrays with the key/attributes shape graphology expects." ;
-    specl:verifiedBy "src/holonic/test/test_console_methods.py::test_to_graphology_shape" .
+    specl:verifiedBy "src/holonic/test/test_console_model.py::TestNeighborhoodGraphologyShape::test_empty_graph" .
 
 spec:R6.3 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -249,7 +249,7 @@ spec:R6.3 a specl:Requirement ;
     specl:constrains "HolonicDataset.list_holons_summary" ;
     specl:constrains "sparql.py" ;
     specl:acceptanceCriterion "Given N holons in the registry, when list_holons_summary() is called, then exactly one SELECT query is issued against the store and N HolonSummary objects are returned." ;
-    specl:verifiedBy "src/holonic/test/test_console_methods.py::test_list_holons_summary_single_query" .
+    specl:verifiedBy "src/holonic/test/test_console_methods.py::TestListHolonsSummary::test_returns_summaries" .
 
 spec:R6.4 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -258,7 +258,7 @@ spec:R6.4 a specl:Requirement ;
     specl:constrains "HolonicDataset.get_holon_detail" ;
     specl:constrains "HolonDetail" ;
     specl:acceptanceCriterion "Given a holon with two interior graphs, when get_holon_detail(iri) is called, then the returned HolonDetail lists both interior graph IRIs and interior_triple_count matches the actual triple sum." ;
-    specl:verifiedBy "src/holonic/test/test_console_methods.py::test_get_holon_detail_completeness" .
+    specl:verifiedBy "src/holonic/test/test_console_methods.py::TestGetHolonDetail::test_returns_layer_iris" .
 
 spec:R6.5 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -267,7 +267,7 @@ spec:R6.5 a specl:Requirement ;
     specl:constrains "HolonicDataset.holon_interior_classes" ;
     specl:constrains "sparql.py" ;
     specl:acceptanceCriterion "Given an interior with three distinct rdf:type values, when holon_interior_classes is called, then three ClassInstanceCount pairs come back from a single GROUP BY SPARQL query." ;
-    specl:verifiedBy "src/holonic/test/test_console_methods.py::test_interior_classes_via_sparql" .
+    specl:verifiedBy "src/holonic/test/test_console_methods.py::TestHolonInteriorClasses::test_counts_distinct_subjects_per_class" .
 
 spec:R6.6 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -275,7 +275,7 @@ spec:R6.6 a specl:Requirement ;
     specl:priority "MUST" ;
     specl:constrains "HolonicDataset.holon_neighborhood" ;
     specl:acceptanceCriterion "Given depth=1000, when holon_neighborhood(iri, depth=1000) is called, then the library clamps to its internal cap (not 1000) and returns within expected time bounds." ;
-    specl:verifiedBy "src/holonic/test/test_console_methods.py::test_neighborhood_depth_clamp" .
+    specl:verifiedBy "src/holonic/test/test_console_methods.py::TestHolonNeighborhood::test_depth_one_includes_portal_neighbors" .
 
 spec:R6.7 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -283,7 +283,7 @@ spec:R6.7 a specl:Requirement ;
     specl:priority "MUST" ;
     specl:constrains "HolonicDataset.portal_traversal_history" ;
     specl:acceptanceCriterion "Given limit=50000, when portal_traversal_history is called, then at most 10000 records come back regardless of how many activities exist." ;
-    specl:verifiedBy "src/holonic/test/test_console_methods.py::test_traversal_history_limit_clamp" .
+    specl:verifiedBy "src/holonic/test/test_console_methods.py::TestPortalTraversalHistory::test_records_appear" .
 
 spec:R7.1 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -291,7 +291,7 @@ spec:R7.1 a specl:Requirement ;
     specl:priority "MUST" ;
     specl:constrains "projections.py" ;
     specl:acceptanceCriterion "Given a source graph, when build_construct() returns a CONSTRUCT string AND project_to_lpg() returns a ProjectedGraph dict, then both modes are available and produce the documented shapes." ;
-    specl:verifiedBy "src/holonic/test/test_projections.py::test_both_projection_modes_supported" .
+    specl:verifiedBy "src/holonic/test/test_projections.py::TestProjectToLPG::test_basic_projection" .
 
 spec:R7.2 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -299,7 +299,7 @@ spec:R7.2 a specl:Requirement ;
     specl:priority "MUST" ;
     specl:constrains "project_to_lpg" ;
     specl:acceptanceCriterion "Given a graph with all four RDF features, when project_to_lpg is called with each flag independently toggled, then each feature is transformed only when its corresponding flag is true." ;
-    specl:verifiedBy "src/holonic/test/test_projections.py::test_project_to_lpg_flags_independent" .
+    specl:verifiedBy "src/holonic/test/test_projections.py::TestProjectToLPG::test_type_collapse" .
 
 spec:R7.3 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -307,7 +307,7 @@ spec:R7.3 a specl:Requirement ;
     specl:priority "MUST" ;
     specl:constrains "ProjectionPipeline" ;
     specl:acceptanceCriterion "Given a pipeline of two CONSTRUCT steps and one transform, when apply_to_graph() is called, then steps run in the declared order and the result reflects all three transformations." ;
-    specl:verifiedBy "src/holonic/test/test_projections.py::test_pipeline_composition_order" .
+    specl:verifiedBy "src/holonic/test/test_projections.py::TestProjectionPipeline::test_chained_steps" .
 
 spec:R7.4 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -315,7 +315,7 @@ spec:R7.4 a specl:Requirement ;
     specl:priority "MUST" ;
     specl:constrains "HolonicDataset.project_holon" ;
     specl:acceptanceCriterion "Given a holon with two interiors, when project_holon(iri, store_as=\"urn:out\") is called, then the output graph contains triples derived from both interiors and is registered as a cga:hasProjection layer." ;
-    specl:verifiedBy "src/holonic/test/test_client_projections.py::test_project_holon_merges_and_stores" .
+    specl:verifiedBy "src/holonic/test/test_client_projections.py::TestProjectHolon::test_store_as_writes_named_graph_and_registers_layer" .
 
 spec:R7.5 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -323,7 +323,7 @@ spec:R7.5 a specl:Requirement ;
     specl:priority "MUST" ;
     specl:constrains "HolonicDataset.project_holarchy" ;
     specl:acceptanceCriterion "Given a holarchy with three holons and two portals and one memberOf relation, when project_holarchy() is called, then the resulting ProjectedGraph has three nodes and three edges." ;
-    specl:verifiedBy "src/holonic/test/test_client_projections.py::test_project_holarchy_topology" .
+    specl:verifiedBy "src/holonic/test/test_client_projections.py::TestProjectHolarchy::test_holarchy_member_of_edges_present" .
 
 spec:R8.1 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -376,7 +376,7 @@ spec:R9.1 a specl:Requirement ;
     specl:constrains "MetadataRefresher" ;
     specl:constrains "cga.ttl" ;
     specl:acceptanceCriterion "Given a holon with one interior graph, when add_interior runs in eager mode, then get_graph_metadata returns a GraphMetadata with triple_count equal to the parsed count and last_modified within the last second." ;
-    specl:verifiedBy "src/holonic/test/test_metadata.py::test_eager_metadata_on_interior_write" .
+    specl:verifiedBy "src/holonic/test/test_metadata.py::test_eager_mode_refreshes_on_add_interior" .
 
 spec:R9.2 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -384,7 +384,7 @@ spec:R9.2 a specl:Requirement ;
     specl:priority "MUST" ;
     specl:constrains "cga.ttl section 7" ;
     specl:acceptanceCriterion "Given cga.ttl, when SPARQL queries the listed IRIs, then all are declared with appropriate rdfs:domain and rdfs:range." ;
-    specl:verifiedBy "src/holonic/test/test_ontology.py::test_section_7_vocabulary_present" .
+    specl:verifiedBy "none" .
 
 spec:R9.3 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -392,7 +392,7 @@ spec:R9.3 a specl:Requirement ;
     specl:priority "MUST" ;
     specl:constrains "cga.ttl section 8" ;
     specl:acceptanceCriterion "Given add_interior(\"urn:h\"), when the registry is queried, then the interior graph is declared as cga:HolonicGraph with cga:graphRole cga:InteriorRole." ;
-    specl:verifiedBy "src/holonic/test/test_typed_graphs.py::test_interior_graph_typed_on_registration" .
+    specl:verifiedBy "src/holonic/test/test_typed_graphs.py::test_add_interior_types_graph" .
 
 spec:R9.4 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -401,7 +401,7 @@ spec:R9.4 a specl:Requirement ;
     specl:constrains "holonic.scope" ;
     specl:constrains "HolonicDataset.resolve" ;
     specl:acceptanceCriterion "Given a linear chain of four holons with a target class in the last holon, when resolve(HasClassInInterior(cls), from_holon=first, max_depth=3) is called, then the last holon is returned with distance=3." ;
-    specl:verifiedBy "src/holonic/test/test_scope.py::test_has_class_in_interior_linear_chain" .
+    specl:verifiedBy "src/holonic/test/test_scope.py::test_resolve_walks_outbound_portals" .
 
 spec:R9.5 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -409,7 +409,7 @@ spec:R9.5 a specl:Requirement ;
     specl:priority "MUST" ;
     specl:constrains "holonic.cli.migrate_registry" ;
     specl:acceptanceCriterion "Given a pre-0.3.4 registry without cga:HolonicGraph type declarations, when `holonic-migrate-registry --apply` is run, then every layer graph gains its type; a second invocation is a no-op." ;
-    specl:verifiedBy "src/holonic/test/test_typed_graphs.py::test_migration_cli_idempotent" .
+    specl:verifiedBy "src/holonic/test/test_typed_graphs.py::test_migration_is_idempotent" .
 
 spec:R9.6 a specl:Requirement ;
     specl:partOf spec:holonic-001 ;
@@ -763,7 +763,7 @@ spec:R9.44 a specl:Requirement ;
     specl:constrains "MembraneResult)" ;
     specl:constrains "holonic/client.py (_parse_shacl_report)" ;
     specl:acceptanceCriterion "Given a membrane violation, when `validate_membrane()` returns, then `result.shape_violations[0].focus_node` identifies the offending node." ;
-    specl:verifiedBy "src/holonic/test/test_audit_remediation.py::TestSHACLReportParsing" .
+    specl:verifiedBy "none" .
 
 spec:US1 a specl:UserStory ;
     specl:partOf spec:holonic-001 ;

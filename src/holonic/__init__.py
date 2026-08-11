@@ -6,7 +6,12 @@ backed by rdflib, Apache Jena Fuseki, or any SPARQL-compliant store.
 
 __version__ = "0.7.1"
 
-from holonic.backends import AbstractHolonicStore, HolonicStore, RdflibBackend
+from holonic.backends import (
+    AbstractHolonicStore,
+    GraphNotFoundError,
+    HolonicStore,
+    RdflibBackend,
+)
 from holonic.client import HolonicDataset, classify_sparql, validate_iri
 from holonic.console_model import (
     ClassInstanceCount,
@@ -22,6 +27,7 @@ from holonic.console_model import (
     ProjectionPipelineStep,
     ProjectionPipelineSummary,
 )
+from holonic.exceptions import HolonicError
 from holonic.model import (
     AuditTrail,
     HolonInfo,
@@ -73,6 +79,8 @@ from holonic.scope import (
 __all__ = [
     # Client
     "HolonicDataset",
+    # Exceptions
+    "HolonicError",
     # Models
     "AuditTrail",
     "SurfaceReport",
@@ -102,6 +110,7 @@ __all__ = [
     "ProjectionPipelineSummary",
     # Backends
     "AbstractHolonicStore",
+    "GraphNotFoundError",
     "HolonicStore",
     "RdflibBackend",
     # Scope resolution (0.3.4)

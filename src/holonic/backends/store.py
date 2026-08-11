@@ -47,8 +47,34 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
+from ..exceptions import HolonicError
+
 if TYPE_CHECKING:
     from rdflib import Graph
+
+
+# ══════════════════════════════════════════════════════════════
+# Store-contract errors
+# ══════════════════════════════════════════════════════════════
+
+
+class GraphNotFoundError(HolonicError):
+    """Raised when a named graph is absent from the store.
+
+    Lives here, rather than beside the backend that raises it, because
+    it is a **contract** of the store interface: callers need to catch
+    "this graph is not there" without importing a concrete backend (and
+    thus its optional transport dependency, e.g. ``aiohttp``).
+
+    Backends SHOULD prefer returning an empty graph from ``get_graph``
+    (see :meth:`AbstractHolonicStore.get_graph`). Where a backend cannot
+    distinguish absent from empty and chooses to raise --
+    ``FusekiBackend`` does, because the Graph Store Protocol answers 404
+    for both -- it raises this type (or a subclass) so callers can
+    handle absence without matching on an error message.
+
+    .. versionadded:: 0.8.0
+    """
 
 
 # ══════════════════════════════════════════════════════════════
@@ -108,7 +134,12 @@ class HolonicStore(Protocol):
         ...
 
     def get_graph(self, graph_iri: str) -> Graph:
-        """Return the named graph as an rdflib.Graph (for local processing)."""
+        """Return the named graph as an rdflib.Graph (for local processing).
+
+        Returns an empty graph for a graph that does not exist, or raises
+        :class:`GraphNotFoundError` -- see
+        :meth:`AbstractHolonicStore.get_graph`.
+        """
         ...
 
     def put_graph(self, graph_iri: str, g: Graph) -> None:
@@ -130,19 +161,36 @@ class HolonicStore(Protocol):
     # ── SPARQL ────────────────────────────────────────────────
 
     def query(self, sparql: str, **bindings: Any) -> list[dict[str, Any]]:
-        """Execute a SELECT query. Return list of binding dicts.
+        """Execute a SELECT query. Return a list of binding dicts.
 
-        Each dict maps variable names (without ``?``) to their values.
-        Values are strings (IRIs/literals) -- callers convert as needed.
+        Each dict maps variable names (without the leading ``?``) to
+        their bound values. Literals are returned as native Python
+        scalars (``str``/``int``/``float``/``bool``/``datetime``); IRIs
+        are returned as ``str``. Unbound variables are omitted from a
+        row's dict. See ``ask`` for the ``**bindings`` contract.
         """
         ...
 
     def construct(self, sparql: str, **bindings: Any) -> Graph:
-        """Execute a CONSTRUCT query. Return results as an rdflib.Graph."""
+        """Execute a CONSTRUCT query. Return results as an rdflib.Graph.
+
+        See ``ask`` for the ``**bindings`` contract.
+        """
         ...
 
     def ask(self, sparql: str, **bindings: Any) -> bool:
-        """Execute an ASK query. Return boolean."""
+        """Execute an ASK query. Return boolean.
+
+        ``**bindings`` parameterizes the query: each keyword pre-binds the
+        SPARQL variable of the same name. Values follow the explicit
+        term-wrapper contract -- rdflib ``Node`` values bind verbatim and
+        any other Python value binds as a typed ``Literal``, so an IRI
+        MUST be passed as ``rdflib.URIRef``. Backends honor bindings
+        without string interpolation (rdflib ``initBindings`` or
+        ``n3()``-escaped substitution); this is the injection-safe
+        parameterization path and the same contract holds for ``query``
+        and ``construct``.
+        """
         ...
 
     def update(self, sparql: str) -> None:
@@ -268,7 +316,17 @@ class AbstractHolonicStore(ABC):
         ``post_graph`` / ``parse_into`` / ``update``.
 
         If the named graph does not exist, implementations SHOULD
-        return an empty ``rdflib.Graph`` rather than raise.
+        return an empty ``rdflib.Graph`` rather than raise. A backend
+        that cannot honour that -- ``FusekiBackend`` cannot, since the
+        Graph Store Protocol answers 404 for both "absent" and "empty"
+        -- MUST raise :class:`GraphNotFoundError` (or a subclass) so
+        callers can detect absence by type instead of by parsing an
+        error message.
+
+        .. versionchanged:: 0.8.0
+           Specified the typed-error alternative. Previously the SHOULD
+           had no stated fallback, and the one backend that diverged
+           raised an untyped transport error.
         """
         ...
 
@@ -325,9 +383,12 @@ class AbstractHolonicStore(ABC):
         literals (strings, ints, floats, booleans, ``datetime``
         objects for ``xsd:dateTime``) and strings for IRIs.
 
-        ``bindings`` is reserved for future parameterized-query
-        support; implementations MAY raise ``NotImplementedError``
-        on non-empty bindings in 0.4.x.
+        ``**bindings`` parameterizes the query (0.8.0, normative):
+        each keyword pre-binds the SPARQL variable of the same name.
+        A value that is an rdflib ``Node`` binds verbatim; any other
+        Python value binds as a typed ``Literal``, so IRIs MUST be
+        passed as ``rdflib.URIRef``. Backends bind without string
+        interpolation, making this the injection-safe query path.
         """
         ...
 
@@ -340,7 +401,7 @@ class AbstractHolonicStore(ABC):
         graph in the store; callers wanting to persist it use
         ``put_graph`` or ``post_graph``.
 
-        ``bindings``: see ``query``.
+        ``**bindings``: see ``query`` (same normative contract).
         """
         ...
 
@@ -349,7 +410,8 @@ class AbstractHolonicStore(ABC):
         """Execute a SPARQL ASK query.
 
         Returns True if the query has at least one solution,
-        False otherwise. ``bindings``: see ``query``.
+        False otherwise. ``**bindings``: see ``query`` (same
+        normative contract).
         """
         ...
 
@@ -417,4 +479,4 @@ class AbstractHolonicStore(ABC):
     #   execute_pipeline_native(holon_iri, spec_iri) -> Graph
 
 
-__all__ = ["AbstractHolonicStore", "HolonicStore"]
+__all__ = ["AbstractHolonicStore", "GraphNotFoundError", "HolonicStore"]

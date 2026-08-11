@@ -122,7 +122,14 @@ class TestRdflibBackend:
 
 
 class TestRdflibBackendBindings:
-    """The **bindings kwarg auto-coerces urn: strings to URIRef."""
+    """The **bindings kwarg follows the explicit term-wrapper contract.
+
+    0.8.0 (audit A1): an rdflib ``Node`` binds verbatim; a bare Python
+    value binds as a typed ``Literal``. IRIs -- of *any* scheme, not just
+    ``urn:`` -- must be passed as ``URIRef``. This replaced the 0.7.x
+    heuristic that promoted only ``urn:``-prefixed strings and silently
+    mis-bound ``http://`` strings as literals.
+    """
 
     @pytest.fixture
     def backend(self):
@@ -137,7 +144,39 @@ class TestRdflibBackendBindings:
         )
         return b
 
-    def test_query_with_urn_binding_coerces_to_uriref(self, backend):
+    def test_query_with_uriref_binding(self, backend):
+        rows = backend.query(
+            """
+            SELECT ?o WHERE {
+                GRAPH <urn:g:bind> { ?s <urn:ex:knows> ?o }
+            }
+            """,
+            s=URIRef("urn:ex:alice"),
+        )
+        assert len(rows) == 1
+        assert rows[0]["o"] == "urn:ex:bob"
+
+    def test_http_iri_binds_correctly(self, backend):
+        # The 0.7.x urn:-only heuristic left an http:// string as a
+        # Literal, so this query matched nothing. Now URIRef binds it.
+        backend.parse_into(
+            "urn:g:bind",
+            "<http://example.org/x> <urn:ex:knows> <urn:ex:bob> .",
+        )
+        rows = backend.query(
+            """
+            SELECT ?o WHERE {
+                GRAPH <urn:g:bind> { ?s <urn:ex:knows> ?o }
+            }
+            """,
+            s=URIRef("http://example.org/x"),
+        )
+        assert len(rows) == 1
+        assert rows[0]["o"] == "urn:ex:bob"
+
+    def test_bare_string_binds_as_literal(self, backend):
+        # A bare Python string is a Literal, never an IRI. Bound into the
+        # subject slot it matches no IRI-subject triple -> zero rows.
         rows = backend.query(
             """
             SELECT ?o WHERE {
@@ -146,8 +185,7 @@ class TestRdflibBackendBindings:
             """,
             s="urn:ex:alice",
         )
-        assert len(rows) == 1
-        assert rows[0]["o"] == "urn:ex:bob"
+        assert rows == []
 
     def test_construct_with_binding(self, backend):
         g = backend.construct(
@@ -157,7 +195,7 @@ class TestRdflibBackendBindings:
                 GRAPH <urn:g:bind> { ?s <urn:ex:knows> ?o }
             }
             """,
-            s="urn:ex:alice",
+            s=URIRef("urn:ex:alice"),
         )
         assert len(g) == 1
 
@@ -166,14 +204,78 @@ class TestRdflibBackendBindings:
             """
             ASK { GRAPH <urn:g:bind> { ?s <urn:ex:knows> <urn:ex:bob> } }
             """,
-            s="urn:ex:alice",
+            s=URIRef("urn:ex:alice"),
         )
         assert not backend.ask(
             """
             ASK { GRAPH <urn:g:bind> { ?s <urn:ex:knows> <urn:ex:bob> } }
             """,
-            s="urn:ex:carol",
+            s=URIRef("urn:ex:carol"),
         )
+
+
+class TestPreparedQueryCache:
+    """P1: identical template strings parse once (cached algebra)."""
+
+    def test_repeated_template_hits_cache(self):
+        from holonic.backends.rdflib_backend import _prepare
+
+        _prepare.cache_clear()
+        backend = RdflibBackend()
+        backend.parse_into("urn:g:c", "<urn:a> <urn:ex:knows> <urn:b> .")
+        template = "SELECT ?o WHERE { GRAPH <urn:g:c> { ?s <urn:ex:knows> ?o } }"
+        for _ in range(5):
+            backend.query(template, s=URIRef("urn:a"))
+        info = _prepare.cache_info()
+        # One miss (first parse) then four hits -- not five parses.
+        assert info.misses == 1
+        assert info.hits == 4
+
+
+class TestBindingCoercion:
+    """Unit tests for the shared _bindings helpers (both backends)."""
+
+    def test_to_term_passes_nodes_through(self):
+        from holonic.backends._bindings import to_term
+
+        u = URIRef("http://example.org/x")
+        assert to_term(u) is u
+
+    def test_to_term_wraps_scalars_as_literal(self):
+        from rdflib import Literal
+
+        from holonic.backends._bindings import to_term
+
+        assert to_term(42) == Literal(42)
+        assert isinstance(to_term("plain"), Literal)
+
+    def test_substitute_uses_n3_and_word_boundary(self):
+        from holonic.backends._bindings import substitute_bindings
+
+        sparql = "SELECT * WHERE { ?holon ?p ?holonType }"
+        out = substitute_bindings(sparql, {"holon": URIRef("urn:h:1")})
+        # ?holon replaced, ?holonType left intact.
+        assert "<urn:h:1>" in out
+        assert "?holonType" in out
+        assert "?holon " not in out
+
+    def test_substitute_escapes_literals(self):
+        from rdflib import Literal
+
+        from holonic.backends._bindings import substitute_bindings
+
+        # A literal carrying SPARQL metacharacters must come back as a
+        # single valid, self-delimiting literal -- the whole payload binds
+        # as data, never breaking out to inject a clause. Prove it by
+        # running the substituted ASK: it must parse and match the exact
+        # literal (True), which is only possible if no breakout occurred.
+        hostile = Literal('a" . } DROP ALL {')
+        backend = RdflibBackend()
+        g = Graph()
+        g.add((URIRef("urn:s"), URIRef("urn:p"), hostile))
+        backend.put_graph("urn:g:h", g)
+        out = substitute_bindings("ASK { GRAPH <urn:g:h> { <urn:s> <urn:p> ?v } }", {"v": hostile})
+        assert backend.ask(out) is True
 
 
 class TestRdflibBackendDatasetAccess:
@@ -193,3 +295,35 @@ class TestRdflibBackendDatasetAccess:
         b = RdflibBackend(dataset=ds)
         assert b.graph_exists("urn:g:pre")
         assert b.dataset is ds
+
+
+class TestRdflibBackendQueryFormGuards:
+    """Wrong query form must raise a clear error, not crash on None or lie.
+
+    Regression for the audit 'typing/rdflib-backend-returns-none-as-graph'
+    finding: rdflib's Result.vars / .graph / .askAnswer are None for the
+    wrong query form and were dereferenced unguarded.
+    """
+
+    @pytest.fixture
+    def backend(self):
+        b = RdflibBackend()
+        b.parse_into("urn:g:1", "<urn:s> <urn:p> <urn:o> .")
+        return b
+
+    def test_query_rejects_construct(self, backend):
+        with pytest.raises(ValueError, match="SELECT"):
+            backend.query("CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o }")
+
+    def test_query_rejects_ask(self, backend):
+        with pytest.raises(ValueError, match="SELECT"):
+            backend.query("ASK { ?s ?p ?o }")
+
+    def test_construct_rejects_select(self, backend):
+        with pytest.raises(ValueError, match="CONSTRUCT"):
+            backend.construct("SELECT ?s WHERE { ?s ?p ?o }")
+
+    def test_ask_rejects_select(self, backend):
+        # Previously bool(None) -> silently False; now a clear error.
+        with pytest.raises(ValueError, match="ASK"):
+            backend.ask("SELECT ?s WHERE { ?s ?p ?o }")

@@ -1,9 +1,26 @@
 #!/usr/bin/env python3
-"""Execute every notebook's code cells and fail on errors.
+"""Execute every example notebook in a real IPython kernel and fail on errors.
 
-Skips cells that use ``%pip``, ``%magic``, or top-level ``await``
-(these are Jupyter-specific and cannot run in a plain Python
-interpreter).
+This runs each notebook through ``nbclient`` — the same execution path
+Jupyter uses — so cells behave exactly as they do in the UI: top-level
+``await``, ``%magic`` lines, rich display, and cell-to-cell state all work
+natively. There is deliberately **no source-level heuristic**: a notebook
+that is not actually executed is never reported as passing. (The previous
+implementation string-matched ``"await "`` and skipped the whole notebook
+as OK, and swallowed every ``ImportError`` as OK — both produced false
+greens that hid broken examples.)
+
+Statuses reported per notebook:
+
+- ``OK``   — every cell executed without error.
+- ``SKIP`` — a cell failed *solely* because an OPTIONAL dependency (one of
+  holonic's ``[viz]`` / ``[entailment]`` / ``[fuseki]`` extras) is not
+  installed. Distinct from OK so it is visible; does not fail the run, so
+  partial-dependency environments stay usable.
+- ``FAIL`` — any other error, including a missing *required* dependency.
+
+The process exits non-zero if and only if at least one notebook FAILs.
+In CI, install the full extras so nothing is skipped and every cell runs.
 
 Usage (standalone)::
 
@@ -13,127 +30,98 @@ Usage (pixi)::
 
     pixi run test-notebooks
 """
+
 from __future__ import annotations
 
 import glob
+import io
+import os
 import sys
 import textwrap
-import traceback
 
 import nbformat
+from nbclient import NotebookClient
+from nbclient.exceptions import CellExecutionError
+
+# Modules that are genuinely optional (declared under holonic's [viz],
+# [entailment], and [fuseki] extras, plus common notebook-only plotting).
+# A cell failing *only* because one of these is absent is a SKIP, not a
+# FAIL. A missing REQUIRED dependency (rdflib, pyshacl, ...) is NOT in this
+# set, so it surfaces as a real failure.
+OPTIONAL_DEPS = frozenset(
+    {
+        "yfiles_jupyter_graphs",
+        "ipywidgets",
+        "ipydatagrid",
+        "networkx",
+        "matplotlib",
+        "owlrl",
+        "aiohttp",
+    }
+)
+
+KERNEL_NAME = "python3"
+CELL_TIMEOUT = 120  # seconds per cell
 
 
-def _should_skip_cell(source: str) -> str | None:
-    """Return a reason string if the cell should be skipped."""
-    if source.strip().startswith("%") or source.strip().startswith("!"):
-        return "magic/shell command"
-    # Top-level await (only works in Jupyter async REPL)
-    for line in source.split("\n"):
-        stripped = line.strip()
-        if stripped.startswith("await ") and not stripped.startswith(
-            "await "
-        ):
-            continue
-        # Check for bare await at module level (not inside async def)
-        if stripped.startswith("await "):
-            # Rough heuristic: if 'async def' appears before this
-            # line AND indentation is deeper, it's inside a function.
-            # Otherwise it's top-level.
-            indent = len(line) - len(line.lstrip())
-            if indent == 0:
-                return "top-level await"
+def _missing_optional_dep(ename: str, evalue: str) -> str | None:
+    """Return the optional module name if the error is its absence, else None.
+
+    Only ``ModuleNotFoundError`` / ``ImportError`` for a module listed in
+    ``OPTIONAL_DEPS`` counts. Everything else returns None (a real failure).
+    """
+    if ename not in ("ModuleNotFoundError", "ImportError"):
+        return None
+    text = evalue or ""
+    for dep in OPTIONAL_DEPS:
+        # evalue looks like: No module named 'yfiles_jupyter_graphs'
+        if f"'{dep}'" in text or f" {dep}" in text:
+            return dep
     return None
 
 
-def _has_toplevel_await(source: str) -> bool:
-    """Check if any line has a top-level await."""
-    lines = source.split("\n")
-    in_async = False
-    async_indent = 0
-    for line in lines:
-        stripped = line.strip()
-        indent = len(line) - len(line.lstrip())
-        if stripped.startswith("async def "):
-            in_async = True
-            async_indent = indent
-        elif in_async and indent <= async_indent and stripped:
-            in_async = False
-        if stripped.startswith("await ") and not in_async:
-            return True
-    return False
+def run_notebook(path: str) -> tuple[str, str]:
+    """Execute all cells of a notebook in a kernel.
 
-
-def run_notebook(path: str) -> tuple[bool, str]:
-    """Execute all code cells in a notebook.
-
-    Returns (success, message).
+    Returns ``(status, message)`` where status is ``"OK"``, ``"SKIP"``,
+    or ``"FAIL"``.
     """
     nb = nbformat.read(path, as_version=4)
     code_cells = [c for c in nb.cells if c.cell_type == "code"]
-
     if not code_cells:
-        return True, "no code cells"
+        return "OK", "no code cells"
 
-    # Build combined source, skipping magic/await cells
-    parts = []
-    skipped = 0
-    for cell in code_cells:
-        src = cell.source.strip()
-        if not src:
-            continue
-        # Skip cells with magic commands or shell calls on any line
-        has_magic = any(
-            ln.lstrip().startswith("%") or ln.lstrip().startswith("!")
-            for ln in src.split("\n") if ln.strip()
-        )
-        if has_magic:
-            skipped += 1
-            continue
-        if _has_toplevel_await(src):
-            skipped += 1
-            continue
-        parts.append(src)
-
-    if not parts:
-        return True, f"all {len(code_cells)} cells skipped"
-
-    # If any remaining cell still has 'await' at any indentation,
-    # skip the entire notebook (it's async-native)
-    combined = "\n".join(parts)
-    if "await " in combined:
-        return True, f"async notebook (skipped)"
-
-    script = "\n\n".join(parts)
-
-    # Execute in a fresh namespace
-    ns: dict = {"__name__": "__main__"}
+    client = NotebookClient(
+        nb,
+        timeout=CELL_TIMEOUT,
+        kernel_name=KERNEL_NAME,
+        allow_errors=False,
+        record_timing=False,
+    )
     try:
-        exec(compile(script, path, "exec"), ns)  # noqa: S102
-    except ImportError as e:
-        # Missing optional dependencies (e.g., matplotlib)
-        return True, f"skipped (missing dep: {e.name})"
-    except Exception:
-        tb = traceback.format_exc()
-        # Show last 5 lines of traceback
-        short = "\n".join(tb.strip().split("\n")[-5:])
-        return False, short
+        client.execute()
+    except CellExecutionError as exc:
+        dep = _missing_optional_dep(exc.ename, exc.evalue)
+        if dep is not None:
+            return "SKIP", f"optional dependency {dep!r} not installed"
+        # Surface the actual error name/value and the tail of the traceback.
+        tail = "\n".join(str(exc).strip().split("\n")[-8:])
+        return "FAIL", tail
+    except Exception as exc:  # noqa: BLE001 — kernel start/protocol failure
+        return "FAIL", f"{type(exc).__name__}: {exc}"
 
-    msg = f"{len(parts)} cells OK"
-    if skipped:
-        msg += f", {skipped} skipped"
-    return msg != "", msg
+    return "OK", f"{len(code_cells)} cells executed"
 
 
 def main() -> int:
-    # Force UTF-8 output on Windows (cp1252 can't encode box-drawing
+    """Run every example notebook; return 1 if any FAILed, else 0."""
+    # Force UTF-8 output on Windows (cp1252 can't encode the box-drawing
     # and symbol characters used in viz formatters and repr methods).
-    import io
-    import os
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     elif os.name == "nt":
         sys.stdout = io.TextIOWrapper(
-            sys.stdout.buffer, encoding="utf-8", errors="replace",
+            sys.stdout.buffer, encoding="utf-8", errors="replace"
         )
 
     paths = sorted(glob.glob("notebooks/[0-9]*.ipynb"))
@@ -141,23 +129,32 @@ def main() -> int:
         print("No notebooks found in notebooks/")
         return 1
 
-    failures = []
+    failures: list[tuple[str, str]] = []
+    skips: list[tuple[str, str]] = []
     for path in paths:
-        ok, msg = run_notebook(path)
-        status = "OK" if ok else "FAIL"
+        status, msg = run_notebook(path)
         print(f"  {status}: {path} ({msg})")
-        if not ok:
+        if status == "FAIL":
             failures.append((path, msg))
+        elif status == "SKIP":
+            skips.append((path, msg))
 
     print()
+    if skips:
+        print(f"{len(skips)} notebook(s) SKIPPED (optional deps missing):")
+        for path, msg in skips:
+            print(f"  {path}: {msg}")
+        print()
     if failures:
-        print(f"{len(failures)} notebook(s) failed:")
+        print(f"{len(failures)} notebook(s) FAILED:")
         for path, msg in failures:
             print(f"  {path}:")
             print(textwrap.indent(msg, "    "))
         return 1
 
-    print(f"All {len(paths)} notebooks executed successfully.")
+    executed = len(paths) - len(skips)
+    tail = f", {len(skips)} skipped." if skips else "."
+    print(f"All {executed} executed notebook(s) passed{tail}")
     return 0
 
 

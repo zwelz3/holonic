@@ -52,6 +52,10 @@ docs/source/_extra/
 # Other
 rdf_gen/
 data/render_templates/
+
+# AI
 .devcontainer
+.claude
 .mcp.json
 .tmp/
+audit/

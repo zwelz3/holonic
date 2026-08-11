@@ -336,3 +336,103 @@ class TestProjectionPipeline:
         pipeline.add_construct("a", "CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o }")
         pipeline.add_transform("b", lambda g: g)
         assert "2 steps" in repr(pipeline)
+
+
+# ══════════════════════════════════════════════════════════════
+# apply_pipeline scoping (audit A3 -- CONSTRUCT-step leak/chaining bug)
+# ══════════════════════════════════════════════════════════════
+
+
+class TestApplyPipelineScoping:
+    """A CONSTRUCT pipeline step must run against the source graph it is
+    handed, never the whole backend dataset.
+
+    Before 0.8.0, ``ProjectionStep.apply`` sent CONSTRUCTs to
+    ``backend.construct(...)`` whenever a backend was present, which ran the
+    query against the *entire* dataset -- leaking triples from other holons
+    into ``apply_pipeline``'s result and breaking step chaining.
+    """
+
+    def test_apply_pipeline_does_not_leak_other_holons(self):
+        from holonic import HolonicDataset
+
+        ds = HolonicDataset()
+        ds.add_holon("urn:holon:a", "A")
+        ds.add_interior("urn:holon:a", "<urn:item:a1> a <urn:type:Widget> .")
+        ds.add_holon("urn:holon:b", "B")
+        ds.add_interior("urn:holon:b", "<urn:item:b1> a <urn:type:Widget> .")
+
+        pipeline = ProjectionPipeline("passthrough")
+        pipeline.add_construct("all", "CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o }")
+
+        result = ds.apply_pipeline("urn:holon:a", pipeline)
+        subjects = {str(s) for s in result.subjects()}
+
+        assert "urn:item:a1" in subjects
+        # Would be present pre-fix, when the CONSTRUCT ran against the whole
+        # dataset instead of holon A's merged interior.
+        assert "urn:item:b1" not in subjects
+
+    def test_apply_pipeline_chains_construct_steps(self):
+        from holonic import HolonicDataset
+
+        ds = HolonicDataset()
+        ds.add_holon("urn:holon:a", "A")
+        ds.add_interior(
+            "urn:holon:a",
+            '<urn:item:a1> a <urn:type:Widget> ; <urn:prop:name> "Alpha" .',
+        )
+
+        pipeline = ProjectionPipeline("strip-then-all")
+        # Step 1 drops rdf:type triples; step 2 echoes whatever step 1 emitted.
+        pipeline.add_construct("strip", CONSTRUCT_STRIP_TYPES)
+        pipeline.add_construct("echo", "CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o }")
+
+        result = ds.apply_pipeline("urn:holon:a", pipeline)
+
+        # If step 2 saw step 1's output (correct chaining), the types are gone.
+        # If it re-read the source, rdf:type would reappear.
+        assert len(list(result.triples((None, RDF.type, None)))) == 0
+        assert any(str(p) == "urn:prop:name" for _, p, _ in result)
+
+
+# ══════════════════════════════════════════════════════════════
+# ProjectionPipeline.to_spec (audit A3 -- builder -> declarative Spec bridge)
+# ══════════════════════════════════════════════════════════════
+
+
+class TestPipelineToSpec:
+    def test_to_spec_maps_construct_and_registered_transform(self):
+        from holonic.console_model import ProjectionPipelineSpec
+        from holonic.plugins import projection_transform
+
+        @projection_transform("_test_to_spec_noop")
+        def _noop(g: Graph) -> Graph:
+            return g
+
+        pipeline = ProjectionPipeline("viz")
+        pipeline.add_construct("strip", CONSTRUCT_STRIP_TYPES)
+        pipeline.add_transform("clean", _noop)
+
+        spec = pipeline.to_spec("urn:projection:viz", description="demo")
+
+        assert isinstance(spec, ProjectionPipelineSpec)
+        assert spec.iri == "urn:projection:viz"
+        assert spec.name == "viz"
+        assert spec.description == "demo"
+        assert [s.name for s in spec.steps] == ["strip", "clean"]
+
+        strip_step, clean_step = spec.steps
+        assert strip_step.construct_query is not None
+        assert strip_step.transform_name is None
+        assert clean_step.transform_name == "_test_to_spec_noop"
+        assert clean_step.construct_query is None
+
+    def test_to_spec_rejects_unregistered_transform(self):
+        import pytest
+
+        pipeline = ProjectionPipeline("bad")
+        pipeline.add_transform("inline", lambda g: g)  # never registered
+
+        with pytest.raises(ValueError, match="unregistered transform"):
+            pipeline.to_spec("urn:projection:bad")

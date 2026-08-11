@@ -32,11 +32,15 @@ sphinx_rtd_theme = "*"
 python = ">=3.11"
 pip = ">=25"
 polars = "*"
-rdflib = ">=7.0.0"
+rdflib = ">=7.0.0,<8"
 pyshacl = ">=0.26.0"
 jinja2 = ">=3.1.0"
 python-docx = ">=1.0.0"
 jupytext = "*"
+# networkx backs the 12_holarchy_viz example notebook; declaring it here
+# (and in the [viz] extra) means `pixi run test` executes that notebook
+# instead of the runner skipping it for a missing optional dep.
+networkx = ">=3"
 
 
 # generic tasks ###########################################
@@ -47,10 +51,9 @@ description = """Run all lint fixers"""
 depends-on = ["clean-notebooks", "fix-pyproject", "fix-ssort", "format-ruff", "fix-ruff"]
 cmd = "echo 🚧"
 
-# TODO: Add mypy back to lint checker
 [tasks.lint-check]
 description = """Run all lint checkers"""
-depends-on = ["check-pyproject", "check-ssort", "check-ruff", "check-notebooks"]
+depends-on = ["check-pyproject", "check-ssort", "check-ruff", "check-mypy", "check-notebooks"]
 cmd = "echo 🔎"
 
 [feature.tasks-test.tasks]
@@ -62,6 +65,16 @@ cmd = "echo ✅ All tests passed"
 [feature.tasks-test.tasks.test-unit]
 description = "Run the pytest suite."
 cmd = "pytest"
+
+[feature.tasks-test.tasks.test-integration]
+description = "Boot dockerized Apache Jena Fuseki, run the --integration suite against it end-to-end, then tear the container down. Requires Docker."
+cmd = "python scripts/run_fuseki_integration.py"
+inputs = [
+  "docker-compose.fuseki.yml",
+  "scripts/run_fuseki_integration.py",
+  "src/holonic/backends/**/*.py",
+  "src/holonic/test/test_fuseki_integration.py",
+]
 
 [feature.tasks-test.tasks.test-notebooks]
 description = "Execute every notebook's code cells and fail on errors. Skips Jupyter-specific cells (magic commands, top-level await)."
@@ -94,9 +107,9 @@ inputs = ["src/**/*.py"]
 cmd = "ruff check src/ --fix"
 inputs = ["src/**/*.py"]
 
-[feature.tasks-lint.tasks.mypy]
+[feature.tasks-lint.tasks.check-mypy]
 cmd = "mypy --show-error-codes -p holonic"
-inputs = ["src/**/*.py"]
+inputs = ["src/**/*.py", "pyproject.toml"]
 
 [feature.tasks-lint.tasks.check-pyproject]
 cmd = "pyproject-fmt pyproject.toml --check"
@@ -271,6 +284,25 @@ pytest-cov = "*"
 pytest-html = "*"
 pytest-xdist = "*"
 pytest-json-report = "*"
+# The `test-notebooks` task executes notebooks through nbclient against the
+# `python3` kernelspec, which only exists if ipykernel is installed. It used
+# to arrive transitively — via jupyterlab in `dev`, and via nbconvert in
+# `deps-lint` for nbclient/nbformat — so the py311/py313 CI environments
+# (neither `deps-lab` nor `deps-jlite`) had no kernel and every notebook
+# failed with `NoSuchKernel` before executing a cell. `test-notebooks` lives
+# in `tasks-test`, so its dependencies belong here.
+ipykernel = "*"
+nbclient = "*"
+nbformat = "*"
+# aiohttp is a runtime dependency of the Fuseki backend. Without it every
+# Fuseki test hits `pytest.importorskip("aiohttp")` and silently skips, so
+# the backend shipped at 0% coverage. Installing it here un-skips them.
+aiohttp = ">=3.9"
+
+[feature.deps-test.pypi-dependencies]
+# Mock aiohttp responses so the Fuseki backend's retry/error/loop handling
+# can be unit-tested without a live server (conda-forge has no aioresponses).
+aioresponses = "*"
 
 [feature.deps-docs.dependencies]
 myst-parser = "*"

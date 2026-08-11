@@ -26,6 +26,13 @@ build:
 
 sphinx:
   configuration: docs/source/conf.py
+  # Kept false deliberately. The audit's "toctree drops core docs" finding is
+  # fixed by including SPEC/DECISIONS/MIGRATION/CHANGELOG as first-class pages
+  # (docs/source/{spec,decisions,migration,changelog}.md) and is guarded by a
+  # deterministic test (test_docs_structure.py), NOT by -W. Turning this on
+  # would fail the build on the large pre-existing content-formatting warning
+  # class those now-rendered docs emit (definition-list/indentation/underline
+  # nits), which is out of scope for the 0.8.0 audit-remediation release.
   fail_on_warning: false
 
 python:

@@ -79,6 +79,92 @@ WHERE {
 }
 """
 
+# All four layer bindings for every holon in one query (P3: collapses the
+# per-holon 4-query fan-out in iter_holons into a single scan; callers group
+# ?graph by ?holon + ?pred in Python). Constant template — no store-derived
+# IRIs, P1 cache-friendly.
+LIST_HOLON_LAYERS = """
+PREFIX cga: <urn:holonic:ontology:>
+
+SELECT ?holon ?pred ?graph
+WHERE {
+    graph ?g {
+        ?holon a cga:Holon .
+        ?holon ?pred ?graph .
+        FILTER(?pred IN (
+            cga:hasInterior, cga:hasBoundary, cga:hasProjection, cga:hasContext
+        ))
+    }
+}
+"""
+
+# Latest traversal timestamp per holon in one aggregate query (P7: replaces
+# the ~5N stale_holons fan-out). Never-traversed holons still appear (via the
+# OPTIONAL) with an unbound ?latest, so the caller can mark them stale.
+LATEST_TRAVERSALS = """
+PREFIX cga:  <urn:holonic:ontology:>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+
+SELECT ?holon (MAX(?timestamp) AS ?latest)
+WHERE {
+    GRAPH ?hg { ?holon a cga:Holon . }
+    OPTIONAL {
+        GRAPH ?ag {
+            ?activity a prov:Activity ;
+                prov:generated ?holon ;
+                prov:startedAtTime ?timestamp .
+        }
+    }
+}
+GROUP BY ?holon
+"""
+
+# Latest persisted membrane health per holon in one query (P4: replaces the
+# per-holon ``validate_membrane`` fan-out inside ``holarchy_summary``). The
+# inner subquery finds each holon's most-recent validation timestamp; the outer
+# pattern reads the ``cga:membraneHealth`` recorded at that instant. Holons that
+# have never been validated produce no row (caller leaves them out of the
+# distribution). ``?health`` is a ``urn:holonic:ontology:{Intact,Weakened,
+# Compromised}`` IRI mirroring ``record_validation``.
+LATEST_HEALTH = """
+PREFIX cga:  <urn:holonic:ontology:>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+
+SELECT ?holon ?health
+WHERE {
+    GRAPH ?g {
+        ?activity prov:used           ?holon ;
+                  cga:membraneHealth  ?health ;
+                  prov:endedAtTime    ?timestamp .
+    }
+    {
+        SELECT ?holon (MAX(?t) AS ?latest)
+        WHERE {
+            GRAPH ?g2 {
+                ?a2 prov:used          ?holon ;
+                    cga:membraneHealth ?h2 ;
+                    prov:endedAtTime   ?t .
+            }
+        }
+        GROUP BY ?holon
+    }
+    FILTER(?timestamp = ?latest)
+}
+"""
+
+# Count portals in one aggregate (P4: ``holarchy_summary`` needs the count, not
+# every portal row).
+COUNT_PORTALS = """
+PREFIX cga: <urn:holonic:ontology:>
+SELECT (COUNT(DISTINCT ?portal) AS ?n)
+WHERE {
+    GRAPH ?g {
+        ?portal cga:sourceHolon ?source ;
+                cga:targetHolon ?target .
+    }
+}
+"""
+
 # ──────────────────────────────────────────────────────────────
 # Portal discovery
 # ──────────────────────────────────────────────────────────────
@@ -230,6 +316,32 @@ INSERT DATA {{
             cga:membraneHealth <{health_iri}> ;
             prov:endedAtTime "{timestamp}"^^xsd:dateTime .
     }}
+}}
+"""
+
+# Read the persisted incremental-traversal hash. Bound variables (``?context``,
+# ``?target``) go through the ``**bindings`` chokepoint, so this is a constant
+# template (P1 cache-hit) with no store-derived IRIs spliced into text (S3).
+GET_PROJECTION_HASH = """
+PREFIX cga: <urn:holonic:ontology:>
+SELECT ?hash WHERE {
+    GRAPH ?context {
+        ?target cga:lastProjectionHash ?hash .
+    }
+}
+"""
+
+# Replace the persisted hash in one DELETE/INSERT WHERE (collapses the prior
+# read + DELETE WHERE + parse_into three-op sequence, closing the read-then-act
+# window on the hash triple). SPARQL UPDATE cannot pre-bind, so this is
+# ``.format()``-templated; the caller validates both IRIs and ``proj_hash`` is a
+# sha256 hex digest (no injection surface).
+SET_PROJECTION_HASH = """
+PREFIX cga: <urn:holonic:ontology:>
+DELETE {{ GRAPH <{context_graph}> {{ <{target_iri}> cga:lastProjectionHash ?old . }} }}
+INSERT {{ GRAPH <{context_graph}> {{ <{target_iri}> cga:lastProjectionHash "{proj_hash}" . }} }}
+WHERE {{
+    OPTIONAL {{ GRAPH <{context_graph}> {{ <{target_iri}> cga:lastProjectionHash ?old . }} }}
 }}
 """
 
@@ -402,51 +514,10 @@ GROUP BY ?class
 ORDER BY DESC(?n)
 """
 
-CLEAR_GRAPH_METADATA_TEMPLATE = """
-PREFIX cga: <urn:holonic:ontology:>
-
-DELETE {{
-    GRAPH <{registry_iri}> {{
-        <{graph_iri}> cga:tripleCount ?count .
-        <{graph_iri}> cga:lastModified ?modified .
-        ?inv a cga:ClassInstanceCount ;
-             cga:inGraph <{graph_iri}> ;
-             cga:class ?cls ;
-             cga:count ?n ;
-             cga:refreshedAt ?r .
-    }}
-}}
-WHERE {{
-    GRAPH <{registry_iri}> {{
-        OPTIONAL {{ <{graph_iri}> cga:tripleCount ?count }}
-        OPTIONAL {{ <{graph_iri}> cga:lastModified ?modified }}
-        OPTIONAL {{
-            ?inv a cga:ClassInstanceCount ;
-                 cga:inGraph <{graph_iri}> ;
-                 cga:class ?cls ;
-                 cga:count ?n .
-            OPTIONAL {{ ?inv cga:refreshedAt ?r }}
-        }}
-    }}
-}}
-"""
-
-CLEAR_HOLON_METADATA_TEMPLATE = """
-PREFIX cga: <urn:holonic:ontology:>
-
-DELETE {{
-    GRAPH <{registry_iri}> {{
-        <{holon_iri}> cga:interiorTripleCount ?c .
-        <{holon_iri}> cga:holonLastModified ?m .
-    }}
-}}
-WHERE {{
-    GRAPH <{registry_iri}> {{
-        OPTIONAL {{ <{holon_iri}> cga:interiorTripleCount ?c }}
-        OPTIONAL {{ <{holon_iri}> cga:holonLastModified ?m }}
-    }}
-}}
-"""
+# NOTE: the former CLEAR_GRAPH_METADATA_TEMPLATE / CLEAR_HOLON_METADATA_TEMPLATE
+# pair was retired in 0.8.0 (audit P2). MetadataRefresher now issues a single
+# DELETE/INSERT/WHERE per refresh instead of a separate clear-then-insert, so
+# the standalone clear templates no longer have a caller.
 
 READ_GRAPH_METADATA_TEMPLATE = """
 PREFIX cga: <urn:holonic:ontology:>
@@ -563,16 +634,23 @@ WHERE {{
 # outbound, then inbound; "reverse-network" follows only inbound;
 # "containment" walks the cga:memberOf chain.
 
+# These walk templates take the BFS frontier IRI as a **bound variable**
+# (``?from_holon``), not a spliced ``<{from_holon}>`` -- the frontier is a
+# store-derived neighbour IRI from the previous hop, so binding it (rather
+# than re-interpolating result-row text) is what closes the second-order
+# injection path (S3). As constant strings they also hit the prepared-query
+# cache (P1). Callers pass ``from_holon=_bind_iri(iri)``.
+
 WALK_OUTBOUND_PORTAL_NEIGHBORS_TEMPLATE = """
 PREFIX cga: <urn:holonic:ontology:>
 
 SELECT DISTINCT ?neighbor
-WHERE {{
-    GRAPH ?g {{
-        ?portal cga:sourceHolon <{from_holon}> ;
+WHERE {
+    GRAPH ?g {
+        ?portal cga:sourceHolon ?from_holon ;
                 cga:targetHolon ?neighbor .
-    }}
-}}
+    }
+}
 ORDER BY ?neighbor
 """
 
@@ -580,12 +658,12 @@ WALK_INBOUND_PORTAL_NEIGHBORS_TEMPLATE = """
 PREFIX cga: <urn:holonic:ontology:>
 
 SELECT DISTINCT ?neighbor
-WHERE {{
-    GRAPH ?g {{
-        ?portal cga:targetHolon <{from_holon}> ;
+WHERE {
+    GRAPH ?g {
+        ?portal cga:targetHolon ?from_holon ;
                 cga:sourceHolon ?neighbor .
-    }}
-}}
+    }
+}
 ORDER BY ?neighbor
 """
 
@@ -593,51 +671,54 @@ WALK_MEMBER_OF_NEIGHBORS_TEMPLATE = """
 PREFIX cga: <urn:holonic:ontology:>
 
 SELECT DISTINCT ?neighbor
-WHERE {{
-    GRAPH ?g {{
-        {{ <{from_holon}> cga:memberOf ?neighbor }}
+WHERE {
+    GRAPH ?g {
+        { ?from_holon cga:memberOf ?neighbor }
         UNION
-        {{ ?neighbor cga:memberOf <{from_holon}> }}
-    }}
-}}
+        { ?neighbor cga:memberOf ?from_holon }
+    }
+}
 ORDER BY ?neighbor
 """
 
 # ── Predicate templates ──
 #
-# Each predicate is expressed as an ASK query with <holon> as the
-# subject-under-test. Callers substitute the candidate IRI at
-# walk time.
+# The holon under test (``?holon``), its registry graph (``?registry``)
+# and the wanted class (``?want_class``) are all bound variables, not
+# spliced text: the holon IRI is store-derived at walk time, so binding it
+# closes the second-order injection path (S3). Callers pass
+# ``holon=_bind_iri(iri)``, ``registry=_bind_iri(...)``,
+# ``want_class=_bind_iri(...)``.
 
 ASK_HAS_CLASS_IN_INTERIOR_TEMPLATE = """
 PREFIX cga: <urn:holonic:ontology:>
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 
-ASK WHERE {{
-    {{
-        GRAPH <{registry_iri}> {{
+ASK WHERE {
+    {
+        GRAPH ?registry {
             ?inv a cga:ClassInstanceCount ;
                  cga:inGraph ?g ;
-                 cga:class <{class_iri}> ;
+                 cga:class ?want_class ;
                  cga:count ?n .
             FILTER(?n > 0)
-        }}
-        GRAPH ?reg {{
-            <{holon_iri}> cga:hasInterior ?g .
-        }}
-    }}
+        }
+        GRAPH ?reg {
+            ?holon cga:hasInterior ?g .
+        }
+    }
     UNION
-    {{
+    {
         # Fallback when the registry has not materialized class
         # inventory for this graph yet: query the interior directly.
-        GRAPH ?reg {{
-            <{holon_iri}> cga:hasInterior ?g .
-        }}
-        GRAPH ?g {{
-            ?s rdf:type <{class_iri}> .
-        }}
-    }}
-}}
+        GRAPH ?reg {
+            ?holon cga:hasInterior ?g .
+        }
+        GRAPH ?g {
+            ?s rdf:type ?want_class .
+        }
+    }
+}
 """
 
 # ══════════════════════════════════════════════════════════════

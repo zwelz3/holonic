@@ -534,6 +534,15 @@ names and become addressable from RDF specs. Existing Python imports
 of `holonic.projections.strip_blank_nodes` continue to work — entry
 points are additive, not replacing the module-level exports.
 
+**Amendment (0.8.0):** Only transforms with a genuine `(Graph) -> Graph`
+signature are registered. `extract_types` (returns a `dict`),
+`filter_by_class` (requires a `class_iri` argument), and
+`collapse_reification` (returns a `ProjectedGraph`, an LPG structure)
+are therefore **not** registered — pipeline steps and `put_graph`
+depend on the `Graph -> Graph` contract. The registered set is
+`strip_blank_nodes` and `localize_predicates`. The three unregistered
+functions remain importable and callable directly.
+
 ### D-0.3.5-5 — Loose provenance with host-machine metadata
 
 **Decision:** `run_projection()` records a `prov:Activity` in the
@@ -1029,8 +1038,6 @@ case — get the correct behavior without changes.
 ---
 
 ## How to add a decision to this document
-
----
 
 ## 0.6.0 -- Audit remediation
 

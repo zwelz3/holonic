@@ -24,7 +24,31 @@ def test_first_party_transforms_registered():
     registry = get_registered_transforms()
     assert "strip_blank_nodes" in registry
     assert "localize_predicates" in registry
-    assert "collapse_reification" in registry
+
+
+def test_collapse_reification_not_registered():
+    # T1: collapse_reification returns a ProjectedGraph (an LPG structure),
+    # not an rdflib Graph, so it must NOT appear in the (Graph) -> Graph
+    # registry -- registering it let a pipeline step feed a ProjectedGraph
+    # to the next step / put_graph. It stays a public function.
+    assert "collapse_reification" not in get_registered_transforms()
+
+
+def test_registered_transforms_return_graphs():
+    # T1 contract: every registered transform must satisfy (Graph) -> Graph.
+    # Iterate the whole registry over a minimal graph and assert each
+    # result is an rdflib Graph, so a mis-typed transform (like the old
+    # collapse_reification) can never silently re-enter the registry.
+    g = Graph()
+    g.parse(
+        data="@prefix ex: <urn:ex:> . ex:a ex:p ex:b .",
+        format="turtle",
+    )
+    for name, func in get_registered_transforms().items():
+        result = func(g)
+        assert isinstance(result, Graph), (
+            f"registered transform {name!r} returned {type(result).__name__}, not a Graph"
+        )
 
 
 def test_resolve_transform_returns_callable():
@@ -155,7 +179,7 @@ def test_get_pipeline_preserves_step_order(ds_with_holon):
         steps=[
             ProjectionPipelineStep(name="first", transform_name="strip_blank_nodes"),
             ProjectionPipelineStep(name="second", transform_name="localize_predicates"),
-            ProjectionPipelineStep(name="third", transform_name="collapse_reification"),
+            ProjectionPipelineStep(name="third", transform_name="strip_blank_nodes"),
         ],
     )
     ds.register_pipeline(spec)

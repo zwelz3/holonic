@@ -19,6 +19,7 @@ ProvenanceViz
 from __future__ import annotations
 
 from holonic.model import AuditTrail
+from holonic.viz._layout import apply_layout
 
 # ── Health -> color mapping ──
 
@@ -229,14 +230,7 @@ def _make_provenance_widget(nodes, edges, layout="hierarchic"):
     w.set_edge_color_mapping(_prov_edge_color_mapping)
     w.set_edge_label_mapping(_prov_edge_label_mapping)
 
-    if layout == "hierarchic":
-        w.hierarchic_layout()
-    elif layout == "organic":
-        w.organic_layout()
-    elif layout == "circular":
-        w.circular_layout()
-    elif layout == "tree":
-        w.tree_layout()
+    apply_layout(w, layout)
 
     return w
 

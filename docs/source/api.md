@@ -73,9 +73,19 @@ consumers using mypy or pyright get full type-checking support.
 ## Governance & Safety (0.6.0)
 
 **Fail-closed traversal.** `traverse(fail_on_breach=True)` validates
-the target membrane after injection. If COMPROMISED, the target
-interior is restored from a pre-injection snapshot and
-`MembraneBreachError` is raised. The target is left unchanged.
+the target membrane after injection. If COMPROMISED, exactly the
+triples this call injected are removed and `MembraneBreachError` is
+raised, leaving the target as it was. The projection hash is written
+only after validation passes, so a rolled-back breach never suppresses a
+later retry.
+
+Two limitations to keep in mind. SHACL `sh:targetClass` reports
+conformant when the target class has no instances, so a portal that
+injects data of the *wrong* type is not caught by a boundary shape that
+targets the *expected* type (tracked as SPEC OQ11). And because the
+rollback uses `DELETE DATA`, a projection that injects blank nodes
+requires exclusive access to the target interior for the duration of the
+call — see `docs/MIGRATION.md`.
 
 **Dry-run simulation.** `dry_run(source, target)` runs the portal's
 CONSTRUCT, merges with the target's existing interior in memory, and
@@ -116,7 +126,10 @@ interiors). Force full-dataset access via
 `cga:sourceLayer cga:InteriorRole` on the portal.
 
 **Batch context manager.** `with ds.batch():` suppresses per-write
-metadata refresh and fires one consolidated refresh on exit.
+metadata refresh and fires one consolidated refresh on exit. This is the
+recommended wrapper for bulk ingestion: in the default `eager` mode each
+`add_*` write otherwise triggers a full recompute of that graph's metadata,
+so wrapping a load in `batch()` collapses N refreshes into one.
 
 **Input validation.** All `add_*` methods validate IRIs at the API
 boundary via `_validate_iri()`. Labels are escaped via `_escape_ttl()`
@@ -141,9 +154,14 @@ query form (`'select'`, `'ask'`, `'construct'`, `'describe'`,
 to the library's IRI validation. Raises `ValueError` for unsafe
 characters.
 
-**Dashboard summary.** `holarchy_summary(max_age=, recent_limit=)`
-returns a `HolarchySummary` with holon count, portal count, root
-count, health distribution, staleness count, and recent activities.
+**Dashboard summary.** `holarchy_summary(max_age=, recent_limit=,
+live_health=False)` returns a `HolarchySummary` with holon count, portal
+count, root count, health distribution, staleness count, and recent
+activities. As of 0.8.0 it runs a handful of aggregate queries rather than
+~4+N round-trips: health is read from each holon's most-recent persisted
+`ValidationRecord` by default (holons never validated do not contribute to
+the distribution). Pass `live_health=True` to re-validate every membrane on
+the call instead — accurate but O(N). See `docs/MIGRATION.md`.
 
 **Notification hooks.** `on_traversal(callback)` and
 `on_validation(callback)` register callbacks that fire

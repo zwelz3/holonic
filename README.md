@@ -210,7 +210,7 @@ Notebooks are committed with outputs stripped; execute them locally with `pixi r
 
 ```bash
 pip install holonic[docs]
-cd docs && sphinx-build -b html . _build/html
+sphinx-build -b html docs/source docs/_build/html
 ```
 
 Or

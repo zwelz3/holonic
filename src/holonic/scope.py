@@ -115,12 +115,14 @@ class HasClassInInterior:
         back to a direct interior scan if the inventory is not
         populated for this holon.
         """
-        ask = Q.ASK_HAS_CLASS_IN_INTERIOR_TEMPLATE.format(
-            registry_iri=registry_iri,
-            class_iri=self.class_iri,
-            holon_iri=holon_iri,
+        from holonic.client import _bind_iri
+
+        return backend.ask(
+            Q.ASK_HAS_CLASS_IN_INTERIOR_TEMPLATE,
+            registry=_bind_iri(registry_iri, "registry_iri"),
+            want_class=_bind_iri(self.class_iri, "class_iri"),
+            holon=_bind_iri(holon_iri, "holon_iri"),
         )
-        return backend.ask(ask)
 
     def evidence(self) -> str:
         """Return a description naming the class being matched."""
@@ -266,13 +268,20 @@ class ScopeResolver:
             values. In practice this should only happen if a caller
             bypasses the type system.
         """
+        # ``holon_iri`` is the store-derived BFS frontier from the previous
+        # hop; bind it (validated URIRef) rather than splicing it back into
+        # query text -- this is the second-order injection close (S3).
+        from holonic.client import _bind_iri
+
+        frontier = _bind_iri(holon_iri, "holon_iri")
+
         if order == "network":
             # Outbound portals first, then inbound
             outbound = self._backend.query(
-                Q.WALK_OUTBOUND_PORTAL_NEIGHBORS_TEMPLATE.format(from_holon=holon_iri)
+                Q.WALK_OUTBOUND_PORTAL_NEIGHBORS_TEMPLATE, from_holon=frontier
             )
             inbound = self._backend.query(
-                Q.WALK_INBOUND_PORTAL_NEIGHBORS_TEMPLATE.format(from_holon=holon_iri)
+                Q.WALK_INBOUND_PORTAL_NEIGHBORS_TEMPLATE, from_holon=frontier
             )
             # Preserve ordering: outbound before inbound, dedup within each
             seen: set[str] = set()
@@ -291,14 +300,12 @@ class ScopeResolver:
 
         if order == "reverse-network":
             rows = self._backend.query(
-                Q.WALK_INBOUND_PORTAL_NEIGHBORS_TEMPLATE.format(from_holon=holon_iri)
+                Q.WALK_INBOUND_PORTAL_NEIGHBORS_TEMPLATE, from_holon=frontier
             )
             return [str(r["neighbor"]) for r in rows]
 
         if order == "containment":
-            rows = self._backend.query(
-                Q.WALK_MEMBER_OF_NEIGHBORS_TEMPLATE.format(from_holon=holon_iri)
-            )
+            rows = self._backend.query(Q.WALK_MEMBER_OF_NEIGHBORS_TEMPLATE, from_holon=frontier)
             return [str(r["neighbor"]) for r in rows]
 
         raise ValueError(f"unknown order: {order!r}")
