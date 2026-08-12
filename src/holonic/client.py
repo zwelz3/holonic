@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import logging
 import re
-import uuid
-from collections import deque
 from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
@@ -39,7 +37,6 @@ from holonic.console_model import (
 from holonic.model import (
     AuditTrail,
     HolonInfo,
-    MembraneBreachError,
     MembraneHealth,
     MembraneResult,
     PortalInfo,
@@ -514,6 +511,34 @@ class HolonicDataset:
 
         self._console = ConsoleReads(self)
 
+        # Membrane validation (0.8.0, AR1/CQ1 decomposition). Owns the
+        # interior-vs-boundary SHACL run and its health classification;
+        # delegated to by validate_membrane/validate_all.
+        from holonic._membrane import MembraneValidator
+
+        self._membrane = MembraneValidator(self)
+
+        # Provenance log (0.8.0, AR1/CQ1 decomposition). Owns PROV-O
+        # activity recording plus the audit/derivation/rollback reads
+        # over those records.
+        from holonic._provenance import ProvenanceLog
+
+        self._provenance = ProvenanceLog(self)
+
+        # Portal registry (0.8.0, AR1/CQ1 decomposition). Owns portal
+        # declaration/mutation/removal and the discovery surface over
+        # the registry (portals from/to a holon, lookup, path search).
+        from holonic._portals import PortalRegistry
+
+        self._portals = PortalRegistry(self)
+
+        # Traversal engine (0.8.0, AR1/CQ1 decomposition). Owns portal
+        # crossing: layer scoping, CONSTRUCT execution, projection
+        # injection/rollback, and traversal outcome recording.
+        from holonic._traversal import TraversalEngine
+
+        self._traversal = TraversalEngine(self)
+
         # Notification hooks (0.7.0). Callbacks fire synchronously
         # after traversal/validation within the calling thread.
         self._on_traversal: list = []
@@ -927,110 +952,12 @@ class HolonicDataset:
 
         .. versionadded:: 0.6.0
         """
-        # Verify portal exists
-        detail = self.get_portal(portal_iri)
-        if detail is None:
-            raise ValueError(f"Portal {portal_iri} not found")
-
-        # Build targeted updates for each changed property.
-        # rdflib's get_graph returns a reference (not copy), so we use
-        # per-graph SPARQL DELETE WHERE with explicit graph names.
-        if construct_query is not _SENTINEL:
-            # Find which graphs contain the old constructQuery
-            cq_graphs = self.backend.query(f"""
-                PREFIX cga: <urn:holonic:ontology:>
-                SELECT DISTINCT ?g WHERE {{
-                    GRAPH ?g {{ <{portal_iri}> cga:constructQuery ?q }}
-                }}
-            """)
-            # Delete old value from each graph individually
-            for row in cq_graphs:
-                g_iri = row["g"]
-                self.backend.update(f"""
-                    PREFIX cga: <urn:holonic:ontology:>
-                    DELETE WHERE {{
-                        GRAPH <{g_iri}> {{ <{portal_iri}> cga:constructQuery ?old }}
-                    }}
-                """)
-            # Insert new query via Turtle parse (avoids SPARQL escaping)
-            if construct_query is not None:
-                escaped = construct_query.replace("\\", "\\\\").replace('"', '\\"')
-                ttl = (
-                    f"@prefix cga: <urn:holonic:ontology:> .\n"
-                    f'<{portal_iri}> cga:constructQuery """{escaped}""" .\n'
-                )
-                self.backend.parse_into(self.registry_iri, ttl, "turtle")
-
-        if label is not _SENTINEL:
-            lbl_graphs = self.backend.query(f"""
-                PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-                SELECT DISTINCT ?g WHERE {{
-                    GRAPH ?g {{ <{portal_iri}> rdfs:label ?l }}
-                }}
-            """)
-            for row in lbl_graphs:
-                g_iri = row["g"]
-                self.backend.update(f"""
-                    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-                    DELETE WHERE {{
-                        GRAPH <{g_iri}> {{ <{portal_iri}> rdfs:label ?old }}
-                    }}
-                """)
-            if label is not None:
-                ttl = (
-                    f"@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n"
-                    f'<{portal_iri}> rdfs:label "{_escape_ttl(label)}" .\n'
-                )
-                self.backend.parse_into(self.registry_iri, ttl, "turtle")
-
-        if portal_type is not _SENTINEL and portal_type is not None:
-            # Find and remove old subtypes per-graph
-            type_graphs = self.backend.query(f"""
-                PREFIX cga: <urn:holonic:ontology:>
-                SELECT DISTINCT ?g ?type WHERE {{
-                    GRAPH ?g {{
-                        <{portal_iri}> a ?type .
-                        FILTER(?type != cga:Portal)
-                    }}
-                }}
-            """)
-            for row in type_graphs:
-                g_iri = row["g"]
-                old_type = row["type"]
-                self.backend.update(f"""
-                    DELETE DATA {{
-                        GRAPH <{g_iri}> {{
-                            <{portal_iri}> a <{old_type}> .
-                        }}
-                    }}
-                """)
-            # Insert new type into registry AND the boundary graph
-            # (boundary is where structural triples live; queries
-            # look for type in the same graph as sourceHolon)
-            ttl = (
-                "@prefix cga: <urn:holonic:ontology:> .\n"
-                f"<{portal_iri}> a {_type_term(portal_type, 'portal_type')} .\n"
-            )
-            self.backend.parse_into(self.registry_iri, ttl, "turtle")
-            # Find the boundary graph
-            bnd_rows = self.backend.query(f"""
-                PREFIX cga: <urn:holonic:ontology:>
-                SELECT ?g WHERE {{
-                    GRAPH ?g {{
-                        <{portal_iri}> cga:sourceHolon ?s .
-                    }}
-                    FILTER(?g != <{self.registry_iri}>)
-                }} LIMIT 1
-            """)
-            if bnd_rows:
-                self.backend.parse_into(
-                    bnd_rows[0]["g"],
-                    ttl,
-                    "turtle",
-                )
-
-        if self._metadata_updates == "eager":
-            self._metadata.refresh_graph(self.registry_iri)
+        return self._portals.update_portal(
+            portal_iri,
+            construct_query=construct_query,
+            label=label,
+            portal_type=portal_type,
+        )
 
     # ══════════════════════════════════════════════════════════
     # Bulk loading
@@ -1355,49 +1282,16 @@ class HolonicDataset:
                 ''',
             )
         """
-        _validate_iri(portal_iri, "portal_iri")
-        _validate_iri(source_iri, "source_iri")
-        _validate_iri(target_iri, "target_iri")
-        if graph_iri:
-            _validate_iri(graph_iri, "graph_iri")
-        graph_iri = graph_iri or f"{source_iri}/boundary"
-        # TODO to_pithy_id
-        lbl = label or f"{source_iri} -> {target_iri}"
-
-        # Extract any @prefix lines from extra_ttl so they can be placed
-        # at the top of the combined Turtle block (prefix declarations
-        # must precede any triples in Turtle syntax).
-        extra_prefixes = ""
-        extra_body = ""
-        if extra_ttl:
-            for line in extra_ttl.splitlines():
-                stripped = line.strip()
-                if stripped.lower().startswith("@prefix") and stripped.endswith("."):
-                    extra_prefixes += line + "\n"
-                else:
-                    extra_body += line + "\n"
-
-        ttl = f"""
-            @prefix cga:  <urn:holonic:ontology:> .
-            @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
-            {extra_prefixes}
-            <{portal_iri}> a {_type_term(portal_type, "portal_type")} ;
-                cga:sourceHolon <{source_iri}> ;
-                cga:targetHolon <{target_iri}> ;
-                rdfs:label "{_escape_ttl(lbl)}\""""
-        if construct_query is not None:
-            escaped_query = construct_query.replace("\\", "\\\\").replace('"', '\\"')
-            ttl += f' ;\n                cga:constructQuery """{escaped_query}"""'
-        ttl += " .\n"
-
-        if extra_body.strip():
-            ttl += extra_body + "\n"
-
-        self.backend.parse_into(graph_iri, ttl, "turtle")
-        # Also ensure portal is visible from registry
-        self.backend.parse_into(self.registry_iri, ttl, "turtle")
-        self._maybe_refresh(graph_iri)
-        return portal_iri
+        return self._portals.add_portal(
+            portal_iri,
+            source_iri,
+            target_iri,
+            construct_query,
+            portal_type=portal_type,
+            extra_ttl=extra_ttl,
+            label=label,
+            graph_iri=graph_iri,
+        )
 
     def remove_portal(self, portal_iri: str) -> bool:
         """Remove a portal from the dataset.
@@ -1432,49 +1326,7 @@ class HolonicDataset:
         When ``metadata_updates="eager"``, metadata for each affected
         graph is refreshed after the removal.
         """
-        # Find every graph containing triples about this portal
-        rows = list(
-            self.backend.query(
-                f"""
-            SELECT DISTINCT ?g WHERE {{
-                GRAPH ?g {{ <{portal_iri}> ?p ?o }}
-            }}
-            """
-            )
-        )
-        if not rows:
-            return False
-
-        affected_graphs = [str(r["g"]) for r in rows]
-
-        # Delete all triples with the portal as subject in each graph
-        for g in affected_graphs:
-            self.backend.update(
-                f"""
-                DELETE WHERE {{
-                    GRAPH <{g}> {{ <{portal_iri}> ?p ?o }}
-                }}
-                """
-            )
-
-        # Belt-and-suspenders: also delete from the registry in case the
-        # portal was added without the registry mirror being picked up
-        # by the graph search (e.g. if the portal's only subject-position
-        # triples were in blank-node contexts that elided the discovery).
-        if self.registry_iri not in affected_graphs:
-            self.backend.update(
-                f"""
-                DELETE WHERE {{
-                    GRAPH <{self.registry_iri}> {{ <{portal_iri}> ?p ?o }}
-                }}
-                """
-            )
-
-        # Refresh metadata for affected graphs if eager
-        for g in affected_graphs:
-            self._maybe_refresh(g)
-
-        return True
+        return self._portals.remove_portal(portal_iri)
 
     # ══════════════════════════════════════════════════════════
     # Portal discovery (SPARQL-driven)
@@ -1502,20 +1354,7 @@ class HolonicDataset:
 
         .. versionadded:: 0.5.0
         """
-        q = Q.FIND_PORTALS_FROM
-        if limit is not None:
-            q += f"\nLIMIT {int(limit)}"
-        if offset is not None:
-            q += f"\nOFFSET {int(offset)}"
-        for r in self.backend.query(q, source=_bind_iri(source_iri, "source_iri")):
-            yield PortalInfo(
-                iri=r["portal"],
-                source_iri=source_iri,
-                target_iri=r["target"],
-                label=r.get("label"),
-                construct_query=r.get("query"),
-                portal_type=r.get("portalType"),
-            )
+        return self._portals.iter_portals_from(source_iri, limit=limit, offset=offset)
 
     def find_portals_from(
         self,
@@ -1529,7 +1368,7 @@ class HolonicDataset:
         Returns a materialized list. For lazy iteration, use
         :meth:`iter_portals_from`.
         """
-        return list(self.iter_portals_from(source_iri, limit=limit, offset=offset))
+        return self._portals.find_portals_from(source_iri, limit=limit, offset=offset)
 
     def iter_portals_to(
         self,
@@ -1553,20 +1392,7 @@ class HolonicDataset:
 
         .. versionadded:: 0.5.0
         """
-        q = Q.FIND_PORTALS_TO
-        if limit is not None:
-            q += f"\nLIMIT {int(limit)}"
-        if offset is not None:
-            q += f"\nOFFSET {int(offset)}"
-        for r in self.backend.query(q, target=_bind_iri(target_iri, "target_iri")):
-            yield PortalInfo(
-                iri=r["portal"],
-                source_iri=r["source"],
-                target_iri=target_iri,
-                label=r.get("label"),
-                construct_query=r.get("query"),
-                portal_type=r.get("portalType"),
-            )
+        return self._portals.iter_portals_to(target_iri, limit=limit, offset=offset)
 
     def find_portals_to(
         self,
@@ -1580,26 +1406,11 @@ class HolonicDataset:
         Returns a materialized list. For lazy iteration, use
         :meth:`iter_portals_to`.
         """
-        return list(self.iter_portals_to(target_iri, limit=limit, offset=offset))
+        return self._portals.find_portals_to(target_iri, limit=limit, offset=offset)
 
     def find_portal(self, source_iri: str, target_iri: str) -> PortalInfo | None:
         """Find a direct portal between two holons.  Returns None if none exists."""
-        rows = self.backend.query(
-            Q.FIND_PORTAL_DIRECT,
-            source=_bind_iri(source_iri, "source_iri"),
-            target=_bind_iri(target_iri, "target_iri"),
-        )
-        if not rows:
-            return None
-        r = rows[0]
-        return PortalInfo(
-            iri=r["portal"],
-            source_iri=source_iri,
-            target_iri=target_iri,
-            label=r.get("label"),
-            construct_query=r.get("query"),
-            portal_type=r.get("portalType"),
-        )
+        return self._portals.find_portal(source_iri, target_iri)
 
     def find_path(
         self,
@@ -1610,32 +1421,7 @@ class HolonicDataset:
 
         Returns a list of PortalInfo forming a path, or None if unreachable.
         """
-        # Fetch all portals in one query
-        rows = self.backend.query(Q.ALL_PORTALS)
-        adj: dict[str, list[PortalInfo]] = {}
-        for r in rows:
-            p = PortalInfo(
-                iri=r["portal"],
-                source_iri=r["source"],
-                target_iri=r["target"],
-                label=r.get("label"),
-                portal_type=r.get("portalType"),
-            )
-            adj.setdefault(p.source_iri, []).append(p)
-
-        # BFS
-        queue: deque[tuple[str, list[PortalInfo]]] = deque([(source_iri, [])])
-        visited = {source_iri}
-        while queue:
-            current, path = queue.popleft()
-            for portal in adj.get(current, []):
-                new_path = path + [portal]
-                if portal.target_iri == target_iri:
-                    return new_path
-                if portal.target_iri not in visited:
-                    visited.add(portal.target_iri)
-                    queue.append((portal.target_iri, new_path))
-        return None
+        return self._portals.find_path(source_iri, target_iri)
 
     # ══════════════════════════════════════════════════════════
     # Layer collection
@@ -1689,39 +1475,6 @@ class HolonicDataset:
                 missing.append(graph_iri)
             return Graph()
 
-    def _scoped_dataset(self, graph_iris: Iterable[str]) -> Dataset:
-        """Materialize the given named graphs as a standalone queryable dataset.
-
-        Portal traversal is scoped to a subset of the store's graphs (S5).
-        Scoping must narrow *which graphs are visible* without changing the
-        *query model*: a portal CONSTRUCT written as
-        ``WHERE { GRAPH ?g { ... } }`` -- the idiom every portal used before
-        0.8.0, when CONSTRUCTs ran against the whole dataset -- has to keep
-        working. Merging the scope into a single ``Graph`` silently broke
-        that, since rdflib raises "requires a dataset (i.e. ConjunctiveGraph)"
-        for a ``GRAPH`` clause evaluated against one graph.
-
-        So the scope is rebuilt as a ``Dataset`` holding each in-scope graph
-        under its own IRI. ``default_union=True`` mirrors
-        :class:`~holonic.backends.rdflib_backend.RdflibBackend`: patterns
-        outside a ``GRAPH`` clause see the union of the in-scope graphs, and
-        ``GRAPH ?g { ... }`` binds ``?g`` to in-scope graph IRIs *only* --
-        never to a graph the portal was not scoped to.
-
-        Layers are fetched through :meth:`_safe_layer_graph`, so a layer that
-        is registered but not yet materialized contributes nothing instead of
-        aborting the traversal (this is reachable on Fuseki, where an empty
-        graph answers 404).
-
-        .. versionadded:: 0.8.0
-        """
-        scoped = Dataset(default_union=True)
-        for graph_iri in graph_iris:
-            target = scoped.graph(URIRef(graph_iri))
-            for triple in self._safe_layer_graph(graph_iri):
-                target.add(triple)
-        return scoped
-
     # ══════════════════════════════════════════════════════════
     # Portal traversal
     # ══════════════════════════════════════════════════════════
@@ -1769,258 +1522,13 @@ class HolonicDataset:
         rdflib.Graph
             The projected triples.
         """
-        from holonic.model import SealedPortalError
-
-        _validate_iri(portal_iri, "portal_iri")
-
-        # Check portal type -- SealedPortal blocks traversal.
-        #
-        # Fail-closed: an ASK is true if *any* graph types the portal as
-        # cga:SealedPortal, so a dual-typed portal (sealed AND, say,
-        # cga:TransformPortal) can no longer slip through. The previous
-        # ``SELECT ?type ... LIMIT 1`` returned one arbitrary type row and a
-        # substring test on it, so whichever type the store happened to
-        # return first decided the seal -- a nondeterministic bypass. Match
-        # the class IRI exactly rather than by substring.
-        is_sealed = self.backend.ask(f"""
-            PREFIX cga: <urn:holonic:ontology:>
-            ASK {{ GRAPH ?g {{ <{portal_iri}> a cga:SealedPortal }} }}
-        """)
-        if is_sealed:
-            raise SealedPortalError(portal_iri)
-
-        log.debug("traverse_portal(%s)", portal_iri)
-        # Fetch the CONSTRUCT query from the portal definition
-        rows = self.backend.query(Q.GET_PORTAL_QUERY, portal=_bind_iri(portal_iri, "portal_iri"))
-        if not rows:
-            raise ValueError(f"Portal {portal_iri} not found or has no CONSTRUCT query")
-
-        construct_query = rows[0]["query"]
-
-        # Source layer scoping: determine what the CONSTRUCT runs against.
-        #
-        # Priority:
-        #   1. Explicit cga:sourceLayer on the portal -> honor it
-        #      (DatasetRole -> whole dataset; ProjectionRole/InteriorRole
-        #      -> that layer of the source holon)
-        #   2. No explicit layer, source has projection graphs -> scope to
-        #      projections (the governed view; raw interiors may carry PII)
-        #   3. No explicit layer, no projections -> scope to the source's
-        #      own interior graphs
-        #   4. Nothing to scope to AND no opt-in -> raise (fail-closed)
-        #
-        # BREAKING in 0.8.0 (S5): a portal is NEVER silently widened to the
-        # whole dataset. Previously a source with no projections ran its
-        # CONSTRUCT against every graph, leaking other holons' interiors.
-        # Whole-dataset traversal now requires cga:sourceLayer cga:DatasetRole
-        # or unscoped_portals_allowed=True. See MIGRATION.md.
-
-        # Get source holon IRI for projection lookup
-        source_rows = self.backend.query(f"""
-            PREFIX cga: <urn:holonic:ontology:>
-            SELECT ?source WHERE {{
-                GRAPH ?g {{ <{portal_iri}> cga:sourceHolon ?source }}
-            }} LIMIT 1
-        """)
-        source_iri_for_scope = source_rows[0]["source"] if source_rows else None
-
-        # Check explicit sourceLayer
-        scope_rows = self.backend.query(f"""
-            PREFIX cga: <urn:holonic:ontology:>
-            SELECT ?layer WHERE {{
-                GRAPH ?g {{ <{portal_iri}> cga:sourceLayer ?layer }}
-            }} LIMIT 1
-        """)
-        explicit_layer = str(scope_rows[0]["layer"]) if scope_rows else None
-
-        def _graphs_for(holon: str, template: str) -> list[str]:
-            return [r["graph"] for r in self.backend.query(template, holon=_bind_iri(holon))]
-
-        scope_graphs: list[str] = []
-        run_whole_dataset = unscoped_portals_allowed
-
-        if explicit_layer and "DatasetRole" in explicit_layer:
-            run_whole_dataset = True
-        elif source_iri_for_scope and explicit_layer and "InteriorRole" in explicit_layer:
-            scope_graphs = _graphs_for(source_iri_for_scope, Q.GET_HOLON_INTERIORS)
-        elif source_iri_for_scope and explicit_layer and "ProjectionRole" in explicit_layer:
-            scope_graphs = _graphs_for(source_iri_for_scope, Q.GET_HOLON_PROJECTIONS)
-        elif source_iri_for_scope:
-            # No explicit layer: prefer projections (the governed view),
-            # else fall back to the source's own interior. Never the whole
-            # dataset by default.
-            scope_graphs = _graphs_for(source_iri_for_scope, Q.GET_HOLON_PROJECTIONS)
-            if not scope_graphs:
-                scope_graphs = _graphs_for(source_iri_for_scope, Q.GET_HOLON_INTERIORS)
-
-        if run_whole_dataset:
-            projected = self.backend.construct(construct_query)
-        elif scope_graphs:
-            # Named graphs are preserved (not merged into one Graph) so a
-            # CONSTRUCT carrying `GRAPH ?g { ... }` still resolves -- scoping
-            # narrows visibility, not the query model. See _scoped_dataset.
-            projected = _run_construct_on_graph(self._scoped_dataset(scope_graphs), construct_query)
-        else:
-            raise ValueError(
-                f"Portal {portal_iri} cannot be scoped: its source holon "
-                f"{source_iri_for_scope!r} has no projection or interior graphs, "
-                "and whole-dataset traversal was not explicitly permitted. "
-                "Declare `cga:sourceLayer cga:DatasetRole` on the portal, or "
-                "call with unscoped_portals_allowed=True, to opt into the legacy "
-                "whole-dataset behaviour."
-            )
-
-        if inject_into and projected:
-            self.backend.post_graph(inject_into, projected)
-            self._maybe_refresh(inject_into)
-
-        return projected
+        return self._traversal.traverse_portal(
+            portal_iri,
+            inject_into=inject_into,
+            unscoped_portals_allowed=unscoped_portals_allowed,
+        )
 
     # ── traverse() helpers (CQ2 decomposition) ───────────────────
-
-    def _resolve_target_interior(self, target_iri: str) -> str:
-        """Return the target's registered interior graph, or the convention name.
-
-        Uses the first ``cga:hasInterior`` graph if one is registered,
-        otherwise falls back to ``<target>/interior`` (registered by the
-        caller once injection succeeds).
-        """
-        interior_rows = self.backend.query(Q.GET_HOLON_INTERIORS, holon=_bind_iri(target_iri))
-        if interior_rows:
-            return interior_rows[0]["graph"]
-        return f"{target_iri}/interior"
-
-    @staticmethod
-    def _projection_hash(projected: Graph | None) -> str:
-        """Stable content hash of a projected graph (empty string if falsy)."""
-        import hashlib
-
-        if not projected:
-            return ""
-        return hashlib.sha256(projected.serialize(format="nt").encode()).hexdigest()
-
-    def _inject_projection(
-        self, interior_iri: str, projected: Graph, *, snapshot: bool
-    ) -> Graph | None:
-        """POST *projected* into *interior_iri*; return the added-triple delta.
-
-        When ``snapshot`` is True the interior is read first so the returned
-        delta is exactly the set of triples this call adds (projected minus
-        pre-existing). That delta is what :meth:`_rollback_injection` removes on
-        breach, so a rollback never touches triples written concurrently by
-        another writer to the same interior. When ``snapshot`` is False no
-        rollback will be needed and ``None`` is returned to skip the read.
-        """
-        delta: Graph | None = None
-        if snapshot:
-            pre = (
-                self.backend.get_graph(interior_iri)
-                if self.backend.graph_exists(interior_iri)
-                else Graph()
-            )
-            delta = projected - pre
-        self.backend.post_graph(interior_iri, projected)
-        self._maybe_refresh(interior_iri)
-        return delta
-
-    def _rollback_injection(self, interior_iri: str, delta: Graph) -> None:
-        """Remove exactly the triples in *delta* from *interior_iri*.
-
-        Uses a targeted ``DELETE DATA`` so concurrently-written triples in the
-        same interior survive the rollback (C2). ``DELETE DATA`` cannot name
-        blank nodes; a delta carrying them falls back to nothing removed for
-        those triples — ``fail_on_breach`` therefore still assumes exclusive
-        access to the target interior for blank-node-bearing projections.
-        """
-        from rdflib import BNode
-
-        ground = Graph()
-        for triple in delta:
-            if any(isinstance(term, BNode) for term in triple):
-                continue
-            ground.add(triple)
-        if len(ground) == 0:
-            return
-        nt = ground.serialize(format="nt")
-        graph_ref = _bind_iri(interior_iri, "interior_iri").n3()
-        self.backend.update(f"DELETE DATA {{ GRAPH {graph_ref} {{\n{nt}\n}} }}")
-
-    def _stored_projection_hash(self, target_iri: str) -> str | None:
-        """Read the persisted ``cga:lastProjectionHash`` for *target_iri*."""
-        rows = self.backend.query(
-            Q.GET_PROJECTION_HASH,
-            context=_bind_iri(f"{target_iri}/context", "context_graph"),
-            target=_bind_iri(target_iri, "target_iri"),
-        )
-        return rows[0]["hash"] if rows else None
-
-    def _store_projection_hash(self, target_iri: str, proj_hash: str) -> None:
-        """Persist *proj_hash* as the target's ``cga:lastProjectionHash``.
-
-        Single ``DELETE/INSERT WHERE`` (replaces the prior read + DELETE +
-        parse_into three-op sequence). ``proj_hash`` is a sha256 hex digest —
-        no injection surface — and the IRIs are validated before templating.
-        """
-        context_graph = f"{target_iri}/context"
-        _validate_iri(context_graph, "context_graph")
-        _validate_iri(target_iri, "target_iri")
-        self.backend.update(
-            Q.SET_PROJECTION_HASH.format(
-                context_graph=context_graph,
-                target_iri=target_iri,
-                proj_hash=proj_hash,
-            )
-        )
-        self._register_layer(target_iri, context_graph, "hasContext")
-
-    def _record_traversal_outcome(
-        self,
-        *,
-        portal: PortalInfo,
-        source_iri: str,
-        target_iri: str,
-        agent_iri: str,
-        is_noop: bool,
-        membrane_result: MembraneResult | None,
-    ) -> None:
-        """Record PROV-O provenance for a completed traversal."""
-        if is_noop:
-            # Record a no-op traversal with explicit label. Same injection
-            # surface as record_traversal() -- validate the interpolated IRIs
-            # and escape the portal IRI embedded in the label before it
-            # reaches the UPDATE template.
-            _validate_iri(agent_iri, "agent_iri")
-            _validate_iri(source_iri, "source_iri")
-            _validate_iri(target_iri, "target_iri")
-            activity_iri = f"urn:prov:traversal:{uuid.uuid4().hex[:12]}"
-            context_graph = f"{target_iri}/context"
-            _validate_iri(context_graph, "context_graph")
-            ts = datetime.now(UTC).isoformat()
-            noop_label = _escape_ttl(f"no-op: source unchanged (portal {portal.iri})")
-            update = Q.RECORD_TRAVERSAL.format(
-                context_graph=context_graph,
-                activity_iri=activity_iri,
-                label=noop_label,
-                agent_iri=agent_iri,
-                source_iri=source_iri,
-                target_iri=target_iri,
-                timestamp=ts,
-            )
-            self.backend.update(update)
-            self._register_layer(target_iri, context_graph, "hasContext")
-        else:
-            self.record_traversal(
-                portal_iri=portal.iri,
-                source_iri=source_iri,
-                target_iri=target_iri,
-                agent_iri=agent_iri,
-            )
-        if membrane_result:
-            self.record_validation(
-                holon_iri=target_iri,
-                health=membrane_result.health,
-                agent_iri=agent_iri,
-            )
 
     def traverse(
         self,
@@ -2058,77 +1566,15 @@ class HolonicDataset:
         -------
         (projected_graph, membrane_result_or_none)
         """
-        if fail_on_breach:
-            validate = True
-
-        portal = self.find_portal(source_iri, target_iri)
-        if portal is None:
-            raise ValueError(f"No direct portal from {source_iri} to {target_iri}")
-        log.debug("traverse(%s -> %s) via %s", source_iri, target_iri, portal.iri)
-
-        target_interior = self._resolve_target_interior(target_iri) if inject else None
-
-        # Run the CONSTRUCT without injecting first (for hash comparison).
-        projected = self.traverse_portal(
-            portal.iri,
-            inject_into=None,
+        return self._traversal.traverse(
+            source_iri,
+            target_iri,
+            inject=inject,
+            validate=validate,
+            fail_on_breach=fail_on_breach,
+            agent_iri=agent_iri,
             unscoped_portals_allowed=unscoped_portals_allowed,
         )
-        proj_hash = self._projection_hash(projected)
-
-        # Hash-compare: skip injection when the projection is unchanged.
-        # Only tracked when agent_iri is provided (hash is a provenance concern).
-        is_noop = False
-        if inject and target_interior and proj_hash and agent_iri:
-            if self._stored_projection_hash(target_iri) == proj_hash:
-                is_noop = True
-
-        # Inject, capturing exactly the triples we add so a breach rollback
-        # can remove only those (C2: never a whole-graph put_graph that would
-        # clobber a concurrent writer's triples in the same interior).
-        injected_delta: Graph | None = None
-        if inject and target_interior and projected and not is_noop:
-            injected_delta = self._inject_projection(
-                target_interior, projected, snapshot=fail_on_breach
-            )
-
-        # Ensure the target interior graph is registered as cga:hasInterior.
-        if target_interior:
-            self._register_layer(target_iri, target_interior, "hasInterior")
-
-        membrane_result = None
-        if validate:
-            membrane_result = self.validate_membrane(target_iri)
-
-            # Fail-closed: remove exactly what this call injected and raise.
-            # The projection hash is written *after* this check (below), so a
-            # rolled-back breach never poisons the no-op cache (E2): a retry
-            # after fixing the boundary re-injects instead of reporting a
-            # phantom no-op.
-            if fail_on_breach and membrane_result.health == MembraneHealth.COMPROMISED:
-                if target_interior and injected_delta is not None:
-                    self._rollback_injection(target_interior, injected_delta)
-                raise MembraneBreachError(membrane_result)
-
-        # Persist the projection hash only once validation has passed (E2).
-        if inject and target_interior and proj_hash and agent_iri and not is_noop:
-            self._store_projection_hash(target_iri, proj_hash)
-
-        if agent_iri:
-            self._record_traversal_outcome(
-                portal=portal,
-                source_iri=source_iri,
-                target_iri=target_iri,
-                agent_iri=agent_iri,
-                is_noop=is_noop,
-                membrane_result=membrane_result,
-            )
-
-        # Fire notification hooks
-        for hook in self._on_traversal:
-            hook(source_iri, target_iri, projected, membrane_result)
-
-        return projected, membrane_result
 
     def traverse_path(
         self,
@@ -2172,22 +1618,13 @@ class HolonicDataset:
 
         .. versionadded:: 0.6.0
         """
-        path = self.find_path(source_iri, target_iri)
-        if path is None:
-            raise ValueError(f"No path from {source_iri} to {target_iri}")
-
-        results = []
-        for portal in path:
-            projected, membrane = self.traverse(
-                portal.source_iri,
-                portal.target_iri,
-                validate=validate,
-                fail_on_breach=fail_on_breach,
-                agent_iri=agent_iri,
-            )
-            results.append((projected, membrane))
-
-        return results
+        return self._traversal.traverse_path(
+            source_iri,
+            target_iri,
+            validate=validate,
+            fail_on_breach=fail_on_breach,
+            agent_iri=agent_iri,
+        )
 
     # ══════════════════════════════════════════════════════════
     # Membrane validation
@@ -2197,17 +1634,13 @@ class HolonicDataset:
     def _no_shapes_report(missing: list[str]) -> str:
         """Explain an empty shapes graph, naming unmaterialized layers.
 
-        "No boundary shapes defined" and "every boundary graph a holon
-        registered is empty" are operationally different situations that
-        produce an identical INTACT result; the report text is the only
-        place the difference survives.
+        Delegates to :func:`holonic._membrane.no_shapes_report`, which is
+        module-level there because both validation and the ``dry_run``
+        preflight need it.
         """
-        if not missing:
-            return "No boundary shapes defined."
-        return (
-            f"No boundary shapes defined: {len(missing)} registered boundary "
-            f"graph(s) hold no triples ({', '.join(sorted(missing))})."
-        )
+        from holonic._membrane import no_shapes_report
+
+        return no_shapes_report(missing)
 
     def dry_run(
         self,
@@ -2241,64 +1674,7 @@ class HolonicDataset:
 
         .. versionadded:: 0.6.0
         """
-        import pyshacl
-
-        portal = self.find_portal(source_iri, target_iri)
-        if portal is None:
-            raise ValueError(f"No direct portal from {source_iri} to {target_iri}")
-
-        # Run the CONSTRUCT without injecting
-        projected = self.traverse_portal(portal.iri, inject_into=None)
-
-        # Build what-if data graph: existing interiors + projected
-        data_graph = Graph()
-        interior_rows = self.backend.query(Q.GET_HOLON_INTERIORS, holon=_bind_iri(target_iri))
-        for r in interior_rows:
-            data_graph += self._safe_layer_graph(r["graph"])
-        data_graph += projected
-
-        # Build shapes graph from boundaries
-        shapes_graph = Graph()
-        missing_boundaries: list[str] = []
-        boundary_rows = self.backend.query(Q.GET_HOLON_BOUNDARIES, holon=_bind_iri(target_iri))
-        for r in boundary_rows:
-            shapes_graph += self._safe_layer_graph(r["graph"], missing=missing_boundaries)
-
-        # Validate the merged state
-        if len(shapes_graph) == 0:
-            return projected, MembraneResult(
-                holon_iri=target_iri,
-                conforms=True,
-                health=MembraneHealth.INTACT,
-                report_text=self._no_shapes_report(missing_boundaries),
-            )
-
-        conforms, report_graph, report_text = pyshacl.validate(
-            data_graph,
-            shacl_graph=shapes_graph,
-            allow_infos=True,
-        )
-
-        violations, warnings_list, shape_viols = _parse_shacl_report(
-            report_graph,
-        )
-
-        if violations:
-            health = MembraneHealth.COMPROMISED
-        elif warnings_list:
-            health = MembraneHealth.WEAKENED
-        else:
-            health = MembraneHealth.INTACT
-
-        return projected, MembraneResult(
-            holon_iri=target_iri,
-            conforms=conforms,
-            health=health,
-            report_text=report_text,
-            violations=violations,
-            warnings=warnings_list,
-            shape_violations=shape_viols,
-        )
+        return self._traversal.dry_run(source_iri, target_iri)
 
     def validate_membrane(self, holon_iri: str) -> MembraneResult:
         """Validate a holon's interior(s) against its boundary shape(s).
@@ -2306,67 +1682,7 @@ class HolonicDataset:
         Collects all cga:hasInterior graphs as data and all cga:hasBoundary
         graphs as shapes, then runs pyshacl.
         """
-        import pyshacl
-
-        log.debug("validate_membrane(%s)", holon_iri)
-
-        # Collect interior graphs (union)
-        interior_rows = self.backend.query(Q.GET_HOLON_INTERIORS, holon=_bind_iri(holon_iri))
-        data_graph = Graph()
-        for row in interior_rows:
-            g = self._safe_layer_graph(row["graph"])
-            for triple in g:
-                data_graph.add(triple)
-
-        # Collect boundary graphs (union)
-        boundary_rows = self.backend.query(Q.GET_HOLON_BOUNDARIES, holon=_bind_iri(holon_iri))
-        shapes_graph = Graph()
-        missing_boundaries: list[str] = []
-        for row in boundary_rows:
-            g = self._safe_layer_graph(row["graph"], missing=missing_boundaries)
-            for triple in g:
-                shapes_graph.add(triple)
-
-        if len(shapes_graph) == 0:
-            return MembraneResult(
-                holon_iri=holon_iri,
-                conforms=True,
-                health=MembraneHealth.INTACT,
-                report_text=self._no_shapes_report(missing_boundaries),
-            )
-
-        conforms, report_graph, report_text = pyshacl.validate(
-            data_graph,
-            shacl_graph=shapes_graph,
-        )
-
-        # Parse violations and warnings from the structured report graph
-        violations, warnings, shape_violations = _parse_shacl_report(
-            report_graph,
-        )
-
-        if violations:
-            health = MembraneHealth.COMPROMISED
-        elif warnings:
-            health = MembraneHealth.WEAKENED
-        else:
-            health = MembraneHealth.INTACT
-
-        result = MembraneResult(
-            holon_iri=holon_iri,
-            conforms=conforms,
-            health=health,
-            report_text=report_text,
-            violations=violations,
-            warnings=warnings,
-            shape_violations=shape_violations,
-        )
-
-        # Fire notification hooks
-        for hook in self._on_validation:
-            hook(holon_iri, result)
-
-        return result
+        return self._membrane.validate_membrane(holon_iri)
 
     def validate_all(self) -> dict[str, MembraneResult]:
         """Validate membranes for all holons in the holarchy.
@@ -2378,10 +1694,7 @@ class HolonicDataset:
 
         .. versionadded:: 0.6.0
         """
-        results = {}
-        for holon in self.iter_holons():
-            results[holon.iri] = self.validate_membrane(holon.iri)
-        return results
+        return self._membrane.validate_all()
 
     # ══════════════════════════════════════════════════════════
     # Provenance (SPARQL UPDATE)
@@ -2397,33 +1710,13 @@ class HolonicDataset:
         context_graph: str | None = None,
     ) -> str:
         """Record a portal traversal as a PROV-O Activity via SPARQL UPDATE."""
-        # Every value below is interpolated into a SPARQL UPDATE template:
-        # the four IRIs land inside <...> slots and portal_iri is embedded
-        # in a quoted label. Validate the IRIs (reject <>"{} whitespace) and
-        # escape the label so neither can break out of its slot.
-        _validate_iri(portal_iri, "portal_iri")
-        _validate_iri(source_iri, "source_iri")
-        _validate_iri(target_iri, "target_iri")
-        _validate_iri(agent_iri, "agent_iri")
-        activity_iri = f"urn:prov:traversal:{uuid.uuid4().hex[:12]}"
-        context_graph = context_graph or f"{target_iri}/context"
-        _validate_iri(context_graph, "context_graph")
-        ts = datetime.now(UTC).isoformat()
-
-        update = Q.RECORD_TRAVERSAL.format(
+        return self._provenance.record_traversal(
+            portal_iri,
+            source_iri,
+            target_iri,
+            agent_iri,
             context_graph=context_graph,
-            activity_iri=activity_iri,
-            label=_escape_ttl(f"Portal traversal via {portal_iri}"),
-            agent_iri=agent_iri,
-            source_iri=source_iri,
-            target_iri=target_iri,
-            timestamp=ts,
         )
-        self.backend.update(update)
-
-        # Register context graph if not already
-        self._register_layer(target_iri, context_graph, "hasContext")
-        return activity_iri
 
     def record_validation(
         self,
@@ -2434,71 +1727,16 @@ class HolonicDataset:
         context_graph: str | None = None,
     ) -> str:
         """Record a membrane validation as a PROV-O Activity."""
-        # holon_iri, agent_iri and context_graph are interpolated into <...>
-        # slots of a SPARQL UPDATE template; validate before use. health_iri
-        # and activity_iri are derived from a trusted enum / a generated UUID.
-        _validate_iri(holon_iri, "holon_iri")
-        _validate_iri(agent_iri, "agent_iri")
-        activity_iri = f"urn:prov:validation:{uuid.uuid4().hex[:12]}"
-        context_graph = context_graph or f"{holon_iri}/context"
-        _validate_iri(context_graph, "context_graph")
-        ts = datetime.now(UTC).isoformat()
-
-        health_iri = f"urn:holonic:ontology:{health.value.capitalize()}"
-        update = Q.RECORD_VALIDATION.format(
+        return self._provenance.record_validation(
+            holon_iri,
+            health,
+            agent_iri,
             context_graph=context_graph,
-            activity_iri=activity_iri,
-            agent_iri=agent_iri,
-            holon_iri=holon_iri,
-            health_iri=health_iri,
-            timestamp=ts,
         )
-        self.backend.update(update)
-        self._register_layer(holon_iri, context_graph, "hasContext")
-        return activity_iri
 
     def _build_surface_report(self, holon_iri: str) -> SurfaceReport | None:
         """Build a surface report from a holon's boundary shapes."""
-        boundary_rows = self.backend.query(Q.GET_HOLON_BOUNDARIES, holon=_bind_iri(holon_iri))
-        if not boundary_rows:
-            return None
-
-        # Query the shapes for required/optional fields
-        report = SurfaceReport(holon_iri=holon_iri)
-        for row in boundary_rows:
-            shape_rows = self.backend.query(f"""
-                PREFIX sh: <http://www.w3.org/ns/shacl#>
-                SELECT ?shape ?target_class ?path ?min_count ?severity
-                WHERE {{
-                    GRAPH <{row["graph"]}> {{
-                        ?shape a sh:NodeShape .
-                        OPTIONAL {{ ?shape sh:targetClass ?target_class }}
-                        OPTIONAL {{
-                            ?shape sh:property ?prop .
-                            ?prop sh:path ?path .
-                            OPTIONAL {{ ?prop sh:minCount ?min_count }}
-                            OPTIONAL {{ ?prop sh:severity ?severity }}
-                        }}
-                    }}
-                }}
-            """)
-            for sr in shape_rows:
-                if sr.get("target_class"):
-                    tc = sr["target_class"]
-                    if tc not in report.target_classes:
-                        report.target_classes.append(tc)
-                if sr.get("path"):
-                    path = sr["path"]
-                    path_short = path.rsplit(":", 1)[-1] if ":" in path else path
-                    min_c = sr.get("min_count")
-                    sev = str(sr.get("severity", ""))
-                    if min_c and int(min_c) > 0:
-                        report.required_fields.append(path_short)
-                    else:
-                        report.optional_fields.append(path_short)
-                    if "Violation" in sev:
-                        report.violations += 0  # counted at validation time
-        return report
+        return self._provenance._build_surface_report(holon_iri)
 
     def collect_audit_trail(
         self,
@@ -2545,89 +1783,11 @@ class HolonicDataset:
             into the ``FILTER``. A malformed value now raises
             ``ValueError`` rather than reaching the SPARQL engine.
         """
-        traversals = []
-        validations = []
-
-        # Validated once, before either branch: both queries splice the
-        # same literal, and a bad value should fail before any I/O.
-        # Note `is not None`, not truthiness: `since=""` used to build
-        # FILTER(?timestamp > ""^^xsd:dateTime), an ill-typed comparison
-        # that silently matched nothing. It is now a ValueError.
-        since_literal = _xsd_datetime_literal(since) if since is not None else None
-
-        if kind in (None, "traversal"):
-            tq = Q.COLLECT_TRAVERSALS
-            # Strip existing ORDER BY clause for re-ordering
-            if "ORDER BY" in tq:
-                tq = tq[: tq.index("ORDER BY")].rstrip()
-            if since_literal:
-                # Insert FILTER before closing }
-                tq = tq.rstrip().rstrip("}")
-                tq += f"  FILTER(?timestamp > {since_literal})\n}}\n"
-            tq += "\nORDER BY DESC(?timestamp)"
-            if limit is not None:
-                tq += f"\nLIMIT {int(limit)}"
-            if offset is not None:
-                tq += f"\nOFFSET {int(offset)}"
-
-            traversals = [
-                TraversalRecord(
-                    activity_iri=r["activity"],
-                    source_iri=r["source"],
-                    target_iri=r["target"],
-                    agent_iri=r.get("agent"),
-                    portal_label=r.get("label"),
-                    timestamp=r.get("timestamp"),
-                )
-                for r in self.backend.query(tq)
-            ]
-
-        if kind in (None, "validation"):
-            vq = Q.COLLECT_VALIDATIONS
-            # Strip existing ORDER BY clause
-            if "ORDER BY" in vq:
-                vq = vq[: vq.index("ORDER BY")].rstrip()
-            if since_literal:
-                vq = vq.rstrip().rstrip("}")
-                vq += f"  FILTER(?timestamp > {since_literal})\n}}\n"
-            vq += "\nORDER BY DESC(?timestamp)"
-            if limit is not None:
-                vq += f"\nLIMIT {int(limit)}"
-            if offset is not None:
-                vq += f"\nOFFSET {int(offset)}"
-
-            validations = [
-                ValidationRecord(
-                    activity_iri=r["activity"],
-                    holon_iri=r["holon"],
-                    health=r["health"],
-                    agent_iri=r.get("agent"),
-                    timestamp=r.get("timestamp"),
-                )
-                for r in self.backend.query(vq)
-            ]
-
-        # Collect derivation chain
-        derivation_rows = self.backend.query(Q.COLLECT_DERIVATION_CHAIN)
-        derivations = [(r["derived"], r["source"]) for r in derivation_rows]
-
-        # Build surface reports for participating holons
-        participating = set()
-        for t in traversals:
-            participating.add(t.source_iri)
-            participating.add(t.target_iri)
-
-        surfaces: dict[str, SurfaceReport] = {}
-        for holon_iri in participating:
-            report = self._build_surface_report(holon_iri)
-            if report:
-                surfaces[holon_iri] = report
-
-        return AuditTrail(
-            traversals=traversals,
-            validations=validations,
-            derivation_chain=derivations,
-            surfaces=surfaces,
+        return self._provenance.collect_audit_trail(
+            limit=limit,
+            offset=offset,
+            since=since,
+            kind=kind,
         )
 
     # ══════════════════════════════════════════════════════════
@@ -3343,31 +2503,7 @@ class HolonicDataset:
         schema does not store the portal IRI as a structured triple.
         Returns an empty list if the portal is not registered.
         """
-        portal = self.get_portal(portal_iri)
-        if portal is None:
-            return []
-
-        # Clamp limit defensively -- runaway value would let a caller
-        # pull the full audit history.
-        safe_limit = max(1, min(int(limit), 10_000))
-
-        q = Q.PORTAL_TRAVERSAL_HISTORY_TEMPLATE.format(
-            source_iri=portal.source_iri,
-            target_iri=portal.target_iri,
-            limit=safe_limit,
-        )
-        rows = self.backend.query(q)
-        return [
-            TraversalRecord(
-                activity_iri=r["activity"],
-                source_iri=portal.source_iri,
-                target_iri=portal.target_iri,
-                agent_iri=r.get("agent"),
-                portal_label=r.get("label"),
-                timestamp=r.get("timestamp"),
-            )
-            for r in rows
-        ]
+        return self._provenance.portal_traversal_history(portal_iri, limit)
 
     def get_activity(
         self,
@@ -3382,68 +2518,7 @@ class HolonicDataset:
 
         .. versionadded:: 0.7.0
         """
-        # Try as traversal first
-        rows = self.backend.query(f"""
-            PREFIX prov: <http://www.w3.org/ns/prov#>
-            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-            SELECT ?source ?target ?agent ?label ?timestamp
-            WHERE {{
-                GRAPH ?g {{
-                    <{activity_iri}> a prov:Activity ;
-                        prov:used ?source ;
-                        prov:generated ?target .
-                    OPTIONAL {{
-                        <{activity_iri}> prov:wasAssociatedWith ?agent
-                    }}
-                    OPTIONAL {{
-                        <{activity_iri}> rdfs:label ?label
-                    }}
-                    OPTIONAL {{
-                        <{activity_iri}> prov:startedAtTime ?timestamp
-                    }}
-                }}
-            }} LIMIT 1
-        """)
-        if rows:
-            r = rows[0]
-            return TraversalRecord(
-                activity_iri=activity_iri,
-                source_iri=r["source"],
-                target_iri=r["target"],
-                agent_iri=r.get("agent"),
-                portal_label=r.get("label"),
-                timestamp=r.get("timestamp"),
-            )
-
-        # Try as validation
-        rows = self.backend.query(f"""
-            PREFIX prov: <http://www.w3.org/ns/prov#>
-            PREFIX cga:  <urn:holonic:ontology:>
-            SELECT ?holon ?health ?agent ?timestamp WHERE {{
-                GRAPH ?g {{
-                    <{activity_iri}> a prov:Activity ;
-                        cga:validatedHolon ?holon ;
-                        cga:membraneHealth ?health .
-                    OPTIONAL {{
-                        <{activity_iri}> prov:wasAssociatedWith ?agent
-                    }}
-                    OPTIONAL {{
-                        <{activity_iri}> prov:startedAtTime ?timestamp
-                    }}
-                }}
-            }} LIMIT 1
-        """)
-        if rows:
-            r = rows[0]
-            return ValidationRecord(
-                activity_iri=activity_iri,
-                holon_iri=r["holon"],
-                health=r["health"],
-                agent_iri=r.get("agent"),
-                timestamp=r.get("timestamp"),
-            )
-
-        return None
+        return self._provenance.get_activity(activity_iri)
 
     def last_traversal(self, holon_iri: str) -> TraversalRecord | None:
         """Return the most recent traversal targeting a given holon.
@@ -3456,38 +2531,7 @@ class HolonicDataset:
 
         .. versionadded:: 0.6.0
         """
-        # Provenance pattern: activity prov:generated <target>,
-        # prov:used <source>, stored in target's context graph.
-        q = f"""
-            PREFIX prov: <http://www.w3.org/ns/prov#>
-            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-
-            SELECT ?activity ?source ?agent ?label ?timestamp
-            WHERE {{
-                GRAPH ?g {{
-                    ?activity a prov:Activity ;
-                        prov:generated <{holon_iri}> ;
-                        prov:used ?source .
-                    OPTIONAL {{ ?activity prov:wasAssociatedWith ?agent }}
-                    OPTIONAL {{ ?activity rdfs:label ?label }}
-                    OPTIONAL {{ ?activity prov:startedAtTime ?timestamp }}
-                }}
-            }}
-            ORDER BY DESC(?timestamp)
-            LIMIT 1
-        """
-        rows = self.backend.query(q)
-        if not rows:
-            return None
-        r = rows[0]
-        return TraversalRecord(
-            activity_iri=r["activity"],
-            source_iri=r.get("source", ""),
-            target_iri=holon_iri,
-            agent_iri=r.get("agent"),
-            portal_label=r.get("label"),
-            timestamp=r.get("timestamp"),
-        )
+        return self._provenance.last_traversal(holon_iri)
 
     def freshness(self, holon_iri: str) -> timedelta | None:
         """Return time since the most recent traversal into this holon.
@@ -3566,29 +2610,7 @@ class HolonicDataset:
 
         .. versionadded:: 0.6.0
         """
-        chain: list[str] = []
-        visited = {holon_iri}
-        frontier = [holon_iri]
-
-        while frontier:
-            current = frontier.pop(0)
-            q = f"""
-                PREFIX prov: <http://www.w3.org/ns/prov#>
-                SELECT DISTINCT ?source WHERE {{
-                    GRAPH ?g {{
-                        <{current}> prov:wasDerivedFrom ?source .
-                    }}
-                }}
-            """
-            rows = self.backend.query(q)
-            for r in rows:
-                src = r["source"]
-                if src not in visited:
-                    visited.add(src)
-                    chain.append(src)
-                    frontier.append(src)
-
-        return chain
+        return self._provenance.derivation_chain(holon_iri)
 
     def rollback_traversal(self, activity_iri: str) -> int:
         """Undo a traversal by removing the triples it injected.
@@ -3610,49 +2632,7 @@ class HolonicDataset:
 
         .. versionadded:: 0.6.0
         """
-        # Find the source (prov:used) and target (prov:generated)
-        q = f"""
-            PREFIX prov: <http://www.w3.org/ns/prov#>
-            SELECT ?source ?target WHERE {{
-                GRAPH ?g {{
-                    <{activity_iri}> a prov:Activity ;
-                        prov:used ?source ;
-                        prov:generated ?target .
-                }}
-            }}
-            LIMIT 1
-        """
-        rows = self.backend.query(q)
-        if not rows:
-            raise ValueError(f"Activity {activity_iri} not found")
-
-        source_iri = rows[0]["source"]
-        target_iri = rows[0]["target"]
-
-        # Find the portal and re-run its CONSTRUCT to get the projected triples
-        portal = self.find_portal(source_iri, target_iri)
-        if portal is None:
-            raise ValueError(
-                f"Cannot find portal from {source_iri} to {target_iri} for activity {activity_iri}"
-            )
-
-        projected = self.traverse_portal(portal.iri, inject_into=None)
-
-        # Remove the projected triples from the target interior
-        interior_rows = self.backend.query(Q.GET_HOLON_INTERIORS, holon=_bind_iri(target_iri))
-        removed = 0
-        for ir in interior_rows:
-            g_iri = ir["graph"]
-            target_g = self.backend.get_graph(g_iri)
-            before = len(target_g)
-            for s, p, o in projected:
-                target_g.remove((s, p, o))
-            after = len(target_g)
-            if after < before:
-                self.backend.put_graph(g_iri, target_g)
-                removed += before - after
-
-        return removed
+        return self._provenance.rollback_traversal(activity_iri)
 
     # ══════════════════════════════════════════════════════════
     # Graph-level metadata (0.3.3)

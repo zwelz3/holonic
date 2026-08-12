@@ -414,7 +414,10 @@ class TestPortalConstructScope:
         # Asserted through SPARQL rather than rdflib's quads()/graphs() API:
         # what `?g` can bind to *is* the security property, and the internal
         # accessors changed shape across the supported rdflib 7.x range.
-        scoped = ds_graph_clause_portal._scoped_dataset(["urn:holon:src/interior"])
+        # Layer scoping moved onto the TraversalEngine delegate in 0.8.0
+        # (AR1/CQ1); it has no facade wrapper because it is internal to
+        # portal crossing.
+        scoped = ds_graph_clause_portal._traversal._scoped_dataset(["urn:holon:src/interior"])
         rows = scoped.query("SELECT DISTINCT ?g WHERE { GRAPH ?g { ?s ?p ?o } }")
         bound = {str(r[0]) for r in rows}
         assert bound == {"urn:holon:src/interior"}, (
@@ -424,7 +427,7 @@ class TestPortalConstructScope:
     def test_scoped_dataset_tolerates_unmaterialized_layer(self, ds_graph_clause_portal):
         # A registered-but-empty layer answers 404 on Fuseki. Collecting it
         # must contribute nothing rather than abort the traversal.
-        scoped = ds_graph_clause_portal._scoped_dataset(
+        scoped = ds_graph_clause_portal._traversal._scoped_dataset(
             ["urn:holon:src/interior", "urn:holon:src/never-materialized"]
         )
         rows = scoped.query("SELECT DISTINCT ?g WHERE { GRAPH ?g { ?s ?p ?o } }")

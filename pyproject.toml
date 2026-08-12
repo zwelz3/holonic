@@ -182,7 +182,11 @@ ignore_errors = true
 [[tool.mypy.overrides]]
 module = [
   "holonic._console",
+  "holonic._membrane",
   "holonic._pipelines",
+  "holonic._portals",
+  "holonic._provenance",
+  "holonic._traversal",
   "holonic.backends._fuseki_client",
   "holonic.backends.fuseki_backend",
   "holonic.client",
