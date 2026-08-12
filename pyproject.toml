@@ -86,7 +86,11 @@ optional-dependencies.test = [
 optional-dependencies.viz = [
   "ipywidgets>=8",
   "networkx>=3",
-  "yfiles-jupyter-graphs>=1.7",
+  # Cap below 3. yFiles 2.0 renamed hierarchic_layout -> hierarchical_layout,
+  # which broke 0.7.1 two months after release because this range had no
+  # ceiling; holonic.viz._layout now resolves either spelling, so 1.x and 2.x
+  # both work, but a future major would repeat the incident.
+  "yfiles-jupyter-graphs>=1.7,<3",
 ]
 scripts.holonic-migrate-registry = "holonic.cli.migrate_registry:main"
 entry-points."holonic.projections".localize_predicates = "holonic.projections:localize_predicates"
