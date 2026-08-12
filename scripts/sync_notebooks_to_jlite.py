@@ -11,6 +11,14 @@ holonic is available regardless of which notebook the user opens first.
 Nothing pre-installs holonic into the Pyodide environment, so every
 notebook has to install it for itself.
 
+Widget packages get their version pinned on the way through. ipywidgets
+resolves a widget's frontend labextension by name and semver, and that
+labextension is baked into the site by ``jupyter lite build`` from whatever
+is installed here. If the browser installs a different version off PyPI the
+widget renders an empty output area instead of raising, so the pin is
+rewritten to the version present in this environment rather than left to
+resolve at runtime.
+
 Also writes jupyterlite/jupyter-lite.json, keying the browser contents
 store to a hash of the notebooks so a new build supersedes the copies
 JupyterLite persists in IndexedDB. Note this is the *runtime* config
@@ -20,8 +28,10 @@ shipped to the browser, not the build-time jupyter_lite_config.json.
 from __future__ import annotations
 
 import hashlib
+import importlib.metadata
 import json
 import pathlib
+import re
 import sys
 
 import nbformat
@@ -54,6 +64,65 @@ except Exception:
 import holonic
 print(f"holonic {holonic.__version__}")
 """
+
+
+# Marker on the notebook-supplied viz install cell (13_visualization.ipynb).
+# Kept out of the cell body for the same reason as _PIP_MARKER.
+_VIZ_MARKER = "# holonic-viz-install"
+
+# Widget distributions whose Python version must match the labextension that
+# ``jupyter lite build`` bundles into the site.
+_PINNED_WIDGETS = ("yfiles-jupyter-graphs",)
+
+
+def _pin_widget_versions(nb: nbformat.NotebookNode, name: str) -> list[str]:
+    """Rewrite widget requirements in the viz install cell to exact pins.
+
+    Returns the pins applied, for logging. A distribution that is not
+    installed here is left alone: this environment is also what supplies the
+    labextension, so if it is absent there is no bundled frontend to match
+    and an exact pin would be a guess.
+    """
+    applied: list[str] = []
+
+    for cell in nb.cells:
+        if cell.cell_type != "code" or _VIZ_MARKER not in cell.source:
+            continue
+
+        for dist in _PINNED_WIDGETS:
+            try:
+                version = importlib.metadata.version(dist)
+            except importlib.metadata.PackageNotFoundError:
+                print(
+                    f"  warning: {dist} not installed; leaving the pin in "
+                    f"{name} as-is. The browser will resolve it from PyPI and "
+                    f"may not match the bundled labextension.",
+                    file=sys.stderr,
+                )
+                continue
+
+            # Matches the quoted requirement with any specifier, or none: the
+            # pin is rewritten on every sync, so a re-pin must overwrite an
+            # existing pin rather than stack onto it.
+            #
+            # The specifier character is required when anything follows the
+            # distribution name, so this does not match prose that merely
+            # starts with it -- notably the f-string label in the cell's own
+            # version echo, ``"yfiles-jupyter-graphs {...}"``, which a looser
+            # ``[^"]*`` pattern silently overwrote.
+            pattern = re.compile(rf'"{re.escape(dist)}(?:\s*[<>=!~,][^"]*)?"')
+            pinned = f'"{dist}=={version}"'
+            cell.source, count = pattern.subn(pinned, cell.source)
+            if count:
+                applied.append(f"{dist}=={version}")
+            else:
+                print(
+                    f"  warning: no {dist} requirement found in {name} "
+                    f"despite the {_VIZ_MARKER} marker; nothing pinned.",
+                    file=sys.stderr,
+                )
+
+    return applied
 
 
 def _make_pip_cell() -> nbformat.NotebookNode:
@@ -173,9 +242,14 @@ def main() -> int:
         if not _has_pip_install(nb):
             nb.cells.insert(0, _make_pip_cell())
 
+        # Pin widget versions to this environment, which is also what supplies
+        # the labextensions the build bundles.
+        pins = _pin_widget_versions(nb, nb_path.name)
+
         nbformat.write(nb, target / nb_path.name)
         copied += 1
-        print(f"  {nb_path.name}")
+        suffix = f" (pinned {', '.join(pins)})" if pins else ""
+        print(f"  {nb_path.name}{suffix}")
 
     print(f"Copied {copied} notebooks from {source}/ to {target}/")
 
