@@ -60,6 +60,58 @@ portal being traversable, remove the `cga:SealedPortal` type.
 valid full IRI. Values that previously slipped through the loose
 `":" in holon_type` check (and could inject Turtle) are rejected.
 
+### `collect_audit_trail(since=...)` is validated as an `xsd:dateTime`
+
+`collect_audit_trail` splices its timestamp filter into the query as *text*
+rather than as a binding, so `since` is now checked before it reaches the
+engine and emitted through rdflib's `n3()`. A value that is not a well-formed
+`xsd:dateTime` raises `ValueError`:
+
+```
+since must be an ISO-8601 xsd:dateTime (e.g. '2026-01-31T12:00:00Z'), got '2026-01-31'
+```
+
+Previously such a value was interpolated raw. That had two consequences, and
+the second is the one that affects working code:
+
+1. A value carrying a quote could close the literal and append arbitrary
+   patterns to the query — the read-path twin of S1.
+2. A merely *malformed* value produced an ill-typed SPARQL comparison, which
+   matched nothing and returned an **empty trail**. Callers that passed
+   something unparseable got silence, not an error.
+
+So the migration risk is not code that passes good timestamps — it is code
+that passed bad ones and treated the empty result as "no activity since then".
+Those call sites now raise. The two most likely forms:
+
+| previously | now | fix |
+|---|---|---|
+| `since="2026-01-31"` (date only) | `ValueError` | `since="2026-01-31T00:00:00Z"` |
+| `since=""` (unset config/env value) | `ValueError` | pass `None`, or omit the argument |
+
+Note `since=""` specifically: the check is `since is not None`, not a
+truthiness test, so an empty string is validated rather than skipped. If you
+forward an optional value straight through, normalize it first:
+
+```python
+ds.collect_audit_trail(since=raw_since or None)
+```
+
+What is accepted (verified against the implementation): a date and time
+separated by `T`, with optional fractional seconds and an optional timezone
+(`Z` or `±HH:MM`). A timezone is **not** required, so both of these work:
+
+```python
+from datetime import UTC, datetime
+
+ds.collect_audit_trail(since=datetime.now(UTC).isoformat())  # aware
+ds.collect_audit_trail(since=datetime.now().isoformat())     # naive
+```
+
+Passing `datetime.isoformat()` is the recommended form for any `datetime` you
+already hold. Bare dates, epoch seconds, and locale-formatted strings are not
+accepted.
+
 ### Backend query bindings take rdflib terms (A1/A2)
 
 The `**bindings` keyword on `backend.query()` / `construct()` / `ask()` now
@@ -233,6 +285,59 @@ now carry their logic on a `holonic._console.ConsoleReads` delegate reached via
 migration; only code that reached into the (private) implementation is
 affected. This lifts the presentation-shaped reads out of the core dataset
 surface (the audit's "core -> console layering" concern).
+
+### `HolonicDataset` membrane validation moved to a delegate (AR1/CQ1)
+
+`validate_membrane` and `validate_all` now carry their logic on a
+`holonic._membrane.MembraneValidator` reached via `ds._membrane`. Both public
+methods are unchanged thin wrappers and require no migration.
+
+The `_no_shapes_report` helper became the module-level function
+`holonic._membrane.no_shapes_report`; `HolonicDataset._no_shapes_report`
+remains as a delegating `@staticmethod`, so existing callers still work.
+
+### `HolonicDataset` provenance moved to a delegate (AR1/CQ1)
+
+The provenance cluster now lives on a `holonic._provenance.ProvenanceLog`
+reached via `ds._provenance`: `record_traversal`, `record_validation`,
+`collect_audit_trail`, `portal_traversal_history`, `get_activity`,
+`last_traversal`, `derivation_chain`, and `rollback_traversal`. All eight
+public methods are unchanged thin wrappers and require no migration.
+
+Only affected: code reaching into the private `_build_surface_report`, now
+`ds._provenance._build_surface_report(...)`.
+
+### `HolonicDataset` portal registry moved to a delegate (AR1/CQ1)
+
+Portal declaration, mutation, and discovery now live on a
+`holonic._portals.PortalRegistry` reached via `ds._portals`: `add_portal`,
+`remove_portal`, `update_portal`, `iter_portals_from`, `find_portals_from`,
+`iter_portals_to`, `find_portals_to`, `find_portal`, and `find_path`. All are
+unchanged thin wrappers and require no migration.
+
+Note the generator methods (`iter_portals_from`, `iter_portals_to`) now return
+the delegate's generator rather than being generator functions themselves.
+Iteration, laziness, and results are identical; only
+`inspect.isgeneratorfunction(ds.iter_portals_from)` changes, from `True` to
+`False`.
+
+### `HolonicDataset` traversal moved to a delegate (AR1/CQ1)
+
+Portal crossing now lives on a `holonic._traversal.TraversalEngine` reached via
+`ds._traversal`: the public `traverse_portal`, `traverse`, `traverse_path`, and
+`dry_run` remain as unchanged thin wrappers and require no migration.
+
+This cluster moved with **no facade wrappers for its privates**, because each
+was called only from within the cluster itself. Code reaching into any of
+`_scoped_dataset`, `_resolve_target_interior`, `_projection_hash`,
+`_inject_projection`, `_rollback_injection`, `_stored_projection_hash`,
+`_store_projection_hash`, or `_record_traversal_outcome` must now go through
+`ds._traversal.<name>(...)`. The in-tree test that pinned `_scoped_dataset`
+(the S5 scoping property) was updated accordingly.
+
+`_safe_layer_graph` deliberately stayed on `HolonicDataset`: holon writes,
+validation, and projections all use it, so it is shared infrastructure rather
+than traversal-owned.
 
 ---
 

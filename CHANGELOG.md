@@ -2,12 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.8.0] - 2026-08-12
 
-_Targeting 0.8.0._ Security- and correctness-hardening release driven by the
-v0.7.1 holonic audit. This release contains **breaking changes**; see
-`docs/MIGRATION.md`. The heading becomes `[0.8.0]` (and `__version__` bumps to
-match) at release time — see the Phase 6 release gate.
+Security- and correctness-hardening release driven by the v0.7.1 holonic audit.
+This release contains **breaking changes**; see `docs/MIGRATION.md`.
 
 ### Security
 
@@ -252,6 +250,28 @@ match) at release time — see the Phase 6 release gate.
   `holon_neighborhood`, `list_portals`, and `get_portal` now carry their logic on
   the delegate, with unchanged thin wrappers on `HolonicDataset`. Behavior is
   unchanged; the console/browser tests cover it.
+- **`HolonicDataset` god-class decomposition completed (audit AR1/CQ1).** The
+  four remaining clusters were extracted onto delegates following the same
+  pattern as `PipelineManager`/`ConsoleReads`: `holonic._membrane.MembraneValidator`
+  (`validate_membrane`, `validate_all`), `holonic._provenance.ProvenanceLog`
+  (recording plus the audit/derivation/rollback reads over those records),
+  `holonic._portals.PortalRegistry` (portal declaration, mutation, and
+  discovery), and `holonic._traversal.TraversalEngine` (portal crossing: layer
+  scoping, CONSTRUCT execution, projection injection/rollback, outcome
+  recording). `client.py` drops from 3862 to 2842 lines and `HolonicDataset`
+  from 89 methods to 81 — every public method retained as an unchanged thin
+  wrapper, so the facade is API-identical. Verified against the full suite at
+  568 passed / 9 skipped / 2 xfailed, unchanged from before the extraction.
+
+  Two deliberate asymmetries. The traversal privates moved *without* facade
+  wrappers, because each was called only from inside that cluster — so the
+  extraction removes them from the facade rather than merely relocating them;
+  the one in-tree test pinning `_scoped_dataset` (the S5 scoping property) was
+  repointed at the delegate. And `_safe_layer_graph`, `_register_layer`, and
+  `_maybe_refresh` deliberately **stayed** on `HolonicDataset`: holon writes,
+  portals, traversal, validation, provenance, and projections all call them, so
+  they are shared infrastructure, not any one cluster's property. Pushing them
+  into a delegate would have forced the other five to reach through it.
 
 ### CI / tooling
 
@@ -275,6 +295,15 @@ match) at release time — see the Phase 6 release gate.
   would have caught the 0.7.1 artifact drift. The PyPI publish step gained
   `skip-existing: true` so a re-run of a partially-published tag no longer
   hard-fails on immutable files.
+- **`sync_notebooks_to_jlite.py` pins widget distributions to the syncing
+  environment.** ipywidgets resolves a widget's frontend labextension by name
+  and semver, and `jupyter lite build` bakes that labextension into the site
+  from this environment — so a browser that resolves a different version off
+  PyPI renders an empty output area instead of raising, which is close to
+  undebuggable from the reader's side. Pins are rewritten on every sync (a
+  re-pin overwrites rather than stacks), and a distribution missing from the
+  environment is left alone with a warning, since there is then no bundled
+  frontend to match.
 
 ### Documentation
 
@@ -297,6 +326,36 @@ match) at release time — see the Phase 6 release gate.
   genuinely covers the requirement (6 such gaps: R1.4, R5.2, R5.3, R5.4, R9.2,
   R9.44). A new `test_docs_structure.py` guard statically resolves every
   node-form citation, so a future rename that orphans a link fails CI.
+- **Notebook 11 no longer dies on the first threaded cell under JupyterLite.**
+  Pyodide compiles CPython without pthreads, so `Thread.start()` raises
+  `RuntimeError: can't start new thread` and `ThreadPoolExecutor` fails the same
+  way on first `submit` — which took out two of the three dispatch patterns the
+  notebook exists to demonstrate. Both now branch on
+  `sys.platform == "emscripten"`: the event-queue dispatcher drops its worker
+  and drains cooperatively via a new `drain()` (`wait()` still works on both
+  platforms), and the asyncio adapter drops its executor and runs the traversal
+  inline inside the coroutine. Agent IRIs are unchanged, so the provenance
+  comparison and pattern-comparison table further down stay accurate in the
+  browser. Native Python takes the threaded path exactly as before.
+- **Notebook 13's viz install actually installs something under JupyterLite.**
+  `%pip install "holonic[viz]"` was a no-op in the browser: the injected
+  per-notebook cell has already installed a plain `holonic`, and micropip treats
+  an already-present distribution as satisfying the requirement — extras
+  included — so `yfiles_jupyter_graphs` never landed and the failure surfaced as
+  a `ModuleNotFoundError` several cells later. The cell now names the packages
+  explicitly, sidestepping extras resolution, and imports the widget package
+  immediately so a failed install is reported where it happened. The retry is no
+  longer silenced or wrapped in a second `except`.
+- **Notebook 13 explains a holonic/yFiles version skew instead of raising
+  `AttributeError`.** yFiles 2.0 renamed `hierarchic_layout` to
+  `hierarchical_layout`; releases before 0.8.0 call the 1.x name directly, and
+  JupyterLite installs holonic from PyPI, so a reader gets that broken pairing
+  until 0.8.0 ships. The install cell now detects the combination — absence of
+  `GraphWidget.hierarchic_layout` together with absence of the
+  `holonic.viz._layout` shim — and raises with both versions and the two ways
+  out. The check is a capability probe rather than a version comparison, because
+  the working tree carries the shim while `__version__` still reads `0.7.1`
+  until the release bump.
 
 ### Dependencies
 
@@ -304,6 +363,14 @@ match) at release time — see the Phase 6 release gate.
   and `pixi.toml` rather than inheriting it transitively from `pyshacl`; the
   library binds directly against rdflib 7 APIs (`Dataset` `default_union`,
   `initBindings` term semantics).
+- **Capped `yfiles-jupyter-graphs` below 3** in `pyproject.toml` and `pixi.toml`.
+  The previous open-ended `>=1.7` is what broke 0.7.1 in the field: yFiles 2.0.0
+  landed on 2026-08-10, ~2.5 months after that release, renaming
+  `hierarchic_layout` to `hierarchical_layout`, so any clean
+  `pip install holonic[viz]` from then on resolved an incompatible major and
+  raised `AttributeError` on the default layout. `holonic.viz._layout` resolves
+  either spelling, so both majors work now — the ceiling is there to stop the
+  next major from repeating it.
 
 ## [0.7.1] - 2026-05-25 (bugfix)
 

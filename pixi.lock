@@ -9136,7 +9136,7 @@ packages:
   - pytest-xdist ; extra == 'test'
   - ipywidgets>=8 ; extra == 'viz'
   - networkx>=3 ; extra == 'viz'
-  - yfiles-jupyter-graphs>=1.7 ; extra == 'viz'
+  - yfiles-jupyter-graphs>=1.7,<3 ; extra == 'viz'
   requires_python: '>=3.11'
 - pypi: git+https://github.com/zwelz3/specl.git#61cae94e2bd274748e4e7d040e9c16cb460e340c
   name: specl

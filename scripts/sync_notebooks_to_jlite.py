@@ -105,12 +105,14 @@ def _pin_widget_versions(nb: nbformat.NotebookNode, name: str) -> list[str]:
             # pin is rewritten on every sync, so a re-pin must overwrite an
             # existing pin rather than stack onto it.
             #
-            # The specifier character is required when anything follows the
-            # distribution name, so this does not match prose that merely
-            # starts with it -- notably the f-string label in the cell's own
-            # version echo, ``"yfiles-jupyter-graphs {...}"``, which a looser
-            # ``[^"]*`` pattern silently overwrote.
-            pattern = re.compile(rf'"{re.escape(dist)}(?:\s*[<>=!~,][^"]*)?"')
+            # Deliberately strict about what may follow the distribution name:
+            # a specifier character, then non-space, non-quote characters up to
+            # the closing quote. Requirements never contain spaces, but prose
+            # does, and the cell mentions this distribution in both its version
+            # echo (``"yfiles-jupyter-graphs {...}"``) and its error message
+            # (``"yfiles-jupyter-graphs < 2 to match ..."``). Looser patterns
+            # rewrote both into a requirement string.
+            pattern = re.compile(rf'"{re.escape(dist)}(?:[<>=!~,][^"\s]*)?"')
             pinned = f'"{dist}=={version}"'
             cell.source, count = pattern.subn(pinned, cell.source)
             if count:

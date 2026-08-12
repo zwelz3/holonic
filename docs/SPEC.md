@@ -1,7 +1,7 @@
 ---
 spec_id: holonic-001
 title: Holonic Library — Graph-Native Holonic RDF Systems
-version: 0.7.1
+version: 0.8.0
 status: prototype
 authors: [zwelz3]
 ---
@@ -686,7 +686,7 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
 @prefix skos:    <http://www.w3.org/2004/02/skos/core#> .
 ```
 
-# Appendix B: Module Map (0.7.1)
+# Appendix B: Module Map (0.8.0)
 
 ```
 src/holonic/
