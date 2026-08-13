@@ -98,8 +98,10 @@ ds = HolonicDataset(
 )
 ```
 
-> Migrating from 0.3.x or 0.4.x? The `GraphBackend` alias and
-> `registry_graph` kwarg were removed in 0.5.0. See
+> Upgrading? 0.8.0 carries breaking changes -- portal CONSTRUCT scoping, argument
+> validation on `collect_audit_trail(since=)` and type terms, and the backend
+> `**bindings` contract. Older jumps have their own entries (the `GraphBackend`
+> alias and `registry_graph` kwarg were removed in 0.5.0). See
 > [`docs/MIGRATION.md`](./docs/MIGRATION.md) for the full checklist.
 
 ## Key Concepts
@@ -202,7 +204,9 @@ The package includes a lightweight OWL 2 RL vocabulary (`holonic/ontology/cga.tt
 
 Notebooks 01-12 run with the base install. Notebook 13 requires the optional `viz` extra (`pip install holonic[viz]`) for the yFiles-based widgets.
 
-**Try in browser:** The [hosted documentation](https://zwelz3.github.io/holonic/) includes a JupyterLite build that runs notebooks 01-12 in your browser without any local installation. Notebook 13 requires a local Jupyter install because yFiles widgets depend on a Jupyter server extension that Pyodide can't provide.
+**Try in browser:** The [hosted documentation](https://zwelz3.github.io/holonic/) includes a JupyterLite build that runs notebooks 01-13 in your browser without any local installation. The yFiles widgets in notebook 13 work there too -- their frontend is a JupyterLab extension bundled into the site at build time, and the notebook installs the matching Python package on first run.
+
+Notebook 11 is the one place the browser behaves differently: Pyodide builds CPython without threads, so its event-queue and asyncio dispatch patterns detect `sys.platform == "emscripten"` and fall back to a cooperative drain and an inline coroutine respectively. Both record the same provenance as the threaded path.
 
 Notebooks are committed with outputs stripped; execute them locally with `pixi run serve` or run the lint check (`pixi run check-notebooks`) to confirm your working copy stays clean before committing.
 
@@ -239,7 +243,12 @@ pixi run test
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    HolonicDataset                       │
-│  (thin Python wrapper — SPARQL queries)                 │
+│         (facade — thin wrappers, stable API)            │
+├─────────────────────────────────────────────────────────┤
+│                       Delegates                         │
+│  TraversalEngine · MembraneValidator · ProvenanceLog    │
+│  PortalRegistry · PipelineManager · ConsoleReads        │
+│  MetadataRefresher · ScopeResolver                      │
 ├─────────────────────────────────────────────────────────┤
 │                  HolonicStore Protocol                  │
 │         graph_exists · get/put/post/delete_graph        │
@@ -253,6 +262,10 @@ pixi run test
 └──────────────────┴──────────────────┴───────────────────┘
 ```
 
+`HolonicDataset` is the public surface; each delegate owns one cluster of behavior and is
+reached through a private attribute (`ds._traversal`, `ds._membrane`, ...). Public methods are
+thin wrappers, so the facade stays API-stable while the clusters evolve independently.
+
 Backends inherit `AbstractHolonicStore` for the recommended path (abstract-method enforcement plus hook points for optional native methods). Duck-typed `HolonicStore` protocol implementations also work — the library dispatches to native methods via `hasattr` where present, falling back to generic Python implementations otherwise.
 
 ## Roadmap
@@ -261,6 +274,8 @@ The roadmap is tracked as `R9.*` requirements in [`docs/SPEC.md`](./docs/SPEC.md
 
 ### Shipped
 
+- **0.8.0** -- Security and correctness hardening driven by a third-party audit (3 critical, 37 high findings). **Breaking:** portal CONSTRUCTs scope to the source holon instead of widening to the whole dataset, `collect_audit_trail(since=)` is validated as an `xsd:dateTime`, `holon_type`/`portal_type` terms are validated, `ProjectionPipeline` execution methods drop `backend=`, and backend `**bindings` bind by rdflib term type. Completed the `HolonicDataset` god-class decomposition (AR1/CQ1) -- membrane validation, provenance, portal registry, and traversal now live on delegates. Sealed-portal enforcement and traversal rollback are fail-closed; `FusekiBackend` holds a pooled session (C1/P5); all exceptions derive from `HolonicError` (A1). yFiles 1.x and 2.x both supported.
+- **0.7.1** -- Bugfix: explicit `holonic` install cell per JupyterLite notebook.
 - **0.7.0** -- Upstream consumer integration. `collect_audit_trail(limit=, offset=, since=, kind=)` with SPARQL-level pagination. `classify_sparql()`, `validate_iri()`, `get_activity()`, `holarchy_summary()`. `on_traversal()`/`on_validation()` notification hooks. `ShapeViolation` structured type with `MembraneResult.shape_violations`. AggregateHolonShape SPARQL constraint removed (queried wrong graph). Notebook execution wired into `pixi run test`.
 - **0.6.0** -- Governance enforcement and audit remediation. Breaking: portal CONSTRUCT scoping defaults to projections (R9.35). 14 new methods (traverse_path, dry_run, compose, validate_all, update_portal, fail_on_breach, rollback_traversal, last_traversal, derivation_chain, freshness, is_stale, stale_holons, SealedPortalError, batch). Third-party audit: Turtle injection fixed (C1), get_graph copy semantics (C2), IRI validation (S4), structured SHACL parsing (M1), batch context manager (M3). Snapshot rollback (M2), concurrency docs (M4), pydantic removed (O4).
 - **0.5.0** -- Breaking cleanup: removed `GraphBackend` alias, `registry_graph` kwarg/property (R9.18). Added `holon_type` kwarg, `iter_holons/iter_portals_*` generators with `limit`/`offset` pagination (R9.11). `bulk_load()` for batch holarchy construction. `list_named_graphs()` confirmed mandatory (R9.17). Notebook reorganization with sectioned landing page.
@@ -270,11 +285,11 @@ The roadmap is tracked as `R9.*` requirements in [`docs/SPEC.md`](./docs/SPEC.md
 - **0.4.0** -- `HolonicStore` protocol (renamed from `GraphBackend`), ABC split, optional native-dispatch hook (R9.8 -- R9.10).
 - **0.3.x** -- Typed graphs, scope resolution, graph-level metadata, projection plugin system (R9.1 -- R9.7).
 
-### 0.8.0 -- Planned
+### Next
 
-- Decompose `client.py` into delegate modules (S1 from audit)
-- Migrate to parameterized SPARQL queries (S2 from audit)
-- FusekiBackend connection pooling (S3 from audit)
+- Migrate the remaining string-assembled SPARQL to parameterized queries. Backend
+  `**bindings` now bind by rdflib term type, but a few read paths (notably
+  `collect_audit_trail`) still assemble filters as query text.
 - Aggregated membrane health in the registry (R9.13)
 - Additional scope predicate classes (R9.14)
 - Optional BFO/CCO and gist alignment modules (OQ10)
