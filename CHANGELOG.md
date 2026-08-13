@@ -2,6 +2,8 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
 ## [0.8.0] - 2026-08-12
 
 Security- and correctness-hardening release driven by the v0.7.1 holonic audit.
