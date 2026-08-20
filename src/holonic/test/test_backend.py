@@ -346,8 +346,19 @@ class TestNoDefaultGraphFlattening:
 
     @staticmethod
     def _default_graph_triples(ds):
-        """Triples sitting in the dataset's default context."""
-        return list(ds.backend.ds.default_context)
+        """Triples sitting in the dataset's default graph.
+
+        ``Dataset.default_context`` was renamed to ``default_graph`` and now
+        emits a ``DeprecationWarning`` on every access. pixi pins
+        ``rdflib >=7.0,<8`` and the new name arrived partway through that
+        range, so prefer it and fall back rather than pinning the floor higher
+        for a test helper.
+        """
+        dataset = ds.backend.ds
+        default = getattr(dataset, "default_graph", None)
+        if default is None:  # rdflib without the rename
+            default = dataset.default_context
+        return list(default)
 
     def test_fresh_dataset_has_empty_default_graph(self, ds):
         assert self._default_graph_triples(ds) == []

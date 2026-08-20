@@ -160,12 +160,35 @@ def _mentions(term: str, blob: str) -> bool:
     return re.search(rf"(cga:|{re.escape(CGA)}){re.escape(term)}(?![A-Za-z0-9_])", blob) is not None
 
 
+def _library_sources() -> list[Path]:
+    """Library ``.py`` files, excluding the test package and bytecode caches.
+
+    Excluding tests is what makes the audit mean anything: a term is live
+    because the *library* uses it, not because a test asserts it exists. The
+    six verification tests added for R1.4/R5.2/R5.3/R5.4/R9.2/R9.44 name CGA
+    terms directly, so including them would report those terms live on the
+    strength of the test that checks they are declared -- circular, and it
+    would quietly hide exactly the dead vocabulary this module hunts.
+
+    Matched on path *components* rather than a substring. ``"/test/" not in
+    str(p)`` is never true on Windows, where the separator is a backslash, so
+    the whole test package was scanned as library source and three terms
+    (``LayerGraph``, ``Public``, ``derivedFrom``) were reported live there and
+    declarative on Linux. Guarded by ``test_static_scan_excludes_tests``.
+    """
+    sources = []
+    for path in SRC_DIR.rglob("*.py"):
+        parts = path.relative_to(SRC_DIR).parts
+        if "__pycache__" in parts or parts[0] == "test":
+            continue
+        sources.append(path)
+    return sources
+
+
 def _static_live() -> set[str]:
     """Terms named literally in library source, excluding tests and ontology."""
     blob = "\n".join(
-        p.read_text(encoding="utf-8", errors="ignore")
-        for p in SRC_DIR.rglob("*.py")
-        if "__pycache__" not in str(p) and "/test/" not in str(p)
+        p.read_text(encoding="utf-8", errors="ignore") for p in _library_sources()
     )
     return {t for t in _declared_terms() if _mentions(t, blob)}
 
@@ -231,6 +254,30 @@ class TestOntologyUtilization:
         """Guard: an empty declaration set would make every other test vacuous."""
         declared, _ = audit
         assert len(declared) > 50, f"only {len(declared)} terms parsed from cga.ttl"
+
+    def test_static_scan_excludes_tests(self):
+        """The static pass must not read the test package.
+
+        This failed silently on Windows: the exclusion matched the substring
+        ``"/test/"``, which never appears in a path built with backslashes, so
+        every test file was scanned as library source. The audit still passed
+        on Linux and reported three terms live on Windows that are only ever
+        named by tests -- a platform-dependent answer to "is this vocabulary
+        used", which is worse than an outright failure.
+
+        Asserted on the file list rather than on the outcome, because the
+        outcome is only wrong for terms that happen to be test-mentioned.
+        """
+        offenders = [
+            str(p.relative_to(SRC_DIR))
+            for p in _library_sources()
+            if "test" in p.relative_to(SRC_DIR).parts
+        ]
+        assert not offenders, (
+            f"the static liveness scan is reading test files, so terms will be "
+            f"reported live because a test names them: {offenders[:5]}"
+        )
+        assert _library_sources(), "the static scan found no library sources at all"
 
     def test_every_declared_term_is_live_or_registered(self, audit):
         """No dead fluff: a term is used, or it says why it is not."""

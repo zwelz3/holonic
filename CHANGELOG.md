@@ -63,6 +63,14 @@ All notable changes to this project will be documented in this file.
   because specl 0.2.0 had been supplying it from the clock and 1.0 requires it
   declared. It now lives in a `<!--specl -->` block and is a constant — nothing
   regenerates it.
+- **rdflib deprecation noise silenced** (`pyproject.toml` `filterwarnings`).
+  rdflib 7.6 renamed `Dataset.default_context` and `Dataset.contexts` but its
+  own SPARQL engine still calls the old names, so every query and update the
+  suite issues emitted two or three `DeprecationWarning`s from inside rdflib —
+  about 10,000 per run, burying anything worth reading. Filtered by message
+  rather than by category, so holonic's own deprecation warnings still
+  surface. Nothing fixable downstream; drop the filter once rdflib stops
+  calling its own deprecated properties.
 - **`docs/ROADMAP.md`** — the human-readable view of the roadmap, moved out of
   the README. `SPEC.md` remains the machine-checked source (`R9.*` requirements,
   `OQ1`–`OQ11` open questions); the README's `## Roadmap` section duplicated it
