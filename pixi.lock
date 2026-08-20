@@ -2040,7 +2040,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/yarl-1.24.5-pyh7db6752_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
       - pypi: ./
-      - pypi: git+https://github.com/zwelz3/specl.git#61cae94e2bd274748e4e7d040e9c16cb460e340c
       - pypi: https://files.pythonhosted.org/packages/0d/c4/583f94de7024d2a092491d0eadcd5cecf4db7f3aa4076428d65a00ad0ce1/yfiles_jupyter_graphs-2.0.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/3f/0e/fa3b193432cfc60c93b42f3be03365f5f909d2b3ea410295cf36df739e31/widgetsnbextension-4.0.15-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/56/6d/0d9848617b9f753b87f214f1c682592f7ca42de085f564352f10f0843026/ipywidgets-8.1.8-py3-none-any.whl
@@ -2049,6 +2048,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/87/c7/b5c8015d823bfda1a346adb2c634a2101d50bb75d421eb6dcb31acd25ebc/sphinx_rtd_theme-3.1.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/97/53/7ae6f44d2a9275562ff6fb7cf8be14c35e8ab057ebd4954f9f10558efb0d/sphinx_autodoc_typehints-3.13.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ab/b5/36c712098e6191d1b4e349304ef73a8d06aed77e56ceaac8c0a306c7bda1/jupyterlab_widgets-3.0.16-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/ee/4a/1a2b524c0fe3f9aa98c585a39974331c133ec09869279552b5eb6248735a/specl-1.0.0-py3-none-any.whl
       win-64:
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/accessible-pygments-0.0.5-pyhd8ed1ab_1.conda
@@ -2212,7 +2212,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/zeromq-4.3.5-h3a581c9_11.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/zstd-1.5.7-h534d264_6.conda
       - pypi: ./
-      - pypi: git+https://github.com/zwelz3/specl.git#61cae94e2bd274748e4e7d040e9c16cb460e340c
       - pypi: https://files.pythonhosted.org/packages/0d/c4/583f94de7024d2a092491d0eadcd5cecf4db7f3aa4076428d65a00ad0ce1/yfiles_jupyter_graphs-2.0.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/3f/0e/fa3b193432cfc60c93b42f3be03365f5f909d2b3ea410295cf36df739e31/widgetsnbextension-4.0.15-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/56/6d/0d9848617b9f753b87f214f1c682592f7ca42de085f564352f10f0843026/ipywidgets-8.1.8-py3-none-any.whl
@@ -2221,6 +2220,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/87/c7/b5c8015d823bfda1a346adb2c634a2101d50bb75d421eb6dcb31acd25ebc/sphinx_rtd_theme-3.1.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/97/53/7ae6f44d2a9275562ff6fb7cf8be14c35e8ab057ebd4954f9f10558efb0d/sphinx_autodoc_typehints-3.13.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ab/b5/36c712098e6191d1b4e349304ef73a8d06aed77e56ceaac8c0a306c7bda1/jupyterlab_widgets-3.0.16-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/ee/4a/1a2b524c0fe3f9aa98c585a39974331c133ec09869279552b5eb6248735a/specl-1.0.0-py3-none-any.whl
 packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
   build_number: 20
@@ -9138,13 +9138,6 @@ packages:
   - networkx>=3 ; extra == 'viz'
   - yfiles-jupyter-graphs>=1.7,<3 ; extra == 'viz'
   requires_python: '>=3.11'
-- pypi: git+https://github.com/zwelz3/specl.git#61cae94e2bd274748e4e7d040e9c16cb460e340c
-  name: specl
-  version: 0.2.0
-  requires_dist:
-  - rdflib>=7.0
-  - pyshacl>=0.25
-  requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/02/10/5da547df7a391dcde17f59520a231527b8571e6f46fc8efb02ccb370ab12/docutils-0.22.4-py3-none-any.whl
   name: docutils
   version: 0.22.4
@@ -9680,6 +9673,16 @@ packages:
   - pytest>=9.0.2 ; extra == 'testing'
   - sphobjinv>=2.3.1.3 ; extra == 'testing'
   - typing-extensions>=4.15 ; extra == 'testing'
+  requires_python: '>=3.11'
+- pypi: https://files.pythonhosted.org/packages/ee/4a/1a2b524c0fe3f9aa98c585a39974331c133ec09869279552b5eb6248735a/specl-1.0.0-py3-none-any.whl
+  name: specl
+  version: 1.0.0
+  sha256: 82ffd87c6d82f5aa2d89314741df195726dc190872e1ef55b3b121f1015c5763
+  requires_dist:
+  - rdflib>=7.0
+  - pyshacl>=0.25
+  - pyyaml>=6
+  - pytest>=8 ; extra == 'dev'
   requires_python: '>=3.11'
 - pypi: https://files.pythonhosted.org/packages/f1/7b/ce1eafaf1a76852e2ec9b22edecf1daa58175c090266e9f6c64afcd81d91/stack_data-0.6.3-py3-none-any.whl
   name: stack-data

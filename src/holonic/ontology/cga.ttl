@@ -165,7 +165,11 @@ cga:BidirectionalPortal  a cga:PortalType ; rdfs:label "Bidirectional" ;
 
 # ── Membrane health ──
 
-cga:MembraneHealth a owl:Class .
+cga:MembraneHealth a owl:Class ;
+    rdfs:label "Membrane Health" ;
+    skos:definition """Enumeration of membrane validation outcomes. Members are
+        cga:Intact, cga:Weakened and cga:Compromised; the class exists to type
+        them, and is never instantiated directly.""" .
 cga:Intact      a cga:MembraneHealth ; rdfs:label "Intact" ;
     skos:definition "No violations or warnings." .
 cga:Weakened    a cga:MembraneHealth ; rdfs:label "Weakened" ;
@@ -412,7 +416,8 @@ cga:holonStatus  a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:H
     skos:definition "Current lifecycle status of the holon (Active, Archived, Proposed)." .
 cga:supersededBy a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range cga:Holon ;
     skos:definition "The successor holon that replaces this one after archival or restructuring." .
-cga:splitTarget  a owl:ObjectProperty ; rdfs:domain cga:HolonSplit ; rdfs:range cga:Holon .
+cga:splitTarget  a owl:ObjectProperty ; rdfs:domain cga:HolonSplit ; rdfs:range cga:Holon ;
+    skos:definition "A holon produced by this split. One triple per successor." .
 
 # ── Discovery index ──
 cga:containsType a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range rdfs:Class ;
@@ -457,16 +462,23 @@ cga:gateCondition      a owl:DatatypeProperty ; rdfs:domain cga:BusinessProcess 
     skos:definition "Human-readable condition that must be met before this process stage can proceed. Evaluated by downstream consumers, not by the library." .
 
 # ── Operational ──
-cga:lastIngestion       a owl:DatatypeProperty ; rdfs:domain cga:Holon ; rdfs:range xsd:dateTime .
+cga:lastIngestion       a owl:DatatypeProperty ; rdfs:domain cga:Holon ; rdfs:range xsd:dateTime ;
+    skos:definition """Timestamp of the last external ingestion into this holon.
+        Distinct from cga:holonLastModified, which covers any library-mediated
+        write; ingestion is specifically data arriving from a source system.""" .
 cga:refreshFrequency    a owl:DatatypeProperty ; rdfs:domain cga:Holon ; rdfs:range xsd:duration ;
     skos:definition "Expected refresh interval. P0D=manual, PT1H=hourly, P1D=daily." .
-cga:interiorTripleCount a owl:DatatypeProperty ; rdfs:domain cga:Holon ; rdfs:range xsd:integer .
+cga:interiorTripleCount a owl:DatatypeProperty ; rdfs:domain cga:Holon ; rdfs:range xsd:integer ;
+    skos:definition """Triples across this holon's interior graphs, summed. The
+        per-holon rollup of cga:tripleCount, which is per layer graph.""" .
 cga:materializationMode a owl:DatatypeProperty ; rdfs:domain cga:Holon ; rdfs:range xsd:string ;
     skos:definition "materialized | virtualized | cached | hybrid" .
 
 # ── Lifecycle ──
-cga:splitRationale a owl:DatatypeProperty ; rdfs:domain cga:HolonSplit ; rdfs:range xsd:string .
-cga:mergeRationale a owl:DatatypeProperty ; rdfs:domain cga:HolonMerge ; rdfs:range xsd:string .
+cga:splitRationale a owl:DatatypeProperty ; rdfs:domain cga:HolonSplit ; rdfs:range xsd:string ;
+    skos:definition "Why the holon was split. Prose, for a reader; cga:splitCriteria carries the mechanism." .
+cga:mergeRationale a owl:DatatypeProperty ; rdfs:domain cga:HolonMerge ; rdfs:range xsd:string ;
+    skos:definition "Why the holons were merged. Prose, for a reader." .
 cga:splitCriteria  a owl:DatatypeProperty ; rdfs:domain cga:HolonSplit ; rdfs:range xsd:string ;
     skos:definition "SPARQL CONSTRUCT determining which triples went to which successor." .
 

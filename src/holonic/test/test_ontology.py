@@ -245,3 +245,170 @@ class TestPortalSubtypeShapeSemantics:
         )
         conforms, _ = self._validate_registry(loaded_ds)
         assert conforms
+
+
+class TestDerivationVocabulary:
+    """R5.3 -- ``cga:derivedFrom`` is reserved, and distinct from PROV.
+
+    The requirement is a reservation: ``cga:derivedFrom`` carries persistent
+    holon-to-holon structural dependency, ``prov:wasDerivedFrom`` carries
+    activity-produced graph-to-graph derivation, and neither replaces the
+    other. What is asserted here is that the vocabulary says so -- that the
+    term exists, is typed, is scoped Holon-to-Holon, and is not conflated
+    with the PROV property by a subproperty axiom or an equivalence.
+    """
+
+    CGA_DERIVED = "urn:holonic:ontology:derivedFrom"
+    PROV_DERIVED = "http://www.w3.org/ns/prov#wasDerivedFrom"
+
+    def test_cga_derived_from_is_declared_holon_to_holon(self, loaded_ds):
+        assert loaded_ds.backend.ask(f"""
+            ASK {{
+                GRAPH <{CGA_GRAPH}> {{
+                    <{self.CGA_DERIVED}>
+                        a <http://www.w3.org/2002/07/owl#ObjectProperty> ;
+                        <http://www.w3.org/2000/01/rdf-schema#domain>
+                            <urn:holonic:ontology:Holon> ;
+                        <http://www.w3.org/2000/01/rdf-schema#range>
+                            <urn:holonic:ontology:Holon> .
+                }}
+            }}
+        """), "cga:derivedFrom must be an ObjectProperty scoped Holon -> Holon"
+
+    def test_cga_derived_from_is_not_conflated_with_prov(self, loaded_ds):
+        """The two properties coexist; neither is defined in terms of the other.
+
+        A ``rdfs:subPropertyOf`` or ``owl:equivalentProperty`` axiom between
+        them would collapse the distinction the requirement exists to draw --
+        a reasoner would then infer structural dependency from every
+        traversal, which is precisely the claim R5.2 and R5.3 keep apart.
+        """
+        assert not loaded_ds.backend.ask(f"""
+            ASK {{
+                GRAPH <{CGA_GRAPH}> {{
+                    {{ <{self.CGA_DERIVED}>
+                        <http://www.w3.org/2000/01/rdf-schema#subPropertyOf>
+                        <{self.PROV_DERIVED}> }}
+                    UNION
+                    {{ <{self.CGA_DERIVED}>
+                        <http://www.w3.org/2002/07/owl#equivalentProperty>
+                        <{self.PROV_DERIVED}> }}
+                    UNION
+                    {{ <{self.PROV_DERIVED}>
+                        <http://www.w3.org/2000/01/rdf-schema#subPropertyOf>
+                        <{self.CGA_DERIVED}> }}
+                }}
+            }}
+        """), "cga:derivedFrom and prov:wasDerivedFrom must stay distinct"
+
+
+class TestSplitMergeActivities:
+    """R5.4 -- ``HolonSplit`` and ``HolonMerge`` are PROV activities."""
+
+    PROV_ACTIVITY = "http://www.w3.org/ns/prov#Activity"
+    SUBCLASS_OF = "http://www.w3.org/2000/01/rdf-schema#subClassOf"
+
+    @pytest.mark.parametrize("cls", ["HolonSplit", "HolonMerge"])
+    def test_subclasses_prov_activity(self, loaded_ds, cls):
+        assert loaded_ds.backend.ask(f"""
+            ASK {{
+                GRAPH <{CGA_GRAPH}> {{
+                    <urn:holonic:ontology:{cls}>
+                        a <http://www.w3.org/2002/07/owl#Class> ;
+                        <{self.SUBCLASS_OF}>+ <{self.PROV_ACTIVITY}> .
+                }}
+            }}
+        """), f"cga:{cls} must reach prov:Activity through rdfs:subClassOf"
+
+    @pytest.mark.parametrize("cls", ["HolonSplit", "HolonMerge"])
+    def test_instance_carries_used_and_generated(self, loaded_ds, cls):
+        """An instance's type chain reaches prov:Activity and it declares both
+        ``prov:used`` and ``prov:generated``.
+
+        Asserted against a real instance rather than the class declaration:
+        the requirement is about what a split or merge record looks like, and
+        a class that subclasses Activity while nothing ever carries the two
+        properties would satisfy the schema and none of the intent.
+        """
+        loaded_ds.add_holon("urn:holon:src", "Source")
+        loaded_ds.add_holon("urn:holon:dst", "Result")
+        activity = f"urn:activity:{cls.lower()}-1"
+        loaded_ds.backend.parse_into(
+            CGA_GRAPH,
+            f"""
+            @prefix prov: <http://www.w3.org/ns/prov#> .
+            <{activity}> a <urn:holonic:ontology:{cls}> ;
+                prov:used <urn:holon:src> ;
+                prov:generated <urn:holon:dst> .
+            """,
+        )
+        assert loaded_ds.backend.ask(f"""
+            ASK {{
+                GRAPH <{CGA_GRAPH}> {{
+                    <{activity}> a ?cls ;
+                        <http://www.w3.org/ns/prov#used> ?used ;
+                        <http://www.w3.org/ns/prov#generated> ?generated .
+                    ?cls <{self.SUBCLASS_OF}>+ <{self.PROV_ACTIVITY}> .
+                }}
+            }}
+        """), f"a cga:{cls} instance must resolve to prov:Activity and declare used/generated"
+
+
+class TestGraphMetadataVocabulary:
+    """R9.2 -- the graph-level metadata vocabulary is declared.
+
+    ``cga:refreshedAt`` is checked for range only. It deliberately declares no
+    ``rdfs:domain`` because it applies to both LayerGraph and
+    ClassInstanceCount, and ``rdfs:domain`` is an inference rule rather than a
+    constraint -- naming one would make a reasoner conclude every refreshed
+    inventory record is a layer graph. R9.2's acceptance criterion asks for
+    "appropriate" domain and range, and for this term the appropriate domain
+    is none.
+    """
+
+    OWL = "http://www.w3.org/2002/07/owl#"
+    RDFS = "http://www.w3.org/2000/01/rdf-schema#"
+    XSD = "http://www.w3.org/2001/XMLSchema#"
+
+    def test_class_instance_count_is_declared(self, loaded_ds):
+        assert loaded_ds.backend.ask(f"""
+            ASK {{
+                GRAPH <{CGA_GRAPH}> {{
+                    <urn:holonic:ontology:ClassInstanceCount> a <{self.OWL}Class> .
+                }}
+            }}
+        """), "cga:ClassInstanceCount must be declared"
+
+    @pytest.mark.parametrize(
+        "term,kind,domain,rng",
+        [
+            ("tripleCount", "DatatypeProperty", "LayerGraph", f"{XSD}integer"),
+            ("lastModified", "DatatypeProperty", "LayerGraph", f"{XSD}dateTime"),
+            ("refreshedAt", "DatatypeProperty", None, f"{XSD}dateTime"),
+            ("inGraph", "ObjectProperty", "ClassInstanceCount", "urn:holonic:ontology:LayerGraph"),
+            ("class", "ObjectProperty", "ClassInstanceCount", f"{RDFS}Class"),
+            ("count", "DatatypeProperty", "ClassInstanceCount", f"{XSD}integer"),
+            ("holonLastModified", "DatatypeProperty", "Holon", f"{XSD}dateTime"),
+        ],
+    )
+    def test_metadata_property_declared_with_range(self, loaded_ds, term, kind, domain, rng):
+        assert loaded_ds.backend.ask(f"""
+            ASK {{
+                GRAPH <{CGA_GRAPH}> {{
+                    <urn:holonic:ontology:{term}>
+                        a <{self.OWL}{kind}> ;
+                        <{self.RDFS}range> <{rng}> .
+                }}
+            }}
+        """), f"cga:{term} must be an owl:{kind} with rdfs:range <{rng}>"
+
+        if domain is None:
+            return
+        assert loaded_ds.backend.ask(f"""
+            ASK {{
+                GRAPH <{CGA_GRAPH}> {{
+                    <urn:holonic:ontology:{term}>
+                        <{self.RDFS}domain> <urn:holonic:ontology:{domain}> .
+                }}
+            }}
+        """), f"cga:{term} must declare rdfs:domain cga:{domain}"

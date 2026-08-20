@@ -7,3 +7,10 @@
 # After adding or changing a rule here, run once:
 #     git add --renormalize . && git commit -m "normalize notebook line endings"
 *.ipynb text eol=lf
+
+# Same reasoning, different generator. specl-translate and `specl-validate
+# score --history` write LF unconditionally, and the docs CI job regenerates
+# both on Linux. Pinning them stops a Windows-side regeneration from rewriting
+# every line and burying the actual spec change.
+docs/SPEC.ttl         text eol=lf
+docs/spec-history.ttl text eol=lf

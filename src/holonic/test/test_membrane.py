@@ -2,7 +2,7 @@
 
 import pytest
 
-from holonic import MembraneBreachError, MembraneHealth, MembraneResult
+from holonic import MembraneBreachError, MembraneHealth, MembraneResult, ShapeViolation
 
 
 class TestMembraneValidation:
@@ -390,3 +390,99 @@ class TestTypedGraphNotFound:
         from holonic import GraphNotFoundError, HolonicError
 
         assert issubclass(GraphNotFoundError, HolonicError)
+
+
+class TestShapeViolationDetail:
+    """R9.44 -- ``MembraneResult.shape_violations`` carries structured detail.
+
+    The requirement names six fields and one behaviour: ``focus_node``
+    identifies the offending node. That is the field that makes the list
+    actionable -- a caller with a breach needs to know *which* node failed,
+    and a message string alone leaves them grepping the interior.
+    """
+
+    EXPECTED_FIELDS = ("shape_iri", "focus_node", "path", "value", "message", "severity")
+
+    @pytest.fixture
+    def breached(self, ds):
+        """A holon whose interior violates its own boundary shape."""
+        ds.add_holon("urn:holon:r944", "Detail")
+        ds.add_interior(
+            "urn:holon:r944",
+            """
+            @prefix ex: <urn:ex:> .
+            <urn:item:offender> a ex:Item .
+            """,
+        )
+        ds.add_boundary(
+            "urn:holon:r944",
+            """
+            @prefix ex: <urn:ex:> .
+            <urn:shapes:ItemShape> a sh:NodeShape ;
+                sh:targetClass ex:Item ;
+                sh:property [
+                    sh:path ex:name ;
+                    sh:minCount 1 ;
+                    sh:datatype xsd:string ;
+                    sh:severity sh:Violation
+                ] .
+            """,
+        )
+        return ds.validate_membrane("urn:holon:r944")
+
+    def test_violation_list_is_populated(self, breached):
+        assert not breached.conforms
+        assert breached.shape_violations, (
+            "a breached membrane must populate shape_violations from the "
+            "pyshacl report graph"
+        )
+        assert all(
+            isinstance(v, ShapeViolation) for v in breached.shape_violations
+        ), "shape_violations must be list[ShapeViolation], not raw strings"
+
+    def test_focus_node_identifies_the_offending_node(self, breached):
+        """The acceptance criterion, asserted literally."""
+        assert breached.shape_violations[0].focus_node == "urn:item:offender"
+
+    def test_all_declared_fields_are_present(self, breached):
+        violation = breached.shape_violations[0]
+        for field_name in self.EXPECTED_FIELDS:
+            assert hasattr(violation, field_name), (
+                f"ShapeViolation is missing the declared field {field_name!r}"
+            )
+
+    def test_path_and_shape_are_resolved_from_the_report(self, breached):
+        """Not merely present -- carrying the values the report supplied.
+
+        ``hasattr`` passes on a dataclass whose fields all defaulted to None,
+        which would satisfy the field list while telling a caller nothing.
+        """
+        violation = breached.shape_violations[0]
+        assert violation.path == "urn:ex:name"
+        assert violation.shape_iri is not None
+        assert violation.severity == "Violation"
+        assert violation.message
+
+    def test_intact_membrane_reports_no_violations(self, ds):
+        ds.add_holon("urn:holon:r944-ok", "Clean")
+        ds.add_interior(
+            "urn:holon:r944-ok",
+            """
+            @prefix ex: <urn:ex:> .
+            <urn:item:ok> a ex:Item ; ex:name "Widget" .
+            """,
+        )
+        ds.add_boundary(
+            "urn:holon:r944-ok",
+            """
+            @prefix ex: <urn:ex:> .
+            <urn:shapes:ItemShape> a sh:NodeShape ;
+                sh:targetClass ex:Item ;
+                sh:property [
+                    sh:path ex:name ; sh:minCount 1 ; sh:severity sh:Violation
+                ] .
+            """,
+        )
+        result = ds.validate_membrane("urn:holon:r944-ok")
+        assert result.conforms
+        assert result.shape_violations == []

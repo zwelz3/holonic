@@ -53,6 +53,11 @@ docs/source/_extra/
 rdf_gen/
 data/render_templates/
 
+# Drafts of issues and proposals filed against *other* projects (specl, etc.).
+# Written here for convenience, filed upstream, and deliberately not carried as
+# holonic history -- the upstream tracker is where they live once filed.
+proposals/
+
 # AI
 .devcontainer
 .claude

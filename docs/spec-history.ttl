@@ -1,0 +1,52 @@
+@prefix specl: <https://w3id.org/specl/ns#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<https://zwelz3.github.io/holonic/spec.ttl#assessment-20260820T000000Z> a specl:MaturityAssessment ;
+    prov:generatedAtTime "2026-08-20T00:00:00Z"^^xsd:dateTime ;
+    specl:assessed <https://zwelz3.github.io/holonic/spec.ttl> ;
+    specl:maturityScore 99 ;
+    specl:progressScore 86 ;
+    specl:subscore <https://zwelz3.github.io/holonic/spec.ttl#assessment-20260820T000000Z-agent> ;
+    specl:subscore <https://zwelz3.github.io/holonic/spec.ttl#assessment-20260820T000000Z-comment> ;
+    specl:subscore <https://zwelz3.github.io/holonic/spec.ttl#assessment-20260820T000000Z-designnote> ;
+    specl:subscore <https://zwelz3.github.io/holonic/spec.ttl#assessment-20260820T000000Z-openissue> ;
+    specl:subscore <https://zwelz3.github.io/holonic/spec.ttl#assessment-20260820T000000Z-persona> ;
+    specl:subscore <https://zwelz3.github.io/holonic/spec.ttl#assessment-20260820T000000Z-requirement> ;
+    specl:subscore <https://zwelz3.github.io/holonic/spec.ttl#assessment-20260820T000000Z-userstory> .
+
+<https://zwelz3.github.io/holonic/spec.ttl#assessment-20260820T000000Z-agent> a specl:ClassSubscore ;
+    specl:itemClass "Agent" ;
+    specl:cleanCount 1 ;
+    specl:totalCount 1 .
+
+<https://zwelz3.github.io/holonic/spec.ttl#assessment-20260820T000000Z-comment> a specl:ClassSubscore ;
+    specl:itemClass "Comment" ;
+    specl:cleanCount 5 ;
+    specl:totalCount 5 .
+
+<https://zwelz3.github.io/holonic/spec.ttl#assessment-20260820T000000Z-designnote> a specl:ClassSubscore ;
+    specl:itemClass "DesignNote" ;
+    specl:cleanCount 7 ;
+    specl:totalCount 7 .
+
+<https://zwelz3.github.io/holonic/spec.ttl#assessment-20260820T000000Z-openissue> a specl:ClassSubscore ;
+    specl:itemClass "OpenIssue" ;
+    specl:cleanCount 9 ;
+    specl:totalCount 11 .
+
+<https://zwelz3.github.io/holonic/spec.ttl#assessment-20260820T000000Z-persona> a specl:ClassSubscore ;
+    specl:itemClass "Persona" ;
+    specl:cleanCount 7 ;
+    specl:totalCount 7 .
+
+<https://zwelz3.github.io/holonic/spec.ttl#assessment-20260820T000000Z-requirement> a specl:ClassSubscore ;
+    specl:itemClass "Requirement" ;
+    specl:cleanCount 85 ;
+    specl:totalCount 85 .
+
+<https://zwelz3.github.io/holonic/spec.ttl#assessment-20260820T000000Z-userstory> a specl:ClassSubscore ;
+    specl:itemClass "UserStory" ;
+    specl:cleanCount 7 ;
+    specl:totalCount 7 .
+

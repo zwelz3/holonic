@@ -16,6 +16,7 @@ import importlib
 import importlib.metadata
 import inspect
 import pathlib
+import re
 import subprocess
 from dataclasses import dataclass, field
 
@@ -727,11 +728,99 @@ check("R9.22", subtype_discovery and sealed_has_no_query and extra_triples_prese
       f"subtype_discovery={subtype_discovery}, sealed_no_query={sealed_has_no_query}, extra_ttl_landed={extra_triples_present}")
 
 # ──────────────────────────────────────────────────────────────
+# Implementation-status drift
+# ──────────────────────────────────────────────────────────────
+# specl 1.0 reports a Progress score rolled up from each requirement's
+# `implementation:` annotation. That number is only worth reading if the
+# annotations track reality, and nothing in specl can check that — it reads
+# the spec, not the library. This does: it derives the status each
+# requirement *should* carry from the verdicts above and reports where
+# docs/SPEC.md disagrees.
+#
+# Without this, Progress decays silently. Someone ships R9.12, the spec still
+# says in-progress, and the badge understates the library indefinitely — or
+# worse, a requirement regresses and the spec keeps claiming `verified`.
+
+IMPL_RE = re.compile(r"^\s+- implementation:\s*(\S+)\s*$")
+REQ_RE = re.compile(r"^- (R[\d.]+)\s")
+
+
+def declared_implementation(spec_path: pathlib.Path) -> dict[str, str]:
+    """Read each requirement's `implementation:` annotation from the markdown."""
+    declared: dict[str, str] = {}
+    current: str | None = None
+    for line in spec_path.read_text(encoding="utf-8").splitlines():
+        m = REQ_RE.match(line)
+        if m:
+            current = m.group(1)
+            continue
+        if line.startswith(("- ", "#")):
+            current = None
+            continue
+        m = IMPL_RE.match(line)
+        if m and current:
+            declared[current] = m.group(1)
+    return declared
+
+
+def observed_implementation(checks: list[Check]) -> dict[str, str]:
+    """Derive the status the verdicts above imply, per requirement.
+
+    `verified` requires a test to point at, which is why it is distinct from
+    `implemented`: a requirement this script confirms by inspection but that
+    no test exercises is built, not verified, and specl warns about the
+    missing verifiedBy separately.
+    """
+    spec_text = (REPO / "docs" / "SPEC.md").read_text(encoding="utf-8")
+    # Several requirements carry more than one check, tagged 'R9.11+bulk' or
+    # 'R9.4-predicates'. Match the identifier grammar rather than splitting on
+    # a separator, so a new suffix style does not silently become its own
+    # requirement and report as drift against an annotation that cannot exist.
+    verdicts: dict[str, set[str]] = {}
+    for c in checks:
+        m = re.match(r"^(R\d+(?:\.\d+)*)", c.req_id)
+        if not m:
+            continue
+        verdicts.setdefault(m.group(1), set()).add(c.status)
+
+    observed = {}
+    for req_id, seen in verdicts.items():
+        # Does the requirement name a verification artifact?
+        block = re.search(
+            rf"^- {re.escape(req_id)}\s.*?(?=^- [A-Z]|^#|\Z)",
+            spec_text, re.M | re.S,
+        )
+        has_test = bool(block and "- verifiedBy:" in block.group(0))
+        if FAIL in seen:
+            observed[req_id] = "in-progress"
+        elif PASS in seen:
+            observed[req_id] = "verified" if has_test else "implemented"
+        elif MANUAL in seen:
+            observed[req_id] = "in-progress" if has_test else "not-started"
+    return observed
+
+
+drift: list[tuple[str, str, str]] = []
+_declared = declared_implementation(REPO / "docs" / "SPEC.md")
+for req_id, expected in sorted(observed_implementation(results).items()):
+    actual = _declared.get(req_id)
+    if actual != expected:
+        drift.append((req_id, actual or "(absent)", expected))
+
+
+# ──────────────────────────────────────────────────────────────
 # Report
 # ──────────────────────────────────────────────────────────────
 
+# The spec's own declared version, not the package's. This report is about
+# whether the library matches docs/SPEC.md, so the spec is what to stamp it
+# with — and it reads from a source checkout, where package metadata may not
+# be installed. The header used to be hardcoded and had drifted to 0.4.2.
+_m = re.search(r"^version:\s*(\S+)\s*$", (REPO / "docs" / "SPEC.md").read_text(encoding="utf-8"), re.M)
+_version = _m.group(1) if _m else "unknown"
+
 print(f"{'='*80}")
-print(f"COMPREHENSIVE SPEC COMPLIANCE REPORT -- holonic 0.4.2")
+print(f"COMPREHENSIVE SPEC COMPLIANCE REPORT -- holonic SPEC {_version}")
 print(f"{'='*80}")
 print()
 
@@ -746,6 +835,15 @@ skipped = sum(1 for c in results if c.status == SKIP)
 
 print(f"{'='*80}")
 print(f"TOTALS: {len(results)} checks  |  {passed} pass  |  {failed} fail  |  {manual_count} manual  |  {skipped} n/a")
+
+if drift:
+    print(f"{'-'*80}")
+    print(f"IMPLEMENTATION DRIFT: {len(drift)} requirement(s) — docs/SPEC.md disagrees with observed state")
+    for req_id, actual, expected in drift:
+        print(f"  {req_id:10s} declares {actual!r}, observed {expected!r}")
+    print("  Update the `implementation:` annotations so the Progress score means something.")
+else:
+    print("Implementation drift: none — every `implementation:` annotation matches observed state.")
 print(f"{'='*80}")
 
-sys.exit(1 if failed > 0 else 0)
+sys.exit(1 if (failed or drift) else 0)

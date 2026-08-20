@@ -11,15 +11,15 @@ platforms = ["linux-64", "win-64"]
 #
 #   dev   — the default for development. Library + lint + test +
 #           docs + jupyterlite + lab. Does NOT pull specl.
-#   spec  — layered over a subset of dev with specl pinned
-#           from git. Use when working on docs/SPEC.md:
+#   spec  — layered over a subset of dev with specl from PyPI.
+#           Use when working on docs/SPEC.md:
 #             pixi run -e spec spec-validate
 #             pixi run -e spec spec-score
 #             pixi run -e spec spec-badge
 #
-# Specl is kept out of dev so day-to-day work doesn't pull
-# a git dependency on every install. It's optional infrastructure
-# for spec-driven development, not required for the library itself.
+# Specl is kept out of dev so day-to-day work doesn't resolve it
+# on every install. It's optional infrastructure for spec-driven
+# development, not required for the library itself.
 # ──────────────────────────────────────────────────────────
 
 [pypi-dependencies]
@@ -124,20 +124,42 @@ cmd = "ruff check src/"
 inputs = ["src/**/*.py"]
 
 # Spec-driven development via specl #################
-# Translates docs/SPEC.md to RDF, validates against SHACL shapes shipped
-# with specl, and reports a maturity score (0-100%). The score is the
-# fraction of ekga:Requirement instances with zero SHACL violations or
-# warnings. Useful as a CI gate and as a README badge.
+# Translates docs/SPEC.md to RDF, validates against the SHACL shapes shipped
+# with specl, and reports two independent numbers: maturity (how completely
+# the spec is written) and progress (how much of it is built, rolled up from
+# per-item `implementation:` annotations). Maturity is the fraction of
+# specl:Item instances with zero SHACL violations or warnings, priority
+# weighted. Useful as a CI gate and as a published badge.
+#
+# The shapes argument is omitted throughout: specl 1.0 resolves its own
+# bundled shapes.ttl. The previous `python -c 'import specl ...'` shim is
+# gone because specl 1.0 states its modules have no supported public API —
+# it is a CLI, and reaching into the package to locate a data file was
+# depending on something it does not promise to keep.
 [feature.tasks-spec.tasks.spec-translate]
-description = "Translate docs/SPEC.md to docs/SPEC.ttl via specl"
+description = "Translate docs/SPEC.md to docs/SPEC.ttl via specl. Parser warnings print but do not gate; use spec-gate for the strict form."
 cmd = "specl-translate docs/SPEC.md docs/SPEC.ttl"
+inputs = ["docs/SPEC.md"]
+outputs = ["docs/SPEC.ttl"]
+
+[feature.tasks-spec.tasks.spec-gate]
+description = """The strict translate CI runs. Fails on any parser warning, which is what keeps a dropped section or an unresolvable reference from passing unnoticed — the failure mode specl 1.0 warns about is content silently not reaching the graph."""
+cmd = "specl-translate docs/SPEC.md docs/SPEC.ttl --fail-on-warning"
 inputs = ["docs/SPEC.md"]
 outputs = ["docs/SPEC.ttl"]
 
 [feature.tasks-spec.tasks.spec-validate]
 description = "Validate docs/SPEC.ttl against specl shapes with explanations"
-cmd = "specl-validate validate docs/SPEC.ttl $(python -c 'import specl, pathlib; print(pathlib.Path(specl.__file__).parent / \"shapes.ttl\")') --explain"
+cmd = "specl-validate validate docs/SPEC.ttl --explain"
 depends-on = ["spec-translate"]
+
+[feature.tasks-spec.tasks.spec-conformance]
+description = """Check that the installed SHACL processor actually applies specl's shapes as intended. The shapes use SPARQL-based targets and constraints, an optional SHACL feature: a processor lacking Advanced Features fails silently rather than erroring, so a defective spec would appear clean. Expect 7 findings, 7 expected."""
+cmd = "specl-validate conformance"
+
+[feature.tasks-spec.tasks.spec-diff]
+description = """Diff two spec graphs, reporting added, removed and changed items. Pass --ignore-base to compare across a spec_base change, which keys by identifier token rather than IRI. Usage: pixi run -e spec spec-diff -- old.ttl new.ttl --ignore-base"""
+cmd = "specl-validate diff"
 
 [feature.tasks-spec.tasks.spec-compliance]
 description = "Run the comprehensive SPEC compliance check — verifies each requirement against actual library behavior (not just annotation coverage)"
@@ -145,14 +167,31 @@ cmd = "python scripts/spec_compliance_check.py"
 inputs = ["docs/SPEC.md", "src/holonic/**/*.py", "scripts/spec_compliance_check.py"]
 
 [feature.tasks-spec.tasks.spec-score]
-description = """Compute the spec maturity score (0-100%). Fraction of requirements without SHACL violations or warnings. Embed the SVG badge in the README by running `spec-badge` and referencing the generated file. See docs/SPEC.md for the embed snippet."""
-cmd = "specl-validate score docs/SPEC.ttl $(python -c 'import specl, pathlib; print(pathlib.Path(specl.__file__).parent / \"shapes.ttl\")')"
+description = """Report maturity and progress. Maturity (0-100%) is the priority-weighted fraction of items with no SHACL violation or warning — how completely the spec is written. Progress is rolled up from per-item `implementation:` annotations — how much of it is built. They are separate numbers on purpose: a fully written spec of an unbuilt library scores 100% maturity and 0% progress, and collapsing them would hide that."""
+cmd = "specl-validate score docs/SPEC.ttl"
+depends-on = ["spec-translate"]
+
+[feature.tasks-spec.tasks.spec-history]
+description = """Append an assessment to docs/spec-history.ttl as a specl:MaturityAssessment. Release cadence, run by hand — NOT wired into CI. One number cannot show whether a spec is converging; a series can, but only at a granularity where movement means something.
+
+Pass --at with the release date so the entry is deterministic and reproducible:
+  pixi run -e spec spec-history -- --at 2026-09-01T00:00:00Z
+
+Why not CI. The history is append-only and must be committed to persist, so a CI job would have to push the file back — which rejects the next push and drifts, the same argument that keeps the badge published rather than committed. The difference is that a badge is regenerable and a history is not, so it is kept, just written deliberately. Appending is idempotent as a graph (the assessment IRI derives from the timestamp, so re-running with the same --at yields identical triples that collapse on parse) but not in the file, which grows a duplicate text block each time. One entry per release keeps it readable."""
+cmd = "specl-validate score docs/SPEC.ttl --history docs/spec-history.ttl"
 depends-on = ["spec-translate"]
 
 [feature.tasks-spec.tasks.spec-badge]
-description = "Generate a spec-maturity SVG badge at static/spec-badge.svg (committed alongside other static assets)"
-cmd = "specl-validate badge docs/SPEC.ttl $(python -c 'import specl, pathlib; print(pathlib.Path(specl.__file__).parent / \"shapes.ttl\")') --out static/spec-badge.svg"
+description = """Render the maturity badge into the Sphinx extra-files tree, from where html_extra_path publishes it to the site root. Not committed: a badge is derived data, and committing it means every scoring run must be pushed back — which rejects the next push and leaves the committed copy drifting from the real score."""
+cmd = "mkdir -p docs/source/_extra/badges && specl-validate badge docs/SPEC.ttl --out docs/source/_extra/badges/spec.svg --link https://github.com/zwelz3/holonic/blob/main/docs/SPEC.md"
 depends-on = ["spec-translate"]
+
+[feature.tasks-spec.tasks.spec-publish]
+description = """Stage docs/SPEC.ttl into the Sphinx extra-files tree so it publishes at https://zwelz3.github.io/holonic/spec.ttl — the namespace every item IRI resolves under. The '.ttl' extension is load-bearing: GitHub Pages serves it as text/turtle, and an extensionless file would not be."""
+cmd = "mkdir -p docs/source/_extra && cp docs/SPEC.ttl docs/source/_extra/spec.ttl"
+depends-on = ["spec-translate"]
+inputs = ["docs/SPEC.ttl"]
+outputs = ["docs/source/_extra/spec.ttl"]
 
 [feature.tasks-docs.tasks.autogen]
 description = "Autobuild the code documentation"
@@ -274,9 +313,12 @@ nbconvert = "*"
 nbformat = "*"
 
 [feature.deps-spec.pypi-dependencies]
-# specl: RDF-native spec validation. Not on PyPI yet; pin to git URL
-# or local path. Replace with a PyPI version once specl ships there.
-specl = { git = "https://github.com/zwelz3/specl.git" }
+# specl: RDF-native spec validation. 1.0 is the first full PyPI delivery;
+# the git pin before it resolved to 0.2.0, two graph contracts behind.
+# Capped below 2.0 because the graph contract (owl:versionIRI
+# https://w3id.org/specl/shapes/2) may only change in a breaking release,
+# and docs/SPEC.md is authored against contract 2.
+specl = ">=1.0,<2"
 
 [feature.deps-test.dependencies]
 pytest = "*"

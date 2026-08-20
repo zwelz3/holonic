@@ -4,6 +4,120 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- **Adopted specl 1.0 from PyPI** (`pixi.toml`), replacing a git pin that
+  resolved to 0.2.0. This crosses two graph contracts and two item-IRI
+  relocations, so `docs/SPEC.md` was migrated to **contract 2**:
+  - **`spec_base` is now declared**: `https://zwelz3.github.io/holonic/spec.ttl#`.
+    Every item has a permanent, dereferenceable IRI — `R1.1` resolves to
+    `…/spec.ttl#R1.1`, and the graph is published to that path by the `docs` CI
+    job. The `.ttl` extension is load-bearing: GitHub Pages serves it as
+    `text/turtle`, which an extensionless path would not be.
+  - User-story triad renamed `asA`/`soThat` → `role`/`benefit`. `role` and
+    `owner` are now references, so a `# Personas` section (P1–P7) and an
+    `# Agents` section (AG1) were added and the annotations point at
+    identifiers rather than repeating a spelling.
+  - RDF vocabulary terms moved from `constrains:` to the new `governs:`.
+    `constrains:` keeps its declared range of `specl:Component`; a requirement
+    governing an RDF class and one constraining a Python class are different
+    claims that the single key had conflated.
+  - Design Considerations and Comments carry `DN1`–`DN7` and `C1`–`C5`
+    identifiers. All twelve bullets were previously **dropped in silence** —
+    three of them without even a warning — so none of that content reached the
+    graph.
+  - Every requirement gained an `implementation:` annotation, which drives
+    specl's new Progress score (**84%**, distinct from the 92% maturity score:
+    one is how much is built, the other how completely it is written).
+  - **Removed six `verifiedBy: none` annotations** (R1.4, R5.2, R5.3, R5.4,
+    R9.2, R9.44). `none` was not a null — it minted a real
+    `spec:test-none a specl:Test` node, so six unverified requirements were
+    passing the verification check by pointing at a fake artifact. They now
+    warn honestly.
+- **Spec validation runs in CI** for the first time (`.github/workflows/ci.yml`),
+  gating on SHACL Violations. Warnings become blocking automatically when the
+  spec declares `status: production` — the threshold lives in the spec, not the
+  workflow.
+- **The maturity badge is published rather than committed.**
+  `static/spec-badge.svg` is deleted; the badge is rendered into
+  `docs/source/_extra/badges/` and served from GitHub Pages. A committed badge
+  is derived data that has to be pushed back, which rejects the next push and
+  leaves the committed copy drifting from the real score.
+- `scripts/spec_compliance_check.py` now detects **implementation drift** —
+  it fails if a requirement's `implementation:` annotation disagrees with what
+  the checker actually observes, which is what keeps the Progress score from
+  decaying into decoration. Its report header also reads the spec version
+  instead of a hardcoded `0.4.2`.
+
+### Added
+
+- **Verification for six previously untested requirements** — R1.4, R5.2, R5.3,
+  R5.4, R9.2 and R9.44 now have tests and are `implementation: verified`. 26 new
+  cases across `test_ontology.py`, `test_backend.py`, `test_portal.py` and
+  `test_membrane.py`, covering: no library write reaching the default graph;
+  traversal recording `prov:wasDerivedFrom` while never emitting
+  `cga:derivedFrom`; the `HolonSplit`/`HolonMerge` PROV subclassing; the
+  graph-metadata vocabulary; and `ShapeViolation` field population.
+- `test_spec_records_creation_date` guards `dct:created` in both `SPEC.md` and
+  `SPEC.ttl`. The value was silently lost in the specl migration once already,
+  because specl 0.2.0 had been supplying it from the clock and 1.0 requires it
+  declared. It now lives in a `<!--specl -->` block and is a constant — nothing
+  regenerates it.
+- **`docs/ROADMAP.md`** — the human-readable view of the roadmap, moved out of
+  the README. `SPEC.md` remains the machine-checked source (`R9.*` requirements,
+  `OQ1`–`OQ11` open questions); the README's `## Roadmap` section duplicated it
+  by hand and had already drifted, still citing `OQ1`–`OQ10`.
+- **`docs/spec-history.ttl`** — spec maturity recorded as `specl:MaturityAssessment`
+  activities, seeded with a 0.9.0 baseline (maturity 99%, progress 86%). Written
+  at release cadence by `spec-history`, deliberately not in CI: the file is
+  append-only and must be committed to persist, so a CI job would have to push it
+  back. Scores before this point are not comparable — they were produced under
+  graph contract 1 against different shapes.
+- **`test_ontology_utilization.py` — an accounting audit for the CGA ontology.**
+  Every one of the 118 declared terms is either *live* or listed in a registry
+  with a stated reason; a term that is neither fails the build, as does a
+  registry entry for a term that has since become live or been deleted. Current
+  split: 74 live (63%), 44 declarative, 0 unaccounted.
+
+  Liveness is established three ways because no one way suffices. Static source
+  matching alone reports false deaths for interpolated IRIs — membrane health is
+  emitted as `f"urn:holonic:ontology:{health.value.capitalize()}"`, so
+  `cga:Intact` appears in no source file and is entirely live — so the audit
+  also exercises a representative holarchy and collects what actually reaches
+  the graph, and counts terms referenced by `cga-shapes.ttl`, which do work when
+  a *user* writes them even though the library never does.
+
+### Fixed
+
+- **Six CGA terms carried no `skos:definition`, `rdfs:label` or
+  `rdfs:comment`** — `MembraneHealth`, `interiorTripleCount`, `lastIngestion`,
+  `splitRationale`, `mergeRationale` and `splitTarget`, each sitting beside
+  documented siblings. Now documented; a term nobody but its author can read is
+  dead in a second sense. Guarded by `test_every_term_is_documented`.
+
+### Fixed
+
+- **`docs/SPEC.md` reports zero SHACL warnings** (was 11), maturity 99%,
+  Requirement subscore 85/85. Open issues gained accountability metadata: OQ6
+  a recommendation and owner (and lost a duplicated `status:` line), OQ10 and
+  OQ11 an owner. OQ4 moved to `resolved` — its lazy-mode gate was usage
+  evidence that never arrived, and the absence of usage was itself the
+  determining criterion.
+- `scripts/spec_compliance_check.py` no longer treats a compound check id such
+  as `R9.4-predicates` as its own requirement, which had reported spurious
+  implementation drift.
+
+### Known issues
+
+- Four parser warnings remain, all one upstream limitation: specl 1.0 cannot
+  express a `urn:` vocabulary namespace, so the CGA terms under `governs:`
+  emit as literals instead of IRIs. Reported upstream. Until it is resolved,
+  CI cannot adopt `specl-translate --fail-on-warning` (available as the
+  `spec-gate` task). Re-namespacing the ontology to work around this is
+  explicitly **not** planned.
+- OQ10 and OQ11 remain `open`, capping the OpenIssue subscore at 9/11. These
+  are genuine unresolved design questions, not missing annotations.
+
 ## [0.8.0] - 2026-08-12
 
 Security- and correctness-hardening release driven by the v0.7.1 holonic audit.

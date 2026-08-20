@@ -71,6 +71,73 @@ def test_changelog_top_entry_matches_version() -> None:
     )
 
 
+def _release_segment(version: str) -> str:
+    """The ``X.Y.Z`` of a version, discarding any pre/post/dev suffix.
+
+    ``0.9.0.dev0`` and ``0.9.0`` name the same release -- one is it under
+    development -- so comparing them literally reports drift where there is
+    agreement. During an open cycle the package carries ``.dev0`` and the spec
+    describes the version being built, which is the normal state and should be
+    silent. A genuine mismatch (``0.8.0`` against ``0.9.0.dev0``) still differs
+    in this segment and still warns.
+    """
+    match = re.match(r"(\d+(?:\.\d+)*)", version)
+    return match.group(1) if match else version
+
+
+@needs_checkout
+def test_spec_records_creation_date() -> None:
+    """``docs/SPEC.md`` must declare ``created``, and the graph must carry it.
+
+    Checked hard, in both files, because this fact has already been lost once
+    and the loss was silent. specl 0.2.0 stamped ``dct:created`` from the clock
+    at translation time; 1.0 stopped -- deliberately, since the value described
+    when the translator ran rather than the document -- and requires it
+    declared instead. The 0.2.0-to-1.0 migration therefore dropped a triple
+    nobody had written by hand, and only a SHACL warning revealed it.
+
+    The value lives in a ``<!--specl -->`` comment block, not the YAML
+    frontmatter: specl reads it from the former and the latter has no such
+    key. Asserting on both the Markdown and the generated Turtle catches the
+    two distinct failures -- someone deleting the declaration, and the
+    declaration silently failing to reach the graph.
+    """
+    assert ROOT is not None  # narrowed by needs_checkout
+    spec_md = ROOT / "docs" / "SPEC.md"
+    if not spec_md.is_file():
+        pytest.skip("docs/SPEC.md not present")
+
+    declared = re.search(
+        r"<!--specl\b(.*?)-->", spec_md.read_text(encoding="utf-8"), re.DOTALL
+    )
+    assert declared is not None, (
+        "docs/SPEC.md declares no <!--specl --> block, so dct:created cannot "
+        "reach the graph. Restore it above '# Intent'."
+    )
+    date_match = re.search(r"^\s*created\s*:\s*(\S+)\s*$", declared.group(1), re.MULTILINE)
+    assert date_match is not None, (
+        "docs/SPEC.md's <!--specl --> block has no 'created:' key. specl 1.0 "
+        "does not supply one -- it must be declared, or SHACL warns that the "
+        "specification records no creation date."
+    )
+    declared_date = date_match.group(1)
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", declared_date), (
+        f"created: {declared_date!r} is not an ISO date; it is emitted as "
+        f"xsd:date and would produce an ill-typed literal."
+    )
+
+    spec_ttl = ROOT / "docs" / "SPEC.ttl"
+    if not spec_ttl.is_file():
+        pytest.skip("docs/SPEC.ttl not generated")
+
+    assert f'dct:created "{declared_date}"^^xsd:date' in spec_ttl.read_text(
+        encoding="utf-8"
+    ), (
+        f"docs/SPEC.md declares created: {declared_date} but docs/SPEC.ttl "
+        f"does not carry it. Regenerate with `pixi run -e spec spec-translate`."
+    )
+
+
 @needs_checkout
 def test_spec_version_tracks_package_version(capsys: pytest.CaptureFixture) -> None:
     """Warn -- never fail -- when docs/SPEC.md's version drifts.
@@ -101,7 +168,7 @@ def test_spec_version_tracks_package_version(capsys: pytest.CaptureFixture) -> N
     if spec_version is None:
         pytest.skip("docs/SPEC.md frontmatter has no 'version:' key")
 
-    if spec_version == holonic.__version__:
+    if _release_segment(spec_version) == _release_segment(holonic.__version__):
         return
 
     message = (
