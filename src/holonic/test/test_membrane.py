@@ -433,12 +433,11 @@ class TestShapeViolationDetail:
     def test_violation_list_is_populated(self, breached):
         assert not breached.conforms
         assert breached.shape_violations, (
-            "a breached membrane must populate shape_violations from the "
-            "pyshacl report graph"
+            "a breached membrane must populate shape_violations from the pyshacl report graph"
         )
-        assert all(
-            isinstance(v, ShapeViolation) for v in breached.shape_violations
-        ), "shape_violations must be list[ShapeViolation], not raw strings"
+        assert all(isinstance(v, ShapeViolation) for v in breached.shape_violations), (
+            "shape_violations must be list[ShapeViolation], not raw strings"
+        )
 
     def test_focus_node_identifies_the_offending_node(self, breached):
         """The acceptance criterion, asserted literally."""

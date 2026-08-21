@@ -152,7 +152,6 @@ class TestTraverseInjection:
         assert len(ctx) == 0
 
 
-
 class TestTraversalDerivationProvenance:
     """R5.2 -- a traversal records PROV derivation and nothing structural.
 

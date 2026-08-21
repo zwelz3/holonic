@@ -221,8 +221,6 @@ ini_options.addopts = [
   "-vv",
   "--ff",
 ]
-ini_options.junit_family = "xunit2"
-ini_options.cache_dir = "build/.pytest_cache"
 # rdflib 7.6 renamed Dataset.default_context -> default_graph and
 # Dataset.contexts -> graphs, but its own SPARQL engine still calls the old
 # names (rdflib/plugins/sparql/evaluate.py:233,235 and update.py:186). Every
@@ -236,9 +234,11 @@ ini_options.cache_dir = "build/.pytest_cache"
 # calling its own deprecated properties.
 ini_options.filterwarnings = [
   "default",
-  "ignore:Dataset.default_context is deprecated:DeprecationWarning",
   "ignore:Dataset.contexts is deprecated:DeprecationWarning",
+  "ignore:Dataset.default_context is deprecated:DeprecationWarning",
 ]
+ini_options.junit_family = "xunit2"
+ini_options.cache_dir = "build/.pytest_cache"
 
 [tool.coverage]
 run.data_file = "build/reports/.coverage"

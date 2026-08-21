@@ -403,8 +403,6 @@ class TestNoDefaultGraphFlattening:
         ds.add_holon("urn:holon:a", "A")
         ds.add_interior("urn:holon:a", "<urn:item:1> a <urn:ex:Item> .")
 
-        named_total = sum(
-            len(ds.backend.get_graph(g)) for g in ds.backend.list_named_graphs()
-        )
+        named_total = sum(len(ds.backend.get_graph(g)) for g in ds.backend.list_named_graphs())
         assert named_total > 0, "nothing was written to any named graph"
         assert self._default_graph_triples(ds) == []

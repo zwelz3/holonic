@@ -107,9 +107,7 @@ def test_spec_records_creation_date() -> None:
     if not spec_md.is_file():
         pytest.skip("docs/SPEC.md not present")
 
-    declared = re.search(
-        r"<!--specl\b(.*?)-->", spec_md.read_text(encoding="utf-8"), re.DOTALL
-    )
+    declared = re.search(r"<!--specl\b(.*?)-->", spec_md.read_text(encoding="utf-8"), re.DOTALL)
     assert declared is not None, (
         "docs/SPEC.md declares no <!--specl --> block, so dct:created cannot "
         "reach the graph. Restore it above '# Intent'."
@@ -130,9 +128,7 @@ def test_spec_records_creation_date() -> None:
     if not spec_ttl.is_file():
         pytest.skip("docs/SPEC.ttl not generated")
 
-    assert f'dct:created "{declared_date}"^^xsd:date' in spec_ttl.read_text(
-        encoding="utf-8"
-    ), (
+    assert f'dct:created "{declared_date}"^^xsd:date' in spec_ttl.read_text(encoding="utf-8"), (
         f"docs/SPEC.md declares created: {declared_date} but docs/SPEC.ttl "
         f"does not carry it. Regenerate with `pixi run -e spec spec-translate`."
     )

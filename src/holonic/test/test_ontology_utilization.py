@@ -75,7 +75,11 @@ _register(
     "container class is only ever a type, never an object. cga:Intact, "
     "Weakened and Compromised are deliberately absent from this list -- the "
     "runtime probe emits all three, so they are live.",
-    "MembraneHealth", "HolonStatus", "Active", "Proposed", "PortalType",
+    "MembraneHealth",
+    "HolonStatus",
+    "Active",
+    "Proposed",
+    "PortalType",
 )
 
 _register(
@@ -83,14 +87,22 @@ _register(
     "any of these; which one a deployment uses is its modelling decision, not "
     "the library's. PersistentHolon is live only because the runtime probe "
     "happens to pass it.",
-    "EphemeralHolon", "GovernanceHolon", "IndexHolon",
+    "EphemeralHolon",
+    "GovernanceHolon",
+    "IndexHolon",
 )
 
 _register(
     "Security and handling markings applied by consumers to their own data. "
     "The library never classifies anything -- doing so would require it to "
     "understand payloads it deliberately treats as opaque.",
-    "CUI", "PII", "Public", "Internal", "Restricted", "Secret", "TopSecret",
+    "CUI",
+    "PII",
+    "Public",
+    "Internal",
+    "Restricted",
+    "Secret",
+    "TopSecret",
 )
 
 _register(
@@ -99,10 +111,20 @@ _register(
     "gist Organization) and is intended for downstream enterprise modelling. "
     "It describes an organisation's data estate, which the library has no "
     "view of.",
-    "dataOwner", "domainSteward", "domainPolicy", "containsType",
-    "sourceOfTruthFor", "repositoryOfTruthFor", "backedBySystem",
-    "consumedByProcess", "governedByProcess", "producedByProcess",
-    "providesCapability", "processStage", "systemEndpoint", "gateCondition",
+    "dataOwner",
+    "domainSteward",
+    "domainPolicy",
+    "containsType",
+    "sourceOfTruthFor",
+    "repositoryOfTruthFor",
+    "backedBySystem",
+    "consumedByProcess",
+    "governedByProcess",
+    "producedByProcess",
+    "providesCapability",
+    "processStage",
+    "systemEndpoint",
+    "gateCondition",
 )
 
 _register(
@@ -120,10 +142,19 @@ _register(
     "library call produces them. Candidates for removal if no consumer "
     "materialises -- tracked as a group so the decision is made once rather "
     "than term by term.",
-    "adjacentTo", "exposesPortal", "isTraversable",
-    "activationEvent", "holonDepth", "splitTarget", "splitCriteria",
-    "sourceRealizes", "targetRealizes", "usesAlignment",
-    "BidirectionalPortal", "UnidirectionalPortal", "portalType",
+    "adjacentTo",
+    "exposesPortal",
+    "isTraversable",
+    "activationEvent",
+    "holonDepth",
+    "splitTarget",
+    "splitCriteria",
+    "sourceRealizes",
+    "targetRealizes",
+    "usesAlignment",
+    "BidirectionalPortal",
+    "UnidirectionalPortal",
+    "portalType",
 )
 
 _register(
@@ -147,7 +178,7 @@ def _declared_terms() -> set[str]:
         if not str(subject).startswith(CGA):
             continue
         if obj in DECLARED_TYPES or str(obj).startswith(CGA):
-            terms.add(str(subject)[len(CGA):])
+            terms.add(str(subject)[len(CGA) :])
     return terms
 
 
@@ -187,9 +218,7 @@ def _library_sources() -> list[Path]:
 
 def _static_live() -> set[str]:
     """Terms named literally in library source, excluding tests and ontology."""
-    blob = "\n".join(
-        p.read_text(encoding="utf-8", errors="ignore") for p in _library_sources()
-    )
+    blob = "\n".join(p.read_text(encoding="utf-8", errors="ignore") for p in _library_sources())
     return {t for t in _declared_terms() if _mentions(t, blob)}
 
 
@@ -211,9 +240,7 @@ def _runtime_live() -> set[str]:
     ds.add_holon("urn:h:a", "A", holon_type="cga:PersistentHolon")
     ds.add_holon("urn:h:b", "B", member_of="urn:h:a")
     ds.add_interior("urn:h:a", "<urn:i:1> a <urn:ex:Item> .")
-    ds.add_boundary(
-        "urn:h:a", "<urn:s:S> a sh:NodeShape ; sh:targetClass <urn:ex:Item> ."
-    )
+    ds.add_boundary("urn:h:a", "<urn:s:S> a sh:NodeShape ; sh:targetClass <urn:ex:Item> .")
     ds.add_portal(
         "urn:p:ab",
         source_iri="urn:h:a",
@@ -238,7 +265,7 @@ def _runtime_live() -> set[str]:
             for node in triple:
                 text = str(node)
                 if text.startswith(CGA):
-                    live.add(text[len(CGA):])
+                    live.add(text[len(CGA) :])
     return live
 
 
@@ -349,7 +376,7 @@ class TestOntologyHygiene:
         graph = Graph().parse(ONTOLOGY_DIR / "cga.ttl", format="turtle")
         describes = (SKOS.definition, RDFS.label, RDFS.comment)
         undocumented = [
-            str(subject)[len(CGA):]
+            str(subject)[len(CGA) :]
             for subject, _, obj in graph.triples((None, RDF.type, None))
             if str(subject).startswith(CGA)
             and obj in DECLARED_TYPES
@@ -369,5 +396,5 @@ class TestOntologyHygiene:
                 continue
             types = {t for t in graph.objects(subject, RDF.type) if t in DECLARED_TYPES}
             if len(types) > 1:
-                conflicted.append((str(subject)[len(CGA):], sorted(str(t) for t in types)))
+                conflicted.append((str(subject)[len(CGA) :], sorted(str(t) for t in types)))
         assert not conflicted, f"terms with conflicting declarations: {conflicted}"
