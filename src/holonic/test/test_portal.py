@@ -150,3 +150,102 @@ class TestTraverseInjection:
         )
         ctx = ds_with_holons.backend.get_graph("urn:holon:target/context")
         assert len(ctx) == 0
+
+
+class TestTraversalDerivationProvenance:
+    """R5.2 -- a traversal records PROV derivation and nothing structural.
+
+    Two claims, and the second is the one worth testing. ``traverse`` records
+    that the target was *derived from* the source by an activity, using
+    ``prov:wasDerivedFrom``. It must not also assert ``cga:derivedFrom``,
+    which says something different and permanent: that one holon structurally
+    depends on another, independent of any activity.
+
+    Emitting both would make every traversal silently declare a structural
+    dependency nobody asked for, and the two claims would become
+    indistinguishable in the graph -- which is what R5.2 and R5.3 exist to
+    keep apart.
+
+    Provenance is recorded only when ``agent_iri`` is supplied; a traversal
+    without one writes no context graph at all. Every test here passes one,
+    which is what keeps the negative assertion from passing vacuously.
+    """
+
+    PROV_DERIVED = "http://www.w3.org/ns/prov#wasDerivedFrom"
+    CGA_DERIVED = "urn:holonic:ontology:derivedFrom"
+    AGENT = "urn:agent:r52"
+
+    @pytest.fixture
+    def traversed(self, ds_with_holons):
+        ds_with_holons.traverse(
+            "urn:holon:source",
+            "urn:holon:target",
+            validate=False,
+            agent_iri=self.AGENT,
+        )
+        return ds_with_holons
+
+    def test_traversal_records_prov_derivation(self, traversed):
+        assert traversed.backend.ask(f"""
+            ASK {{
+                GRAPH ?g {{
+                    <urn:holon:target> <{self.PROV_DERIVED}> <urn:holon:source>
+                }}
+            }}
+        """), "traverse must record prov:wasDerivedFrom from target to source"
+
+    def test_traversal_does_not_assert_structural_dependency(self, traversed):
+        """The distinction, asserted negatively.
+
+        The positive check runs first in the same fixture state, so a
+        regression that stopped recording provenance entirely would fail
+        ``test_traversal_records_prov_derivation`` rather than turning this
+        into a test that passes because the graph is empty.
+        """
+        assert traversed.backend.ask(f"""
+            ASK {{ GRAPH ?g {{ ?t <{self.PROV_DERIVED}> ?s }} }}
+        """), "guard: no derivation was recorded, so the check below is vacuous"
+
+        assert not traversed.backend.ask(f"""
+            ASK {{ GRAPH ?g {{ ?s <{self.CGA_DERIVED}> ?o }} }}
+        """), (
+            "traverse emitted cga:derivedFrom as a side effect; that property "
+            "is reserved for persistent holon-to-holon structural dependency "
+            "(R5.3) and must never be produced by an activity"
+        )
+
+    def test_derivation_is_attributable_to_an_activity(self, traversed):
+        """Activity-level provenance, not a bare pair of IRIs.
+
+        ``prov:wasDerivedFrom`` alone does not say what produced the
+        derivation. The requirement's point is that it is attributable, so the
+        same graph must carry an Activity that used the source and generated
+        the target.
+        """
+        assert traversed.backend.ask(f"""
+            PREFIX prov: <http://www.w3.org/ns/prov#>
+            ASK {{
+                GRAPH ?g {{
+                    <urn:holon:target> <{self.PROV_DERIVED}> <urn:holon:source> .
+                    ?activity a prov:Activity ;
+                        prov:used <urn:holon:source> ;
+                        prov:generated <urn:holon:target> ;
+                        prov:wasAssociatedWith <{self.AGENT}> .
+                }}
+            }}
+        """), "the derivation must be attributable to an agent-associated Activity"
+
+    def test_traversal_without_an_agent_records_nothing(self, ds_with_holons):
+        """No agent, no provenance -- and still no structural claim.
+
+        Documents the condition the fixture depends on, so a future change
+        that started recording unattributed provenance is caught here rather
+        than silently weakening the tests above.
+        """
+        ds_with_holons.traverse("urn:holon:source", "urn:holon:target", validate=False)
+        assert not ds_with_holons.backend.ask(f"""
+            ASK {{ GRAPH ?g {{ ?t <{self.PROV_DERIVED}> ?s }} }}
+        """)
+        assert not ds_with_holons.backend.ask(f"""
+            ASK {{ GRAPH ?g {{ ?s <{self.CGA_DERIVED}> ?o }} }}
+        """)

@@ -32,6 +32,61 @@ jobs:
         run: pixi run -e dev lint-check
 
   # ════════════════════════════════════════════════════════════
+  # Spec — translate docs/SPEC.md, validate, report maturity
+  # ════════════════════════════════════════════════════════════
+  #
+  # Gates on SHACL Violations (structural integrity), not Warnings.
+  # That split is specl's, and it is data driven rather than configured
+  # here: warnings become blocking automatically when docs/SPEC.md
+  # declares `status: production`. The spec is `prototype`, so warnings
+  # surface in the log and depress the maturity score without failing
+  # the build — which is the point of scoring it at all.
+  #
+  # `spec-gate` (translate --fail-on-warning) is deliberately NOT run
+  # yet: four parser warnings are the known specl limitation that it
+  # cannot express a urn: vocabulary, so the CGA terms under `governs:`
+  # emit as literals. Filed upstream. Switch this job to `spec-gate`
+  # once that lands and the count is zero.
+  spec:
+    name: Spec
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          environments: spec
+
+      - name: Confirm the SHACL processor applies the shapes as intended
+        # The shapes use SPARQL-based targets, an optional SHACL feature.
+        # A processor without Advanced Features skips them silently rather
+        # than erroring, so a broken spec would validate clean. This asserts
+        # the gate below is actually running.
+        run: pixi run -e spec spec-conformance
+
+      - name: Translate SPEC.md to RDF
+        run: pixi run -e spec spec-translate
+
+      - name: Validate against specl shapes
+        run: pixi run -e spec spec-validate
+
+      - name: Report maturity and progress
+        run: pixi run -e spec spec-score
+
+      - name: Verify the spec still describes the library
+        # Reports, does not gate — for now. Two checks fail today and both
+        # predate the specl 1.0 adoption: R4.5 (find_path uses a Python BFS
+        # where the spec forbids anything but SPARQL) and R8.2 (the Fuseki
+        # tests are not marked skip-when-unavailable). Blocking on them here
+        # would fail every build for reasons unrelated to the spec tooling.
+        # Drop continue-on-error once those two are fixed; the step also
+        # catches `implementation:` drift, which is what keeps the Progress
+        # score honest, and that half is green.
+        continue-on-error: true
+        run: pixi run -e spec spec-compliance
+
+  # ════════════════════════════════════════════════════════════
   # Test — matrix across Python versions
   # ════════════════════════════════════════════════════════════
   test:
@@ -123,13 +178,27 @@ jobs:
 
       - uses: prefix-dev/setup-pixi@v0.8.1
         with:
-          environments: dev
+          environments: >-
+            dev
+            spec
 
       - name: Sync notebooks to JupyterLite content
         run: pixi run -e dev sync_jl
 
       - name: Build JupyterLite site
         run: pixi run -e dev build_jl
+
+      # Both land in docs/source/_extra/, which Sphinx's html_extra_path
+      # copies verbatim to the site root. That publishes the graph at
+      # https://zwelz3.github.io/holonic/spec.ttl — the namespace every item
+      # IRI in the spec resolves under, so the identifiers dereference
+      # instead of merely looking like they would. The badge rides the same
+      # mechanism rather than being committed: derived data pushed back into
+      # the repo rejects the next push and drifts from the real score.
+      - name: Publish the spec graph and maturity badge
+        run: |
+          pixi run -e spec spec-publish
+          pixi run -e spec spec-badge
 
       - name: Build documentation
         run: pixi run -e dev build_html_docs

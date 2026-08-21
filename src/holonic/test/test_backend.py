@@ -327,3 +327,82 @@ class TestRdflibBackendQueryFormGuards:
         # Previously bool(None) -> silently False; now a clear error.
         with pytest.raises(ValueError, match="ASK"):
             backend.ask("SELECT ?s WHERE { ?s ?p ?o }")
+
+
+class TestNoDefaultGraphFlattening:
+    """R1.4 -- every triple the library writes belongs to a named graph.
+
+    The four-graph model rests on layer membership being discoverable by
+    SPARQL from the holon IRI. A triple in the default graph belongs to no
+    layer, so it is outside the model entirely: it cannot be scoped, governed
+    by a membrane, or attributed to a holon. One such write is enough to make
+    ``GRAPH ?g`` traversal incomplete without anything reporting it.
+
+    ``Dataset(default_union=True)`` makes this easy to miss -- an unscoped
+    SELECT still returns the triple, because the union includes the default
+    graph, so a leak looks exactly like a correct write until someone asks
+    which graph it came from. This inspects the default context directly.
+    """
+
+    @staticmethod
+    def _default_graph_triples(ds):
+        """Triples sitting in the dataset's default graph.
+
+        ``Dataset.default_context`` was renamed to ``default_graph`` and now
+        emits a ``DeprecationWarning`` on every access. pixi pins
+        ``rdflib >=7.0,<8`` and the new name arrived partway through that
+        range, so prefer it and fall back rather than pinning the floor higher
+        for a test helper.
+        """
+        dataset = ds.backend.ds
+        default = getattr(dataset, "default_graph", None)
+        if default is None:  # rdflib without the rename
+            default = dataset.default_context
+        return list(default)
+
+    def test_fresh_dataset_has_empty_default_graph(self, ds):
+        assert self._default_graph_triples(ds) == []
+
+    def test_full_lifecycle_writes_nothing_to_the_default_graph(self, ds):
+        """Exercise every write path, then assert the default graph is untouched."""
+        ds.add_holon("urn:holon:a", "A")
+        ds.add_holon("urn:holon:b", "B", member_of="urn:holon:a")
+        ds.add_interior("urn:holon:a", "<urn:item:1> a <urn:ex:Item> .")
+        ds.add_boundary(
+            "urn:holon:a",
+            """
+            <urn:shapes:ItemShape> a sh:NodeShape ;
+                sh:targetClass <urn:ex:Item> .
+            """,
+        )
+        ds.add_portal(
+            "urn:portal:a-b",
+            source_iri="urn:holon:a",
+            target_iri="urn:holon:b",
+            construct_query=(
+                "CONSTRUCT { ?s a <urn:ex:Copied> } "
+                "WHERE { GRAPH <urn:holon:a/interior> { ?s a <urn:ex:Item> } }"
+            ),
+        )
+        ds.validate_membrane("urn:holon:a")
+        ds.traverse("urn:holon:a", "urn:holon:b", validate=False)
+
+        leaked = self._default_graph_triples(ds)
+        assert leaked == [], (
+            f"{len(leaked)} triple(s) reached the default graph, which belongs "
+            f"to no layer and is invisible to GRAPH ?g traversal: {leaked[:3]}"
+        )
+
+    def test_every_triple_is_reachable_through_a_named_graph(self, ds):
+        """The positive half: what was written is findable via GRAPH ?g.
+
+        Asserting the default graph is empty is not sufficient on its own --
+        an empty dataset passes that too. This confirms the writes landed
+        somewhere addressable.
+        """
+        ds.add_holon("urn:holon:a", "A")
+        ds.add_interior("urn:holon:a", "<urn:item:1> a <urn:ex:Item> .")
+
+        named_total = sum(len(ds.backend.get_graph(g)) for g in ds.backend.list_named_graphs())
+        assert named_total > 0, "nothing was written to any named graph"
+        assert self._default_graph_triples(ds) == []
