@@ -43,6 +43,7 @@ from holonic.model import (
     ShapeViolation,
     SurfaceReport,
     TraversalRecord,
+    UntargetedNode,
     ValidationRecord,
 )
 
@@ -370,11 +371,18 @@ def _parse_shacl_report(report_graph: Graph) -> ParsedShaclReport:
     return ParsedShaclReport(violations, warnings, infos, structured)
 
 
-def _health_from_report(report: ParsedShaclReport) -> MembraneHealth:
-    """Map a parsed report to membrane health; Info results never lower it."""
-    if report.violations:
+def _health_from_report(
+    report: ParsedShaclReport,
+    untargeted: Iterable[UntargetedNode] = (),
+) -> MembraneHealth:
+    """Map a parsed report and untargeted nodes to membrane health.
+
+    Info results and untargeted nodes at Info severity never lower it.
+    """
+    severities = {u.severity for u in untargeted}
+    if report.violations or "Violation" in severities:
         return MembraneHealth.COMPROMISED
-    if report.warnings:
+    if report.warnings or "Warning" in severities:
         return MembraneHealth.WEAKENED
     return MembraneHealth.INTACT
 

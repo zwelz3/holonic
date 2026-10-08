@@ -57,6 +57,24 @@ class ShapeViolation(_DictMixin):
 
 
 @dataclass
+class UntargetedNode(_DictMixin):
+    """A typed interior node that no boundary shape targets.
+
+    SHACL validates only the focus nodes its shapes target, so a node whose
+    types no shape targets passes validation without being checked. Such a
+    node is reported as a result of its own kind rather than as a SHACL
+    result. Its ``severity`` comes from the holon's
+    ``cga:untargetedTypeSeverity`` (see :meth:`HolonicDataset.validate_membrane`).
+
+    .. versionadded:: 0.9.0
+    """
+
+    focus_node: str
+    types: list[str] = field(default_factory=list)
+    severity: str = "Info"
+
+
+@dataclass
 class MembraneResult(_DictMixin):
     """Result of SHACL membrane validation."""
 
@@ -68,7 +86,12 @@ class MembraneResult(_DictMixin):
     warnings: list[str] = field(default_factory=list)
     shape_violations: list[ShapeViolation] = field(default_factory=list)
     infos: list[str] = field(default_factory=list)
+    untargeted: list[UntargetedNode] = field(default_factory=list)
     """SHACL results at ``sh:Info`` severity. They never lower health.
+
+    .. versionadded:: 0.9.0
+    """
+    """Typed interior nodes that no boundary shape targets.
 
     .. versionadded:: 0.9.0
     """
@@ -90,6 +113,10 @@ class MembraneResult(_DictMixin):
             lines.append(f"  infos ({len(self.infos)}):")
             for i in self.infos[:5]:
                 lines.append(f"    - {i}")
+        if self.untargeted:
+            lines.append(f"  untargeted nodes ({len(self.untargeted)}):")
+            for u in self.untargeted[:5]:
+                lines.append(f"    - {u.severity}: {u.focus_node} a {', '.join(u.types)}")
         return "\n".join(lines)
 
     @property
@@ -214,9 +241,11 @@ class MembraneBreachError(HolonicError):
 
     def __init__(self, result: MembraneResult):
         self.result = result
-        super().__init__(
-            f"Membrane COMPROMISED for {result.holon_iri}: {len(result.violations)} violation(s)"
-        )
+        untargeted = sum(1 for u in result.untargeted if u.severity == "Violation")
+        detail = f"{len(result.violations)} violation(s)"
+        if untargeted:
+            detail += f", {untargeted} untargeted node(s)"
+        super().__init__(f"Membrane COMPROMISED for {result.holon_iri}: {detail}")
 
 
 class SealedPortalError(HolonicError, ValueError):

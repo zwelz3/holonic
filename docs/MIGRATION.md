@@ -5,6 +5,40 @@ introduces. Sections are newest-first.
 
 ---
 
+## 0.8.x → 0.9.0
+
+### `fail_on_breach` rejects injected types no shape targets (#50)
+
+`traverse(..., fail_on_breach=True)` now treats each node it injects whose
+types no boundary shape targets as a violation, rolls the injection back, and
+raises `MembraneBreachError`. Before 0.9.0 such nodes passed, because SHACL
+validates only the nodes its shapes target.
+
+A traversal breaks under this change when its portal injects auxiliary node
+types (for example measurement or provenance nodes) that the target's shapes do
+not name. Either add shapes that target those types, or exempt them in the
+target's boundary graph:
+
+```turtle
+<urn:holon:target> cga:permitsType ex:Measurement .
+```
+
+`cga:permitsType` also exempts subclasses. To report such nodes without
+failing the traversal, declare `cga:untargetedTypeSeverity sh:Warning` (or
+`sh:Info`) on the holon instead. `validate_membrane()` and `dry_run()` keep
+their health; they list untargeted nodes in `MembraneResult.untargeted` at Info
+unless the holon declares a severity.
+
+### Unrecognized SHACL severities compromise the membrane (#30)
+
+A SHACL result whose severity is not `sh:Violation`, `sh:Warning`, or
+`sh:Info`, or that has no severity, now counts as a violation. Before 0.9.0
+such results were dropped. A boundary shape that declares a custom severity
+therefore now compromises the membrane when it fails. `sh:Info` results are
+reported in `MembraneResult.infos`.
+
+---
+
 ## 0.7.x → 0.8.0
 
 Security- and correctness-hardening release. The breaking changes below

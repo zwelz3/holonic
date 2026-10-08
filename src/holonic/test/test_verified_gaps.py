@@ -446,14 +446,9 @@ class TestFailClosedTraversal:
         sig = inspect.signature(ds_with_holons.traverse)
         assert "fail_on_breach" in sig.parameters, "traverse() has no fail_on_breach parameter."
 
-    @pytest.mark.xfail(
-        reason="SHACL sh:targetClass validates only instances of the target class. "
-        "When no instances exist, validation reports conformant. Detecting "
-        "'wrong type injected' requires non-standard validation semantics. "
-        "Tracked as SPEC OQ11.",
-        strict=True,
-    )
     def test_fail_on_breach_raises_on_compromised(self, ds):
+        # SHACL passes bad:Wrong because no shape targets it; the untargeted-
+        # type check (R3.7, holonic#50) is what turns the injection into a breach.
         ds.add_holon("urn:holon:src", "Src")
         ds.add_interior("urn:holon:src", '<urn:x> a <urn:bad:Wrong> ; <urn:bad:junk> "y" .')
         ds.add_holon("urn:holon:tgt", "Tgt")
@@ -476,12 +471,6 @@ class TestFailClosedTraversal:
         with pytest.raises(MembraneBreachError):
             ds.traverse("urn:holon:src", "urn:holon:tgt", validate=True, fail_on_breach=True)
 
-    @pytest.mark.xfail(
-        reason="Same root cause as test_fail_on_breach_raises_on_compromised: "
-        "SHACL reports conformant when no target-class instances exist. "
-        "Tracked as SPEC OQ11.",
-        strict=True,
-    )
     def test_fail_on_breach_rolls_back(self, ds):
         ds.add_holon("urn:holon:src", "Src")
         ds.add_interior("urn:holon:src", "<urn:x> a <urn:T> ; <urn:p> 1 .")
@@ -511,8 +500,9 @@ class TestFailClosedTraversal:
 
     # ── E1: genuine SHACL Violation drives fail-closed (passing) ──
     #
-    # The two xfails above document SPEC OQ11: sh:targetClass reports
-    # conformant when the *target class has no instances*. These tests avoid
+    # The two tests above exercise SPEC OQ11: sh:targetClass reports
+    # conformant when the *target class has no instances*, and the
+    # untargeted-type check (R3.7) closes that gap. These tests avoid
     # that gap by projecting an actual instance of the targeted class that
     # violates a sh:minCount, so SHACL reports a real Violation -- exercising
     # the advertised restore-and-raise guarantee end to end.

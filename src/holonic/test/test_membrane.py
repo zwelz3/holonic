@@ -602,3 +602,144 @@ class TestSeverityFailsClosed:
         )
         _, result = ds.dry_run("urn:holon:src", "urn:holon:tgt")
         assert result.health == MembraneHealth.COMPROMISED
+
+
+class TestUntargetedTypes:
+    """R3.7 -- typed interior nodes that no boundary shape targets (holonic#50).
+
+    SHACL validates only the focus nodes its shapes target, so a node of a
+    type no shape names passes unchecked. Membrane validation reports such
+    nodes in ``result.untargeted``: at Info by default, and at Violation for
+    the nodes a ``traverse(fail_on_breach=True)`` injects.
+    """
+
+    SHAPES = """
+        @prefix ex: <urn:ex:> .
+        <urn:shapes:ItemShape> a sh:NodeShape ;
+            sh:targetClass ex:Item ;
+            sh:property [ sh:path ex:name ; sh:minCount 1 ; sh:severity sh:Violation ] .
+        """
+    PERMIT_OTHER = "<urn:holon:tgt> <urn:holonic:ontology:permitsType> <urn:ex:Other> ."
+
+    def _target(self, ds, *, interior: str = "", policy: str = "") -> None:
+        ds.add_holon("urn:holon:tgt", "Tgt")
+        ds.add_interior("urn:holon:tgt", interior, graph_iri="urn:holon:tgt/interior")
+        ds.add_boundary("urn:holon:tgt", self.SHAPES + policy)
+
+    @staticmethod
+    def _portal_from(ds, source_ttl: str) -> None:
+        ds.add_holon("urn:holon:src", "Src")
+        ds.add_interior("urn:holon:src", source_ttl)
+        ds.add_portal(
+            "urn:portal:all",
+            "urn:holon:src",
+            "urn:holon:tgt",
+            "CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o }",
+        )
+
+    @staticmethod
+    def _traverse_closed(ds):
+        return ds.traverse("urn:holon:src", "urn:holon:tgt", validate=True, fail_on_breach=True)
+
+    def test_targeted_interior_is_unchanged(self, ds):
+        self._target(ds, interior='@prefix ex: <urn:ex:> . <urn:i:1> a ex:Item ; ex:name "a" .')
+        result = ds.validate_membrane("urn:holon:tgt")
+        assert result.health == MembraneHealth.INTACT
+        assert result.untargeted == []
+
+    def test_untargeted_node_is_reported_at_info_by_default(self, ds):
+        self._target(ds, interior="@prefix ex: <urn:ex:> . <urn:o:1> a ex:Other .")
+        result = ds.validate_membrane("urn:holon:tgt")
+        assert result.health == MembraneHealth.INTACT
+        assert [(u.focus_node, u.types, u.severity) for u in result.untargeted] == [
+            ("urn:o:1", ["urn:ex:Other"], "Info")
+        ]
+        assert "untargeted nodes (1)" in result.summary()
+
+    @pytest.mark.parametrize(
+        ("declared", "health"),
+        [
+            ("sh:Warning", MembraneHealth.WEAKENED),
+            ("sh:Violation", MembraneHealth.COMPROMISED),
+            ("<urn:ex:Custom>", MembraneHealth.COMPROMISED),
+        ],
+    )
+    def test_declared_severity_sets_health(self, ds, declared, health):
+        policy = f"<urn:holon:tgt> <urn:holonic:ontology:untargetedTypeSeverity> {declared} ."
+        self._target(ds, interior="@prefix ex: <urn:ex:> . <urn:o:1> a ex:Other .", policy=policy)
+        assert ds.validate_membrane("urn:holon:tgt").health == health
+
+    def test_subclass_instance_is_targeted(self, ds):
+        interior = """
+            @prefix ex: <urn:ex:> .
+            ex:Gadget rdfs:subClassOf ex:Item .
+            <urn:g:1> a ex:Gadget ; ex:name "g" .
+            """
+        self._target(ds, interior=interior)
+        assert ds.validate_membrane("urn:holon:tgt").untargeted == []
+
+    @pytest.mark.parametrize(
+        "shape",
+        [
+            "<urn:shapes:N> a sh:NodeShape ; sh:targetNode <urn:o:1> .",
+            "<urn:shapes:N> a sh:NodeShape ; sh:targetSubjectsOf <urn:ex:p> .",
+            "<urn:shapes:N> a sh:NodeShape ; sh:targetObjectsOf <urn:ex:q> .",
+            "<urn:ex:Other> a sh:NodeShape , rdfs:Class .",
+            "<urn:ex:Other> a sh:NodeShape , <http://www.w3.org/2002/07/owl#Class> .",
+        ],
+        ids=[
+            "targetNode",
+            "targetSubjectsOf",
+            "targetObjectsOf",
+            "implicit-rdfs-class",
+            "implicit-owl-class",
+        ],
+    )
+    def test_other_core_targets_count(self, ds, shape):
+        interior = "<urn:o:1> a <urn:ex:Other> ; <urn:ex:p> 1 . <urn:x> <urn:ex:q> <urn:o:1> ."
+        self._target(ds, interior=interior, policy=shape)
+        assert ds.validate_membrane("urn:holon:tgt").untargeted == []
+
+    def test_sparql_target_skips_the_check(self, ds):
+        shape = """
+            <urn:shapes:S> a sh:NodeShape ;
+                sh:target [ a sh:SPARQLTarget ; sh:select "SELECT ?this WHERE { ?this ?p ?o }" ] .
+            """
+        self._target(ds, interior="<urn:o:1> a <urn:ex:Other> .", policy=shape)
+        assert ds.validate_membrane("urn:holon:tgt").untargeted == []
+
+    def test_fail_on_breach_rejects_an_untargeted_injection(self, ds):
+        self._target(ds)
+        self._portal_from(ds, "<urn:o:1> a <urn:ex:Other> .")
+        with pytest.raises(MembraneBreachError, match="1 untargeted node"):
+            self._traverse_closed(ds)
+        assert len(ds.backend.get_graph("urn:holon:tgt/interior")) == 0
+
+    def test_permitted_type_passes_fail_on_breach(self, ds):
+        self._target(ds, policy=self.PERMIT_OTHER)
+        self._portal_from(ds, "<urn:o:1> a <urn:ex:Other> .")
+        _, result = self._traverse_closed(ds)
+        assert result.health == MembraneHealth.INTACT
+        assert result.untargeted == []
+
+    def test_existing_untargeted_nodes_do_not_block_fail_on_breach(self, ds):
+        """Only injected nodes are checked at Violation; prior content is not."""
+        self._target(ds, interior="<urn:o:old> a <urn:ex:Other> .")
+        self._portal_from(ds, '@prefix ex: <urn:ex:> . <urn:i:1> a ex:Item ; ex:name "a" .')
+        _, result = self._traverse_closed(ds)
+        assert result.health == MembraneHealth.INTACT
+        assert result.untargeted == []
+
+    def test_traverse_without_fail_on_breach_keeps_info(self, ds):
+        self._target(ds)
+        self._portal_from(ds, "<urn:o:1> a <urn:ex:Other> .")
+        _, result = ds.traverse("urn:holon:src", "urn:holon:tgt", validate=True)
+        assert result.health == MembraneHealth.INTACT
+        assert [u.severity for u in result.untargeted] == ["Info"]
+
+    def test_dry_run_reports_projected_untargeted_nodes(self, ds):
+        self._target(ds, interior="<urn:o:old> a <urn:ex:Other> .")
+        self._portal_from(ds, "<urn:o:new> a <urn:ex:Other> .")
+        _, result = ds.dry_run("urn:holon:src", "urn:holon:tgt")
+        assert result.health == MembraneHealth.INTACT
+        assert [u.focus_node for u in result.untargeted] == ["urn:o:new"]

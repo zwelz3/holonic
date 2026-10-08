@@ -334,6 +334,10 @@ cga:hasProjection a owl:ObjectProperty ; rdfs:subPropertyOf cga:hasLayer ; rdfs:
     skos:definition "Associates a holon with a projection layer graph containing external-facing data." .
 cga:hasContext    a owl:ObjectProperty ; rdfs:subPropertyOf cga:hasLayer ; rdfs:domain cga:Holon ;
     skos:definition "Associates a holon with a context layer graph containing provenance and operational history." .
+cga:permitsType   a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range rdfs:Class ;
+    skos:definition "Names a class whose instances may enter the holon's interior without a boundary shape that targets them. Stated in the holon's boundary graph with the holon as subject; it exempts the class and its subclasses from the untargeted-type check that membrane validation runs alongside SHACL." .
+cga:untargetedTypeSeverity a owl:ObjectProperty ; rdfs:domain cga:Holon ; rdfs:range <http://www.w3.org/ns/shacl#Severity> ;
+    skos:definition "The severity (sh:Violation, sh:Warning, or sh:Info) at which membrane validation reports an interior node whose types no boundary shape targets. Stated in the holon's boundary graph. Without it, validation reports such nodes at sh:Info and a fail-closed traversal reports injected ones at sh:Violation; any other value is treated as sh:Violation." .
 cga:layerRole     a owl:ObjectProperty ; rdfs:domain cga:LayerGraph ; rdfs:range cga:LayerRole ;
     skos:definition "Declares which role (interior, boundary, projection, context) a named graph plays for its holon." .
 
