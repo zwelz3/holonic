@@ -37,6 +37,9 @@ such results were dropped. A boundary shape that declares a custom severity
 therefore now compromises the membrane when it fails. `sh:Info` results are
 reported in `MembraneResult.infos`.
 
+`validate_membrane()` now returns `conforms=True` for a report that holds
+only `sh:Info` results, as `dry_run()` already did. Health is unaffected.
+
 ---
 
 ## 0.7.x → 0.8.0
