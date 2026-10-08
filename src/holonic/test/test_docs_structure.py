@@ -1,6 +1,6 @@
 """Structural guards for the documentation tree.
 
-Two regression classes the v0.7.1 audit surfaced, now pinned by tests:
+Regression classes pinned by tests (the first two surfaced in the v0.7.1 audit):
 
 - **toctree drops core docs.** ``docs/source/index.md`` used to point its
   "Project" toctree at ``../SPEC`` / ``../DECISIONS`` / ``../MIGRATION`` /
@@ -18,7 +18,16 @@ Two regression classes the v0.7.1 audit surfaced, now pinned by tests:
   node-form citation against the actual test tree, so a future rename that
   orphans a link fails here instead of rotting silently.
 
-Both tests only run from a source checkout; against an installed wheel the
+- **``constrains:`` items split inside parentheses.** specl splits a
+  ``constrains:`` or ``affects:`` value on every comma (specl's SYNTAX.md,
+  "Comma-split"), including one inside a parenthesized symbol list, so
+  ``holonic/client.py (freshness, is_stale)`` became two components,
+  ``holonic/client.py (freshness`` and ``is_stale)``. Seven
+  requirements emitted sixteen malformed ``specl:Component`` identifiers this
+  way. ``test_spec_constrains_items_have_no_comma_inside_parentheses`` fails on
+  the pattern in ``SPEC.md``, where the malformed components originate.
+
+The tests only run from a source checkout; against an installed wheel the
 prose/source files are absent and the tests skip.
 """
 
@@ -180,4 +189,40 @@ def test_spec_verifiedby_links_resolve() -> None:
         "docs/SPEC.md has verifiedBy links that no longer resolve to a test "
         "(rename the citation to the current node id, or mark it "
         "'verifiedBy: none'):\n  " + "\n  ".join(failures)
+    )
+
+
+# ── constrains: component lists ─────────────────────────────────────────────
+
+_COMMA_SPLIT = re.compile(r"^\s*- (?:constrains|affects):\s*(.+)$", re.MULTILINE)
+
+
+def _commas_inside_parentheses(value: str) -> bool:
+    depth = 0
+    for char in value:
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        elif char == "," and depth > 0:
+            return True
+    return False
+
+
+@needs_checkout
+def test_spec_constrains_items_have_no_comma_inside_parentheses() -> None:
+    """Each ``constrains:`` and ``affects:`` item must survive specl's comma split.
+
+    specl does not respect parentheses when it splits these values, so
+    ``path (a, b)`` must be written ``path (a), path (b)``.
+    """
+    assert ROOT is not None
+    spec = (ROOT / "docs" / "SPEC.md").read_text(encoding="utf-8")
+    values = _COMMA_SPLIT.findall(spec)
+    assert values, "no constrains: annotations found; parser or SPEC.md changed shape"
+    offending = [v for v in values if _commas_inside_parentheses(v)]
+    assert not offending, (
+        "docs/SPEC.md has constrains:/affects: values with a comma inside parentheses, "
+        "which specl splits into malformed components (write 'path (a), path (b)'):\n  "
+        + "\n  ".join(offending)
     )
