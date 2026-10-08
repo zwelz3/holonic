@@ -51,6 +51,18 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- **Untargeted-type check in membrane validation**
+  ([#50](https://github.com/zwelz3/holonic/issues/50), R3.7, resolves SPEC
+  OQ11). SHACL passes a node whose type no boundary shape targets, so a portal
+  injecting the wrong type left the membrane INTACT under `fail_on_breach`.
+  Validation now reports such nodes in `MembraneResult.untargeted`
+  (`UntargetedNode`), at Info by default, and `traverse(fail_on_breach=True)`
+  treats the nodes it injected as violations. A holon's boundary can exempt a
+  class with `cga:permitsType` or set the severity with
+  `cga:untargetedTypeSeverity`, both new ontology terms. The two `xfail` tests
+  for OQ11 now pass. A holon whose portals inject node types its shapes do not
+  target needs shapes or `cga:permitsType` declarations before using
+  `fail_on_breach` (D-0.9.0-2).
 - **Verification for six previously untested requirements** — R1.4, R5.2, R5.3,
   R5.4, R9.2 and R9.44 now have tests and are `implementation: verified`. 26 new
   cases across `test_ontology.py`, `test_backend.py`, `test_portal.py` and
@@ -97,6 +109,16 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- **`fail_on_breach` no longer fails open on an unrecognized SHACL severity**
+  ([#30](https://github.com/zwelz3/holonic/issues/30)). `_parse_shacl_report`
+  matched severities by suffix and dropped any result it could not classify,
+  so a shape declaring a custom severity left the membrane INTACT and
+  `traverse(..., fail_on_breach=True)` injected the breaching data. Severities
+  are now compared with `sh:Violation`, `sh:Warning` and `sh:Info` exactly, and
+  a result with any other severity, or none, counts as a violation. `sh:Info`
+  results, previously discarded, are kept in the new `MembraneResult.infos`
+  and never lower health. `validate_membrane` and `dry_run` share one health
+  rule (R3.6).
 - **Six CGA terms carried no `skos:definition`, `rdfs:label` or
   `rdfs:comment`** — `MembraneHealth`, `interiorTripleCount`, `lastIngestion`,
   `splitRationale`, `mergeRationale` and `splitTarget`, each sitting beside
@@ -123,8 +145,9 @@ All notable changes to this project will be documented in this file.
   CI cannot adopt `specl-translate --fail-on-warning` (available as the
   `spec-gate` task). Re-namespacing the ontology to work around this is
   explicitly **not** planned.
-- OQ10 and OQ11 remain `open`, capping the OpenIssue subscore at 9/11. These
-  are genuine unresolved design questions, not missing annotations.
+- OQ10 remains `open`, capping the OpenIssue subscore at 10/11. It is a
+  genuine unresolved design question, not a missing annotation. OQ11 was
+  resolved by R3.7.
 
 ## [0.8.0] - 2026-08-12
 

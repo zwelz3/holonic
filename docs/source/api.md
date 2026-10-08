@@ -79,13 +79,15 @@ raised, leaving the target as it was. The projection hash is written
 only after validation passes, so a rolled-back breach never suppresses a
 later retry.
 
-Two limitations to keep in mind. SHACL `sh:targetClass` reports
-conformant when the target class has no instances, so a portal that
-injects data of the *wrong* type is not caught by a boundary shape that
-targets the *expected* type (tracked as SPEC OQ11). And because the
-rollback uses `DELETE DATA`, a projection that injects blank nodes
-requires exclusive access to the target interior for the duration of the
-call — see `docs/MIGRATION.md`.
+SHACL `sh:targetClass` reports conformant when the target class has no
+instances, so a boundary shape that targets the *expected* type does not
+catch a portal that injects the *wrong* one. Since 0.9.0 a fail-closed
+traversal also treats injected nodes whose types no boundary shape
+targets as violations (R3.7; see "Untargeted types" below), which closes
+SPEC OQ11. One limitation remains: because the rollback uses
+`DELETE DATA`, a projection that injects blank nodes requires exclusive
+access to the target interior for the duration of the call (see
+`docs/MIGRATION.md`).
 
 **Dry-run simulation.** `dry_run(source, target)` runs the portal's
 CONSTRUCT, merges with the target's existing interior in memory, and
@@ -171,7 +173,18 @@ Eliminates polling for same-process event detection.
 **Structured violations.** `ShapeViolation` dataclass with
 `shape_iri`, `focus_node`, `path`, `value`, `message`, `severity`.
 `MembraneResult.shape_violations` carries a `list[ShapeViolation]`
-populated from the pyshacl report graph.
+populated from the pyshacl report graph. A result whose severity is not
+`sh:Warning` or `sh:Info` counts as a violation, including a custom or
+missing severity, so an unrecognized report cannot pass a breach (0.9.0).
+`sh:Info` results are kept in `MembraneResult.infos` and never lower health.
+
+**Untargeted types (0.9.0).** SHACL validates only the nodes its shapes
+target. `MembraneResult.untargeted` lists the typed interior nodes no boundary
+shape targets, as `UntargetedNode(focus_node, types, severity)`. They are
+reported at Info unless the holon's boundary declares
+`cga:untargetedTypeSeverity`; `traverse(..., fail_on_breach=True)` treats the
+nodes it injected as violations by default. `cga:permitsType` in the boundary
+exempts a class and its subclasses.
 
 ## Store Protocol (0.4.0)
 

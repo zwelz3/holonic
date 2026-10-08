@@ -156,6 +156,20 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
   - acceptance: Given a governed traversal with validate=True, when the activity is read from the context graph, then cga:membraneHealth is present and matches the MembraneResult.health value.
   - verifiedBy: src/holonic/test/test_audit.py::TestCollectAuditTrail::test_validation_recorded_in_trail
 
+- R3.6 Membrane validation MUST fail closed on SHACL result severity. A result whose `sh:resultSeverity` is `sh:Violation`, or is absent, or is any term other than `sh:Warning` and `sh:Info`, MUST be counted as a violation; `sh:Warning` results MUST lower health to `Weakened`; `sh:Info` results MUST be reported in `MembraneResult.infos` and MUST NOT lower health. `validate_membrane()` and `dry_run()` MUST apply the same rule.
+  - priority: MUST
+  - implementation: verified
+  - constrains: holonic.client._parse_shacl_report, holonic.client._health_from_report, MembraneResult
+  - acceptance: Given a boundary shape that declares a custom severity and an interior that violates it, when `traverse()` is called with `fail_on_breach=True`, then `MembraneBreachError` is raised.
+  - verifiedBy: src/holonic/test/test_membrane.py::TestSeverityFailsClosed
+
+- R3.7 Membrane validation MUST report each typed interior node that no boundary shape targets as an `UntargetedNode` in `MembraneResult.untargeted`. Targeting follows SHACL Core (`sh:targetClass` with `rdfs:subClassOf*` in the data graph, implicit class targets, `sh:targetNode`, `sh:targetSubjectsOf`, `sh:targetObjectsOf`); a boundary with a SPARQL-based target skips the check. A class named by `cga:permitsType` in the holon's boundary, and its subclasses, MUST be exempt. The severity MUST be the holon's `cga:untargetedTypeSeverity` when declared, resolved as R3.6 resolves SHACL severities; otherwise Info for `validate_membrane()` and `dry_run()`, and Violation for the nodes `traverse(fail_on_breach=True)` injects.
+  - priority: MUST
+  - implementation: verified
+  - constrains: holonic._membrane.find_untargeted, holonic._membrane.untargeted_policy, UntargetedNode, MembraneResult
+  - acceptance: Given a portal that injects a node whose type no boundary shape targets, when `traverse()` is called with `fail_on_breach=True`, then `MembraneBreachError` is raised and the target interior is unchanged.
+  - verifiedBy: src/holonic/test/test_membrane.py::TestUntargetedTypes
+
 ## R4 Portal and Traversal Semantics
 
 - R4.1 Portals MUST be first-class RDF entities stored in boundary graphs with `cga:sourceHolon`, `cga:targetHolon`, and (for `cga:TransformPortal`) `cga:constructQuery`.
@@ -561,7 +575,7 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
   - priority: MUST
   - implementation: verified
   - constrains: holonic/client.py (traverse)
-  - acceptance: Given a traversal that produces COMPROMISED validation, when `fail_on_breach=True`, then `MembraneBreachError` is raised and the target interior is unchanged. See OQ11 for the SHACL coverage gap.
+  - acceptance: Given a traversal that produces COMPROMISED validation, when `fail_on_breach=True`, then `MembraneBreachError` is raised and the target interior is unchanged. Injected nodes of a type no shape targets compromise the membrane (R3.7).
   - verifiedBy: src/holonic/test/test_verified_gaps.py::TestFailClosedTraversal
 
 - R9.29 `update_portal()` MUST update portal properties in-place without requiring remove+add. Uses per-graph SPARQL DELETE for old values and Turtle parse for new values.
@@ -826,8 +840,8 @@ and joinable only by string equality.
 
 - OQ11 SHACL target-class validation gap for fail-on-breach. Standard SHACL `sh:targetClass` validates only instances of the target class; when no instances exist, validation reports conformant. This means `fail_on_breach=True` cannot detect the case where a portal injects data of the WRONG type (e.g. `bad:Wrong` instead of `good:Required`). The membrane reports INTACT because there are no `good:Required` instances to validate against. The `fail_on_breach` mechanism (R9.28) is correctly implemented for cases where SHACL does report violations. Closing this gap requires one of: (a) non-standard SHACL interpretation where boundary shapes assert minimum cardinality on target-class instances, not just properties; (b) a pre-validation check that verifies at least one instance of each `sh:targetClass` exists in the interior after injection; (c) custom SPARQL-based validation in addition to SHACL. Two tests in `test_verified_gaps.py` are marked `xfail` pending resolution. This is a critical design decision because it affects whether `fail_on_breach` provides meaningful protection against schema-mismatch errors, not just constraint violations within the correct schema.
   - owner: AG1
-  - status: open
-  - recommendation: Approach (b) (pre-validation target-class instance check) is the lowest-risk option. It adds a SPARQL ASK before SHACL validation to verify at least one instance of each `sh:targetClass` exists in the data. If none exist, the membrane is WEAKENED rather than INTACT.
+  - status: resolved
+  - recommendation: Resolved in 0.9.0 by R3.7 (D-0.9.0-2) with a variant of approach (c) rather than (b). Option (b) fails a valid interior that has no instances of some class yet. Instead, membrane validation reports each typed node that no shape targets; a fail-closed traversal treats the nodes it injected as violations unless the holon permits their type, and the two tests in `test_verified_gaps.py` pass without `xfail`.
 
 # Appendix A: Suggested Namespaces
 <!--specl: parked-->

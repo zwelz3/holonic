@@ -29,7 +29,6 @@ Roughly in priority order, though items are not strictly sequenced.
 - Optional BFO/CCO and gist alignment modules (OQ10)
 - Federation semantics across multiple registries (OQ7)
 - Async variant of `HolonicStore` (R2.5)
-- Resolve the SHACL target-class gap for `fail_on_breach` (OQ11)
 - Holarchy graph with `to_graphology()` (upstream #7)
 - `find_path()` adjacency caching (upstream #9)
 - Decide the fate of the 13 CGA terms that are modelled but not implemented;

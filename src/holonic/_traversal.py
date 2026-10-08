@@ -44,7 +44,7 @@ from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from rdflib import Dataset, Graph, URIRef
+from rdflib import RDF, Dataset, Graph, URIRef
 
 from holonic import sparql as Q
 from holonic.model import (
@@ -52,6 +52,7 @@ from holonic.model import (
     MembraneHealth,
     MembraneResult,
     PortalInfo,
+    UntargetedNode,
 )
 
 if TYPE_CHECKING:
@@ -428,7 +429,11 @@ class TraversalEngine:
         fail_on_breach :
             If True and validation returns COMPROMISED, roll back the
             injected triples and raise :class:`MembraneBreachError`.
-            Implies ``validate=True``.
+            Implies ``validate=True``. Injected nodes whose types no
+            boundary shape targets also compromise the membrane, at the
+            target's declared ``cga:untargetedTypeSeverity`` or
+            ``sh:Violation`` by default (``cga:permitsType`` exempts a
+            class).
         agent_iri :
             If provided, record PROV-O provenance.
         unscoped_portals_allowed :
@@ -480,7 +485,16 @@ class TraversalEngine:
 
         membrane_result = None
         if validate:
-            membrane_result = self._ds.validate_membrane(target_iri)
+            if fail_on_breach:
+                # Check the injected nodes for untargeted types at Violation
+                # severity by default (holonic#50): SHACL passes a node no
+                # shape targets, so a portal injecting the wrong type would
+                # otherwise leave the membrane INTACT.
+                membrane_result = self._ds._membrane.validate_membrane(
+                    target_iri, injected=injected_delta if injected_delta is not None else Graph()
+                )
+            else:
+                membrane_result = self._ds.validate_membrane(target_iri)
 
             # Fail-closed: remove exactly what this call injected and raise.
             # The projection hash is written *after* this check (below), so a
@@ -583,6 +597,13 @@ class TraversalEngine:
         against the target's boundary shapes. Nothing is written to the
         dataset.
 
+        Projected nodes whose types no boundary shape targets are reported in
+        ``result.untargeted`` at the target's declared
+        ``cga:untargetedTypeSeverity``, ``sh:Info`` by default. A
+        ``traverse(..., fail_on_breach=True)`` defaults to ``sh:Violation``
+        for the same nodes, so a dry run that lists untargeted nodes at Info
+        predicts a breach for a fail-closed traversal.
+
         Useful for CI/CD validation of CONSTRUCT query changes, mapping
         updates, and interactive development.
 
@@ -605,7 +626,8 @@ class TraversalEngine:
         """
         import pyshacl
 
-        from holonic.client import _bind_iri, _parse_shacl_report
+        from holonic._membrane import find_untargeted, untargeted_policy, untargeted_severity_label
+        from holonic.client import _bind_iri, _health_from_report, _parse_shacl_report
 
         portal = self._ds.find_portal(source_iri, target_iri)
         if portal is None:
@@ -643,25 +665,28 @@ class TraversalEngine:
             allow_infos=True,
         )
 
-        violations, warnings_list, shape_viols = _parse_shacl_report(
-            report_graph,
-        )
+        report = _parse_shacl_report(report_graph)
 
-        if violations:
-            health = MembraneHealth.COMPROMISED
-        elif warnings_list:
-            health = MembraneHealth.WEAKENED
-        else:
-            health = MembraneHealth.INTACT
+        # Untargeted projected nodes are reported at the holon's declared
+        # severity, Info by default; traverse(fail_on_breach=True) defaults
+        # to Violation for the same nodes (holonic#50).
+        permitted, declared = untargeted_policy(shapes_graph, _bind_iri(target_iri))
+        severity = untargeted_severity_label(declared, "Info")
+        candidates = set(projected.subjects(RDF.type, None))
+        found = find_untargeted(data_graph, shapes_graph, permitted, candidates) or []
+        untargeted = [UntargetedNode(str(n), types, severity) for n, types in found]
+        health = _health_from_report(report, untargeted)
 
         return projected, MembraneResult(
             holon_iri=target_iri,
             conforms=conforms,
             health=health,
             report_text=report_text,
-            violations=violations,
-            warnings=warnings_list,
-            shape_violations=shape_viols,
+            violations=report.violations,
+            warnings=report.warnings,
+            infos=report.infos,
+            shape_violations=report.shape_violations,
+            untargeted=untargeted,
         )
 
 

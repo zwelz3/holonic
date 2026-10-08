@@ -30,15 +30,19 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from rdflib import Graph
+from rdflib import OWL, RDF, RDFS, Graph, Namespace, URIRef
+from rdflib.term import Node
 
 from holonic import sparql as Q
-from holonic.model import MembraneHealth, MembraneResult
+from holonic.model import MembraneHealth, MembraneResult, UntargetedNode
 
 if TYPE_CHECKING:
     from holonic.client import HolonicDataset
 
 log = logging.getLogger(__name__)
+
+SH = Namespace("http://www.w3.org/ns/shacl#")
+CGA = Namespace("urn:holonic:ontology:")
 
 
 def no_shapes_report(missing: list[str]) -> str:
@@ -57,6 +61,96 @@ def no_shapes_report(missing: list[str]) -> str:
     )
 
 
+def _is_shape(shapes: Graph, node: Node) -> bool:
+    return (node, RDF.type, SH.NodeShape) in shapes or (node, RDF.type, SH.PropertyShape) in shapes
+
+
+def find_untargeted(
+    data: Graph,
+    shapes: Graph,
+    permitted: set[URIRef],
+    candidates: set[Node] | None = None,
+) -> list[tuple[Node, list[str]]] | None:
+    """Return the typed nodes in ``data`` that no shape in ``shapes`` targets.
+
+    A node is targeted when it is a SHACL instance (``rdf:type`` followed by
+    ``rdfs:subClassOf*`` in the data graph) of a class named by
+    ``sh:targetClass`` or of a shape that is itself an ``rdfs:Class`` or
+    ``owl:Class`` (an implicit class target, as pyshacl applies it), when it
+    is named by ``sh:targetNode``, or when it is the subject of a predicate
+    named by ``sh:targetSubjectsOf`` or the object of one named by
+    ``sh:targetObjectsOf``. A node that is an instance of a class in
+    ``permitted`` is treated as targeted.
+
+    ``candidates`` restricts the check to those nodes; by default every
+    subject of an ``rdf:type`` triple in ``data`` is checked.
+
+    Returns ``None`` when a shape uses a SPARQL-based target (``sh:target``),
+    whose focus nodes cannot be determined without running it; the caller
+    reports nothing rather than guessing.
+
+    .. versionadded:: 0.9.0
+    """
+    if next(shapes.objects(None, SH.target), None) is not None:
+        log.debug("find_untargeted: SPARQL-based target present, check skipped")
+        return None
+
+    covered = set(permitted) | {c for c in shapes.objects(None, SH.targetClass)}
+    for class_type in (RDFS.Class, OWL.Class):
+        covered |= {s for s in shapes.subjects(RDF.type, class_type) if _is_shape(shapes, s)}
+    target_nodes = set(shapes.objects(None, SH.targetNode))
+    subjects_of = set(shapes.objects(None, SH.targetSubjectsOf))
+    objects_of = set(shapes.objects(None, SH.targetObjectsOf))
+
+    superclass_cache: dict[Node, set[Node]] = {}
+
+    def superclasses(cls: Node) -> set[Node]:
+        if cls not in superclass_cache:
+            superclass_cache[cls] = set(data.transitive_objects(cls, RDFS.subClassOf))
+        return superclass_cache[cls]
+
+    nodes = candidates if candidates is not None else set(data.subjects(RDF.type, None))
+    found: list[tuple[Node, list[str]]] = []
+    for node in sorted(nodes, key=str):
+        types = set(data.objects(node, RDF.type))
+        if not types or node in target_nodes:
+            continue
+        if any((node, p, None) in data for p in subjects_of):
+            continue
+        if any((None, p, node) in data for p in objects_of):
+            continue
+        if any(superclasses(t) & covered for t in types):
+            continue
+        found.append((node, sorted(str(t) for t in types)))
+    return found
+
+
+def untargeted_policy(shapes: Graph, holon: URIRef) -> tuple[set[URIRef], Node | None]:
+    """Read a holon's permitted types and untargeted-node severity.
+
+    Both are declared in the holon's boundary graphs, with the holon as
+    subject: ``cga:permitsType`` names a class whose instances need no
+    targeting shape, and ``cga:untargetedTypeSeverity`` names the
+    severity (``sh:Violation``, ``sh:Warning``, or ``sh:Info``) at which an
+    untargeted node is reported.
+
+    .. versionadded:: 0.9.0
+    """
+    permitted = {t for t in shapes.objects(holon, CGA.permitsType) if isinstance(t, URIRef)}
+    return permitted, shapes.value(holon, CGA.untargetedTypeSeverity)
+
+
+def untargeted_severity_label(declared: Node | None, default: str) -> str:
+    """Resolve a declared severity, failing closed as R3.6 does for SHACL results."""
+    from holonic.client import _SEVERITY_LABELS
+
+    if declared is None:
+        return default
+    return (
+        _SEVERITY_LABELS.get(declared, "Violation") if isinstance(declared, URIRef) else "Violation"
+    )
+
+
 class MembraneValidator:
     """SHACL validation of holon interiors against their boundaries.
 
@@ -67,15 +161,24 @@ class MembraneValidator:
     def __init__(self, ds: HolonicDataset):
         self._ds = ds
 
-    def validate_membrane(self, holon_iri: str) -> MembraneResult:
+    def validate_membrane(self, holon_iri: str, *, injected: Graph | None = None) -> MembraneResult:
         """Validate a holon's interior(s) against its boundary shape(s).
 
         Collects all cga:hasInterior graphs as data and all cga:hasBoundary
-        graphs as shapes, then runs pyshacl.
+        graphs as shapes, then runs pyshacl. Typed interior nodes that no
+        boundary shape targets are reported in ``result.untargeted``
+        (:func:`find_untargeted`), at the holon's declared
+        ``cga:untargetedTypeSeverity`` or ``sh:Info`` by default.
+
+        ``injected`` is the triples a fail-closed traversal just added. When
+        given, only the typed subjects of those triples are checked for
+        targeting, and the default severity is ``sh:Violation``, so a portal
+        that injects a type no shape covers breaches the membrane while nodes
+        already in the interior do not.
         """
         import pyshacl
 
-        from holonic.client import _bind_iri, _parse_shacl_report
+        from holonic.client import _bind_iri, _health_from_report, _parse_shacl_report
 
         log.debug("validate_membrane(%s)", holon_iri)
 
@@ -110,25 +213,27 @@ class MembraneValidator:
         )
 
         # Parse violations and warnings from the structured report graph
-        violations, warnings, shape_violations = _parse_shacl_report(
-            report_graph,
-        )
+        report = _parse_shacl_report(report_graph)
 
-        if violations:
-            health = MembraneHealth.COMPROMISED
-        elif warnings:
-            health = MembraneHealth.WEAKENED
-        else:
-            health = MembraneHealth.INTACT
+        permitted, declared = untargeted_policy(shapes_graph, _bind_iri(holon_iri))
+        severity = untargeted_severity_label(
+            declared, "Violation" if injected is not None else "Info"
+        )
+        candidates = set(injected.subjects(RDF.type, None)) if injected is not None else None
+        found = find_untargeted(data_graph, shapes_graph, permitted, candidates) or []
+        untargeted = [UntargetedNode(str(n), types, severity) for n, types in found]
+        health = _health_from_report(report, untargeted)
 
         result = MembraneResult(
             holon_iri=holon_iri,
             conforms=conforms,
             health=health,
             report_text=report_text,
-            violations=violations,
-            warnings=warnings,
-            shape_violations=shape_violations,
+            violations=report.violations,
+            warnings=report.warnings,
+            infos=report.infos,
+            shape_violations=report.shape_violations,
+            untargeted=untargeted,
         )
 
         # Fire notification hooks
@@ -153,4 +258,10 @@ class MembraneValidator:
         return results
 
 
-__all__ = ["MembraneValidator", "no_shapes_report"]
+__all__ = [
+    "MembraneValidator",
+    "find_untargeted",
+    "no_shapes_report",
+    "untargeted_policy",
+    "untargeted_severity_label",
+]

@@ -1139,3 +1139,33 @@ has:
 When a decision is overturned in a later release, the original entry
 stays in place (historical record) and a new entry in the later
 release section references it (`Supersedes D-0.3.3-X`).
+
+## 0.9.0 -- Fail-closed membrane validation
+
+### D-0.9.0-1 -- Unrecognized SHACL severities count as violations
+
+**Context.** `_parse_shacl_report` matched `sh:resultSeverity` by string suffix and skipped any result that did not end in `Violation` or `Warning`. A boundary shape that declared a custom severity, or a result with no severity, therefore produced an INTACT membrane, and `traverse(fail_on_breach=True)` injected the data (holonic#30).
+
+**Decision.** Compare the severity with `sh:Violation`, `sh:Warning`, and `sh:Info` as IRIs. Any other value, or none, counts as a violation. `sh:Info` results are kept in `MembraneResult.infos` and never lower health. `validate_membrane` and `dry_run` derive health through one function, `_health_from_report`. Specified as R3.6.
+
+**Alternatives considered.** (a) Treat every unclassified result as a violation, including `sh:Info`, as the issue first proposed; rejected because `sh:Info` is a standard severity whose meaning is "does not fail", and a shape author who chose it would see the membrane compromised. (b) Raise on an unrecognized severity; rejected because validation of other holons in `validate_all` would stop on one holon's shape.
+
+**Rationale.** The membrane's guarantee is that data a shape rejects does not pass. A parser that cannot classify a result has no grounds to treat it as passing.
+
+### D-0.9.0-2 -- Untargeted types are reported, and breach a fail-closed traversal
+
+**Context.** SHACL validates only the focus nodes a shape targets. A portal that injects nodes of a type no boundary shape names leaves the membrane INTACT, so `fail_on_breach` could not stop a schema mismatch (SPEC OQ11, holonic#50). Two tests in `test_verified_gaps.py` were marked `xfail` for this.
+
+**Decision.**
+
+- Membrane validation reports every typed interior node that no boundary shape targets as an `UntargetedNode` in `MembraneResult.untargeted`. Targeting follows SHACL Core: `sh:targetClass` with `rdfs:subClassOf*` in the data graph, implicit class targets, `sh:targetNode`, `sh:targetSubjectsOf`, and `sh:targetObjectsOf`. A boundary that uses a SPARQL-based target (`sh:target`) skips the check, because its focus nodes are known only by running it.
+- A holon states its policy in its boundary graph: `cga:permitsType` exempts a class and its subclasses, and `cga:untargetedTypeSeverity` sets the severity.
+- Without a declared severity, `validate_membrane` and `dry_run` report untargeted nodes at Info, which leaves health unchanged. `traverse(fail_on_breach=True)` checks only the nodes it injected, at Violation by default.
+
+Specified as R3.7. OQ11 is resolved.
+
+**Alternatives considered.** (a) SPEC OQ11 option (b), requiring at least one instance of each `sh:targetClass` after injection; rejected because it fails a valid interior that has no instances of some class yet, trading a missed breach for a false one. (b) Check every interior node at Violation under `fail_on_breach`; rejected because nodes already in the interior, such as ontology terms kept in a second interior graph, would block every traversal. (c) Violation by default in `validate_membrane`; rejected because it would compromise existing holons whose interiors hold untargeted types without any change on their part.
+
+**Rationale.** Restricting the strict check to injected nodes stops the case `fail_on_breach` exists for (a portal delivering the wrong type) without reinterpreting data that was already accepted. Reporting at Info elsewhere makes the gap visible without changing health.
+
+**Implications.** A holon whose portals inject auxiliary node types (measurement records, provenance nodes) needs either shapes that target them or `cga:permitsType` declarations before it uses `fail_on_breach`.

@@ -213,12 +213,41 @@ spec:R3.5 a specl:Requirement ;
     specl:acceptanceCriterion "Given a governed traversal with validate=True, when the activity is read from the context graph, then cga:membraneHealth is present and matches the MembraneResult.health value." ;
     specl:verifiedBy spec:test-8a5bd88b .
 
+spec:R3.6 a specl:Requirement ;
+    specl:partOf <https://zwelz3.github.io/holonic/spec.ttl> ;
+    dct:title "Membrane validation MUST fail closed on SHACL result severity" ;
+    dct:description "Membrane validation MUST fail closed on SHACL result severity. A result whose `sh:resultSeverity` is `sh:Violation`, or is absent, or is any term other than `sh:Warning` and `sh:Info`, MUST be counted as a violation; `sh:Warning` results MUST lower health to `Weakened`; `sh:Info` results MUST be reported in `MembraneResult.infos` and MUST NOT lower health. `validate_membrane()` and `dry_run()` MUST apply the same rule." ;
+    prov:wasDerivedFrom spec:source-dcc526b3 ;
+    specl:sourceLine "159"^^xsd:integer ;
+    specl:priority "MUST" ;
+    specl:implementationStatus "verified" ;
+    specl:constrains spec:component-270c02a7 ;
+    specl:constrains spec:component-ba636c12 ;
+    specl:constrains spec:component-MembraneResult ;
+    specl:acceptanceCriterion "Given a boundary shape that declares a custom severity and an interior that violates it, when `traverse()` is called with `fail_on_breach=True`, then `MembraneBreachError` is raised." ;
+    specl:verifiedBy spec:test-b4128776 .
+
+spec:R3.7 a specl:Requirement ;
+    specl:partOf <https://zwelz3.github.io/holonic/spec.ttl> ;
+    dct:title "Membrane validation MUST report each typed interior node that no boundary shape…" ;
+    dct:description "Membrane validation MUST report each typed interior node that no boundary shape targets as an `UntargetedNode` in `MembraneResult.untargeted`. Targeting follows SHACL Core (`sh:targetClass` with `rdfs:subClassOf*` in the data graph, implicit class targets, `sh:targetNode`, `sh:targetSubjectsOf`, `sh:targetObjectsOf`); a boundary with a SPARQL-based target skips the check. A class named by `cga:permitsType` in the holon's boundary, and its subclasses, MUST be exempt. The severity MUST be the holon's `cga:untargetedTypeSeverity` when declared, resolved as R3.6 resolves SHACL severities; otherwise Info for `validate_membrane()` and `dry_run()`, and Violation for the nodes `traverse(fail_on_breach=True)` injects." ;
+    prov:wasDerivedFrom spec:source-dcc526b3 ;
+    specl:sourceLine "166"^^xsd:integer ;
+    specl:priority "MUST" ;
+    specl:implementationStatus "verified" ;
+    specl:constrains spec:component-47f1e737 ;
+    specl:constrains spec:component-d3f7b43c ;
+    specl:constrains spec:component-UntargetedNode ;
+    specl:constrains spec:component-MembraneResult ;
+    specl:acceptanceCriterion "Given a portal that injects a node whose type no boundary shape targets, when `traverse()` is called with `fail_on_breach=True`, then `MembraneBreachError` is raised and the target interior is unchanged." ;
+    specl:verifiedBy spec:test-a4c79acf .
+
 spec:R4.1 a specl:Requirement ;
     specl:partOf <https://zwelz3.github.io/holonic/spec.ttl> ;
     dct:title "Portals MUST be first-class RDF entities stored in boundary graphs with…" ;
     dct:description "Portals MUST be first-class RDF entities stored in boundary graphs with `cga:sourceHolon`, `cga:targetHolon`, and (for `cga:TransformPortal`) `cga:constructQuery`." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "161"^^xsd:integer ;
+    specl:sourceLine "175"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-b0376446 ;
@@ -232,7 +261,7 @@ spec:R4.2 a specl:Requirement ;
     dct:title "Portal discovery MUST be SPARQL-driven (`find_portals_from`, `find_portals_to`…" ;
     dct:description "Portal discovery MUST be SPARQL-driven (`find_portals_from`, `find_portals_to`, `find_portal`, `find_path`). Python-side iteration over cached portal objects is forbidden." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "169"^^xsd:integer ;
+    specl:sourceLine "183"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-cfbc4336 ;
@@ -245,7 +274,7 @@ spec:R4.3 a specl:Requirement ;
     dct:title "`traverse_portal(portal_iri)` MUST execute the portal's CONSTRUCT query against…" ;
     dct:description "`traverse_portal(portal_iri)` MUST execute the portal's CONSTRUCT query against the quad store and MAY inject the result into a target named graph." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "176"^^xsd:integer ;
+    specl:sourceLine "190"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-da09c161 ;
@@ -257,7 +286,7 @@ spec:R4.4 a specl:Requirement ;
     dct:title "`traverse(source, target, validate=True)` MUST compose discovery, traversal…" ;
     dct:description "`traverse(source, target, validate=True)` MUST compose discovery, traversal, membrane validation, and provenance recording as one governed operation. Validation failure MUST NOT inject data into the target interior." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "183"^^xsd:integer ;
+    specl:sourceLine "197"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-16396f5e ;
@@ -269,7 +298,7 @@ spec:R4.5 a specl:Requirement ;
     dct:title "Multi-hop path finding (`find_path`) MUST discover a portal route from source…" ;
     dct:description "Multi-hop path finding (`find_path`) MUST discover a portal route from source to target. The current implementation fetches the portal adjacency list via `Q.ALL_PORTALS` and runs Python BFS. Deferred to 0.8.0: migrate to a SPARQL property-path query or cache the adjacency list across calls." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "190"^^xsd:integer ;
+    specl:sourceLine "204"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "in-progress" ;
     specl:constrains spec:component-4e7174b7 ;
@@ -282,7 +311,7 @@ spec:R5.1 a specl:Requirement ;
     dct:title "Every governed traversal and membrane validation MUST emit a `prov:Activity`…" ;
     dct:description "Every governed traversal and membrane validation MUST emit a `prov:Activity` into the target holon's context graph, including `prov:wasAssociatedWith`, `prov:used`, `prov:generated`, and `prov:startedAtTime`." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "199"^^xsd:integer ;
+    specl:sourceLine "213"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-16396f5e ;
@@ -296,7 +325,7 @@ spec:R5.2 a specl:Requirement ;
     dct:title "Graph-to-graph derivation produced by a traversal (target interior derived from…" ;
     dct:description "Graph-to-graph derivation produced by a traversal (target interior derived from source interior) MUST use `prov:wasDerivedFrom` and MUST be distinct from `cga:derivedFrom`." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "206"^^xsd:integer ;
+    specl:sourceLine "220"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:verifiedBy spec:test-0b1eb1fe ;
@@ -309,7 +338,7 @@ spec:R5.3 a specl:Requirement ;
     dct:title "`cga:derivedFrom` MUST be reserved for persistent holon-to-holon structural…" ;
     dct:description "`cga:derivedFrom` MUST be reserved for persistent holon-to-holon structural dependency independent of any activity. The two properties coexist; neither replaces the other." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "213"^^xsd:integer ;
+    specl:sourceLine "227"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:verifiedBy spec:test-e68d6e25 ;
@@ -322,7 +351,7 @@ spec:R5.4 a specl:Requirement ;
     dct:title "`HolonSplit` and `HolonMerge` MUST be modeled as `prov:Activity` subclasses…" ;
     dct:description "`HolonSplit` and `HolonMerge` MUST be modeled as `prov:Activity` subclasses with `prov:used` (source holon) and `prov:generated` (resulting holons)." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "221"^^xsd:integer ;
+    specl:sourceLine "235"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:verifiedBy spec:test-984ddc78 ;
@@ -334,7 +363,7 @@ spec:R6.1 a specl:Requirement ;
     dct:title "The `holonic.console_model` module MUST expose dataclasses tuned for JSON…" ;
     dct:description "The `holonic.console_model` module MUST expose dataclasses tuned for JSON serialization over HTTP: `HolonSummary`, `HolonDetail`, `ClassInstanceCount`, `NeighborhoodNode`, `NeighborhoodEdge`, `NeighborhoodGraph`, `PortalSummary`, `PortalDetail`." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "230"^^xsd:integer ;
+    specl:sourceLine "244"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-04830ab1 ;
@@ -346,7 +375,7 @@ spec:R6.2 a specl:Requirement ;
     dct:title "`NeighborhoodGraph.to_graphology()` MUST return a dict matching graphology's…" ;
     dct:description "`NeighborhoodGraph.to_graphology()` MUST return a dict matching graphology's JSON shape so sigma.js can consume it without further transformation." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "237"^^xsd:integer ;
+    specl:sourceLine "251"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-64f20ac4 ;
@@ -358,7 +387,7 @@ spec:R6.3 a specl:Requirement ;
     dct:title "`HolonicDataset.list_holons_summary()` MUST return lightweight summaries via a…" ;
     dct:description "`HolonicDataset.list_holons_summary()` MUST return lightweight summaries via a single SPARQL query with no per-holon fan-out." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "244"^^xsd:integer ;
+    specl:sourceLine "258"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-f336986b ;
@@ -371,7 +400,7 @@ spec:R6.4 a specl:Requirement ;
     dct:title "`HolonicDataset.get_holon_detail(iri)` MUST return full layer IRIs plus…" ;
     dct:description "`HolonicDataset.get_holon_detail(iri)` MUST return full layer IRIs plus interior triple count." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "251"^^xsd:integer ;
+    specl:sourceLine "265"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-d96e3687 ;
@@ -384,7 +413,7 @@ spec:R6.5 a specl:Requirement ;
     dct:title "`HolonicDataset.holon_interior_classes(iri)` MUST return `(class_iri, count)`…" ;
     dct:description "`HolonicDataset.holon_interior_classes(iri)` MUST return `(class_iri, count)` pairs computed by SPARQL, not by Python iteration over triples." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "258"^^xsd:integer ;
+    specl:sourceLine "272"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-4ab57a67 ;
@@ -397,7 +426,7 @@ spec:R6.6 a specl:Requirement ;
     dct:title "`HolonicDataset.holon_neighborhood(iri, depth=1)` MUST return a BFS subgraph…" ;
     dct:description "`HolonicDataset.holon_neighborhood(iri, depth=1)` MUST return a BFS subgraph bounded by portal topology, with `depth` clamped to a reasonable maximum to bound runaway traversals." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "265"^^xsd:integer ;
+    specl:sourceLine "279"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-08fb9244 ;
@@ -409,7 +438,7 @@ spec:R6.7 a specl:Requirement ;
     dct:title "`HolonicDataset.portal_traversal_history(iri, limit=50)` MUST return recent…" ;
     dct:description "`HolonicDataset.portal_traversal_history(iri, limit=50)` MUST return recent `prov:Activity` records scoped to the portal, with `limit` clamped to 10,000." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "272"^^xsd:integer ;
+    specl:sourceLine "286"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-e716cd25 ;
@@ -421,7 +450,7 @@ spec:R7.1 a specl:Requirement ;
     dct:title "Projection operations MUST support two modes: CONSTRUCT (result stays as RDF…" ;
     dct:description "Projection operations MUST support two modes: CONSTRUCT (result stays as RDF, storable in the holarchy) and Pythonic (result exits RDF into LPG-shaped dicts for visualization consumers)." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "281"^^xsd:integer ;
+    specl:sourceLine "295"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-48830ea3 ;
@@ -433,7 +462,7 @@ spec:R7.2 a specl:Requirement ;
     dct:title "`project_to_lpg(graph, ...)` MUST support four independent boolean flags…" ;
     dct:description "`project_to_lpg(graph, ...)` MUST support four independent boolean flags controlling the core simplifications: `collapse_types`, `collapse_literals`, `resolve_blanks`, and `resolve_lists`. Each flag governs a distinct transformation (types→node annotations, literals→node attributes, blank nodes inlined as nested attributes, RDF lists resolved to Python lists) and each MUST be toggleable independently of the others." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "288"^^xsd:integer ;
+    specl:sourceLine "302"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-project_to_lpg ;
@@ -445,7 +474,7 @@ spec:R7.3 a specl:Requirement ;
     dct:title "`ProjectionPipeline` MUST compose named steps as a sequence of CONSTRUCT…" ;
     dct:description "`ProjectionPipeline` MUST compose named steps as a sequence of CONSTRUCT queries and Python transforms, with `.apply_to_lpg()` and `.apply_to_graph()` terminal methods." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "295"^^xsd:integer ;
+    specl:sourceLine "309"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-ProjectionPipeline ;
@@ -457,7 +486,7 @@ spec:R7.4 a specl:Requirement ;
     dct:title "`project_holon(iri, store_as=...)` MUST merge all interior graphs, apply the…" ;
     dct:description "`project_holon(iri, store_as=...)` MUST merge all interior graphs, apply the pipeline, and optionally write the result back to a named graph." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "302"^^xsd:integer ;
+    specl:sourceLine "316"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-8b4eec77 ;
@@ -469,7 +498,7 @@ spec:R7.5 a specl:Requirement ;
     dct:title "`project_holarchy()` MUST project the topology (holons as nodes, portals and…" ;
     dct:description "`project_holarchy()` MUST project the topology (holons as nodes, portals and `cga:memberOf` as edges) into an LPG." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "309"^^xsd:integer ;
+    specl:sourceLine "323"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-1d1f6519 ;
@@ -481,7 +510,7 @@ spec:R8.1 a specl:Requirement ;
     dct:title "The default pytest suite MUST pass against `RdflibBackend` with no external…" ;
     dct:description "The default pytest suite MUST pass against `RdflibBackend` with no external services." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "318"^^xsd:integer ;
+    specl:sourceLine "332"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-f14c174e ;
@@ -493,7 +522,7 @@ spec:R8.2 a specl:Requirement ;
     dct:title "Fuseki integration tests, if any, MUST be marked with `@pytest.mark.fuseki` and…" ;
     dct:description "Fuseki integration tests, if any, MUST be marked with `@pytest.mark.fuseki` and skipped when Fuseki is unavailable." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "325"^^xsd:integer ;
+    specl:sourceLine "339"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "in-progress" ;
     specl:constrains spec:component-4e23e950 ;
@@ -506,7 +535,7 @@ spec:R8.3 a specl:Requirement ;
     dct:title "Test fixtures MUST use Turtle loaded via `backend.parse_into()` rather than…" ;
     dct:description "Test fixtures MUST use Turtle loaded via `backend.parse_into()` rather than programmatic rdflib graph construction." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "332"^^xsd:integer ;
+    specl:sourceLine "346"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "in-progress" ;
     specl:constrains spec:component-f14c174e ;
@@ -519,7 +548,7 @@ spec:R8.4 a specl:Requirement ;
     dct:title "The package MUST publish to PyPI under `holonic` and be installable with `pip…" ;
     dct:description "The package MUST publish to PyPI under `holonic` and be installable with `pip install holonic`." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "339"^^xsd:integer ;
+    specl:sourceLine "353"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-5d07e7d7 ;
@@ -532,7 +561,7 @@ spec:R8.5 a specl:Requirement ;
     dct:title "Optional extras (`dev`, `docs`, `entailment`, `fuseki`, `lint`, `notebooks`…" ;
     dct:description "Optional extras (`dev`, `docs`, `entailment`, `fuseki`, `lint`, `notebooks`, `test`, `viz`) MUST keep the base install under five seconds on a typical network." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "346"^^xsd:integer ;
+    specl:sourceLine "360"^^xsd:integer ;
     specl:priority "SHOULD" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-b94288b5 ;
@@ -544,7 +573,7 @@ spec:R9.1 a specl:Requirement ;
     dct:title "The registry SHOULD carry graph-level operational metadata per layer graph…" ;
     dct:description "The registry SHOULD carry graph-level operational metadata per layer graph: triple count, last-modified timestamp, and materialized class inventory. `HolonicDataset.refresh_metadata()`, `refresh_all_metadata()`, and `get_graph_metadata()` provide the read/write surface. Shipped with `metadata_updates=\"eager\"|\"off\"` policy." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "357"^^xsd:integer ;
+    specl:sourceLine "371"^^xsd:integer ;
     specl:priority "SHOULD" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-HolonicDataset ;
@@ -558,7 +587,7 @@ spec:R9.2 a specl:Requirement ;
     dct:title "The CGA ontology MUST declare graph-level metadata vocabulary…" ;
     dct:description "The CGA ontology MUST declare graph-level metadata vocabulary (`cga:ClassInstanceCount` class; `cga:tripleCount`, `cga:lastModified`, `cga:refreshedAt`, `cga:inGraph`, `cga:class`, `cga:count`, `cga:holonLastModified` properties)." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "364"^^xsd:integer ;
+    specl:sourceLine "378"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:verifiedBy spec:test-8c528e68 ;
@@ -570,7 +599,7 @@ spec:R9.3 a specl:Requirement ;
     dct:title "The CGA ontology MUST declare graph-category vocabulary so named graphs carry…" ;
     dct:description "The CGA ontology MUST declare graph-category vocabulary so named graphs carry RDF types discoverable via SPARQL. Implemented as the flat+role pattern: `cga:HolonicGraph` class plus `cga:graphRole` object property ranged over `cga:LayerRole` individuals. New individual `cga:RegistryRole` covers the cross-cutting registry graph. See `docs/DECISIONS.md` § D-0.3.4-1." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "373"^^xsd:integer ;
+    specl:sourceLine "387"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-1c7dcf37 ;
@@ -582,7 +611,7 @@ spec:R9.4 a specl:Requirement ;
     dct:title "The library MUST add a `resolve(predicate, from_holon, max_depth, order…" ;
     dct:description "The library MUST add a `resolve(predicate, from_holon, max_depth, order, limit)` method implementing decreasing-priority scope resolution across the holarchy. `HolonicDataset.resolve()` in `holonic.scope`. Two predicate classes shipped: `HasClassInInterior` (uses 0.3.3 class inventory) and `CustomSPARQL` (escape hatch). Three ordering modes: `\"network\"` (default, outbound+inbound portals), `\"reverse-network\"`, `\"containment\"`. Strict BFS topology." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "380"^^xsd:integer ;
+    specl:sourceLine "394"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-334465bd ;
@@ -595,7 +624,7 @@ spec:R9.5 a specl:Requirement ;
     dct:title "The library MUST ship a migration CLI to backfill graph-type declarations for…" ;
     dct:description "The library MUST ship a migration CLI to backfill graph-type declarations for pre-0.3.4 deployments. `holonic-migrate-registry` entry point, idempotent, dry-run by default." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "387"^^xsd:integer ;
+    specl:sourceLine "401"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-abc763e4 ;
@@ -607,7 +636,7 @@ spec:R9.6 a specl:Requirement ;
     dct:title "The library MUST ship a projection plugin system" ;
     dct:description "The library MUST ship a projection plugin system. Projection pipelines are RDF-modeled specs (`cga:ProjectionPipelineSpec`) in the registry graph, carrying an `rdf:List` of `cga:ProjectionPipelineStep` entries. Python transforms are discovered via the `holonic.projections` entry-point group (both first-party and third-party). Pipelines reference transforms by registered name; registration validates name resolution." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "396"^^xsd:integer ;
+    specl:sourceLine "410"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-ef4c2b0e ;
@@ -621,7 +650,7 @@ spec:R9.7 a specl:Requirement ;
     dct:title "The library MUST ship `HolonicDataset.register_pipeline()`…" ;
     dct:description "The library MUST ship `HolonicDataset.register_pipeline()`, `attach_pipeline()`, `list_pipelines()`, `get_pipeline()`, and `run_projection()`. Running a pipeline emits a `prov:Activity` in the target holon's context graph with loose version tracking (`cga:transformVersion`) and host metadata (`cga:runHost`, `cga:runPlatform`, `cga:runPythonVersion`, `cga:runHolonicVersion`). Running with `store_as` refreshes metadata on the output graph per D-0.3.3-5." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "403"^^xsd:integer ;
+    specl:sourceLine "417"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-HolonicDataset ;
@@ -634,7 +663,7 @@ spec:R9.8 a specl:Requirement ;
     dct:title "The backend protocol MUST split into a mandatory core and an optional mixin" ;
     dct:description "The backend protocol MUST split into a mandatory core and an optional mixin. Implemented as `HolonicStore` (Protocol, mandatory) + `AbstractHolonicStore` (ABC, recommended base with hook points for optional methods). Backends declaring only the Protocol surface continue to work via the library's Python-fallback helpers. Optional native methods are dispatched via `hasattr`. The initial optional surface is a single method: `refresh_graph_metadata(graph_iri, registry_iri)`." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "412"^^xsd:integer ;
+    specl:sourceLine "426"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-7d00f81c ;
@@ -647,7 +676,7 @@ spec:R9.9 a specl:Requirement ;
     dct:title "The library MUST preserve `GraphBackend` as a deprecated alias through the…" ;
     dct:description "The library MUST preserve `GraphBackend` as a deprecated alias through the 0.4.x series and provide a migration guide (`docs/MIGRATION.md`). Deprecation warnings are suppressible via `HOLONIC_SILENCE_DEPRECATION=1`. Superseded by R9.18 in 0.5.0: the alias was removed as planned." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "419"^^xsd:integer ;
+    specl:sourceLine "433"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-eef96aaf ;
@@ -661,7 +690,7 @@ spec:R9.10 a specl:Requirement ;
     dct:title "The `HolonicDataset` constructor parameter previously named `registry_graph`…" ;
     dct:description "The `HolonicDataset` constructor parameter previously named `registry_graph` MUST be renamed to `registry_iri` for consistency with internal usage. The old name was a deprecated alias through 0.4.x and was removed in 0.5.0 per R9.18." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "426"^^xsd:integer ;
+    specl:sourceLine "440"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-eaf52afc ;
@@ -673,7 +702,7 @@ spec:R9.11 a specl:Requirement ;
     dct:title "The library SHOULD ship a `holonic.generators` module formalizing the existing…" ;
     dct:description "The library SHOULD ship a `holonic.generators` module formalizing the existing `examples/` holarchy generators (company, research lab, random)." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "435"^^xsd:integer ;
+    specl:sourceLine "449"^^xsd:integer ;
     specl:priority "SHOULD" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-f4ee1e35 ;
@@ -685,7 +714,7 @@ spec:R9.12 a specl:Requirement ;
     dct:title "The library SHOULD offer a `metadata_updates=\"lazy\"` mode (dirty tracking with…" ;
     dct:description "The library SHOULD offer a `metadata_updates=\"lazy\"` mode (dirty tracking with `flush_metadata()`) if evidence emerges that eager and off modes leave a practical gap." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "442"^^xsd:integer ;
+    specl:sourceLine "456"^^xsd:integer ;
     specl:priority "SHOULD" ;
     specl:implementationStatus "in-progress" ;
     specl:constrains spec:component-HolonicDataset ;
@@ -698,7 +727,7 @@ spec:R9.13 a specl:Requirement ;
     dct:title "The registry SHOULD optionally aggregate per-holon membrane health for fast…" ;
     dct:description "The registry SHOULD optionally aggregate per-holon membrane health for fast dashboards and scope-resolution health predicates. Semantics and invalidation rules to be decided before implementation." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "449"^^xsd:integer ;
+    specl:sourceLine "463"^^xsd:integer ;
     specl:priority "SHOULD" ;
     specl:implementationStatus "in-progress" ;
     specl:constrains spec:component-5a8380d6 ;
@@ -712,7 +741,7 @@ spec:R9.14 a specl:Requirement ;
     dct:title "The scope resolver SHOULD gain additional predicate classes…" ;
     dct:description "The scope resolver SHOULD gain additional predicate classes (`HasPortalProducing`, `HasShapeFor`, `LabelMatches`) if evidence emerges that `CustomSPARQL` is being used as a workaround for missing first-class predicates." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "456"^^xsd:integer ;
+    specl:sourceLine "470"^^xsd:integer ;
     specl:priority "SHOULD" ;
     specl:implementationStatus "in-progress" ;
     specl:constrains spec:component-334465bd ;
@@ -724,7 +753,7 @@ spec:R9.15 a specl:Requirement ;
     dct:title "The library SHOULD ship a migration pass that synthesizes minimal…" ;
     dct:description "The library SHOULD ship a migration pass that synthesizes minimal `cga:ProjectionPipelineSpec` resources for projection graphs registered before 0.3.5, so historical projections get consistent provenance." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "463"^^xsd:integer ;
+    specl:sourceLine "477"^^xsd:integer ;
     specl:priority "SHOULD" ;
     specl:implementationStatus "in-progress" ;
     specl:constrains spec:component-38f68c68 ;
@@ -736,7 +765,7 @@ spec:R9.16 a specl:Requirement ;
     dct:title "Pipeline steps SHOULD support per-step arguments (e.g" ;
     dct:description "Pipeline steps SHOULD support per-step arguments (e.g. `filter_by_class(class_iri)`) via a `cga:stepArguments` JSON literal or structured argument record." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "470"^^xsd:integer ;
+    specl:sourceLine "484"^^xsd:integer ;
     specl:priority "SHOULD" ;
     specl:implementationStatus "in-progress" ;
     specl:constrains spec:component-ProjectionPipelineStep ;
@@ -749,7 +778,7 @@ spec:R9.17 a specl:Requirement ;
     dct:title "The optional protocol surface SHOULD grow additively during 0.4.x with native…" ;
     dct:description "The optional protocol surface SHOULD grow additively during 0.4.x with native hooks for scope walking, bulk load, and pipeline execution as backend-specific optimization opportunities arise." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "477"^^xsd:integer ;
+    specl:sourceLine "491"^^xsd:integer ;
     specl:priority "SHOULD" ;
     specl:implementationStatus "in-progress" ;
     specl:constrains spec:component-7d00f81c ;
@@ -762,7 +791,7 @@ spec:R9.18 a specl:Requirement ;
     dct:title "In 0.5.0, the `GraphBackend` alias MUST be removed along with the…" ;
     dct:description "In 0.5.0, the `GraphBackend` alias MUST be removed along with the `registry_graph` kwarg and `ds.registry_graph` property." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "484"^^xsd:integer ;
+    specl:sourceLine "498"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-eef96aaf ;
@@ -777,7 +806,7 @@ spec:R9.19 a specl:Requirement ;
     dct:title "The library MUST ship a JupyterLite static build of the example notebooks for…" ;
     dct:description "The library MUST ship a JupyterLite static build of the example notebooks for in-browser exploration without local Python installation. Build integrates with the existing `notebooks/` directory via `scripts/sync_notebooks_to_jlite.py`; output lands in `docs/source/_extra/jupyterlite/` so Sphinx's `html_extra_path` serves it at `/jupyterlite/` alongside the documentation. Notebook 13 (yFiles visualization) is excluded from in-browser execution because yFiles requires a Jupyter server extension that Pyodide cannot provide; the landing notebook `00_start_here.ipynb` documents this constraint." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "493"^^xsd:integer ;
+    specl:sourceLine "507"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-f0c9c1bd ;
@@ -793,7 +822,7 @@ spec:R9.20 a specl:Requirement ;
     dct:title "The library MUST provide `HolonicDataset.remove_holon(iri)` completing the CRUD…" ;
     dct:description "The library MUST provide `HolonicDataset.remove_holon(iri)` completing the CRUD lifecycle started by `add_holon()`. Cleans up the holon's registry entry, all four layer graphs (interior/boundary/projection/context), graph-typing triples, graph-level metadata records, the per-holon rollup, and cascades to `remove_portal()` for every portal where the holon is source or target. Child holons that reference the removed holon via `cga:memberOf` are orphaned (their `memberOf` triple is removed) but not themselves deleted. Idempotent — returns `False` for a non-existent IRI rather than raising. Provenance activities referencing the removed holon are preserved because provenance is immutable history." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "502"^^xsd:integer ;
+    specl:sourceLine "516"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-c8573464 ;
@@ -806,7 +835,7 @@ spec:R9.21 a specl:Requirement ;
     dct:title "The library MUST provide `HolonicDataset.remove_portal(portal_iri)` completing…" ;
     dct:description "The library MUST provide `HolonicDataset.remove_portal(portal_iri)` completing the CRUD lifecycle started by `add_portal()`. Removes all triples with `portal_iri` as subject from every graph containing them (typically the source holon's boundary graph and the registry mirror). The boundary graph itself is preserved — sibling portals and SHACL shapes in the same graph are unaffected. Idempotent — returns `False` for a non-existent portal IRI rather than raising. Metadata refresh fires per affected graph when `metadata_updates=\"eager\"`." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "509"^^xsd:integer ;
+    specl:sourceLine "523"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-61d6e316 ;
@@ -819,7 +848,7 @@ spec:R9.22 a specl:Requirement ;
     dct:title "The `add_portal()` method MUST support creation of all portal subtypes declared…" ;
     dct:description "The `add_portal()` method MUST support creation of all portal subtypes declared in the CGA ontology (`cga:TransformPortal`, `cga:IconPortal`, `cga:SealedPortal`) as well as downstream subclasses via three additive parameters: `construct_query` is optional (default `None`); `portal_type` is a customizable RDF type (default `\"cga:TransformPortal\"`); `extra_ttl` accepts additional Turtle triples for predicates carried by downstream portal subclasses. All existing positional calls continue to work unchanged. Portal discovery (`find_portals_from/to/direct`) MUST match any portal subtype — the pre-0.4.2 hardcoded filter on `cga:TransformPortal` is relaxed because the `cga:sourceHolon` + `cga:targetHolon` predicate pair uniquely identifies a portal regardless of its specific subtype. Discovery queries use `SELECT DISTINCT` to deduplicate results across the boundary graph and registry mirror. The CGA ontology ships `cga:IconPortal` (previously undeclared) and SHACL shapes (`cga:IconPortalShape`, `cga:SealedPortalShape`) that warn when these subtypes carry `cga:constructQuery`; `cga:TransformPortalShape` continues to require exactly one `cga:constructQuery`." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "516"^^xsd:integer ;
+    specl:sourceLine "530"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-b0376446 ;
@@ -838,7 +867,7 @@ spec:R9.23 a specl:Requirement ;
     dct:title "Portal discovery queries MUST return the portal's RDF type (excluding base…" ;
     dct:description "Portal discovery queries MUST return the portal's RDF type (excluding base `cga:Portal`) as a `portal_type` field on `PortalInfo`, `PortalSummary`, and `PortalDetail`. All five discovery SPARQL queries include `OPTIONAL { ?portal a ?portalType . FILTER(?portalType != cga:Portal) }`." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "525"^^xsd:integer ;
+    specl:sourceLine "539"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-8cc28144 ;
@@ -854,7 +883,7 @@ spec:R9.24 a specl:Requirement ;
     dct:title "`traverse_portal()` MUST check the portal's RDF type before executing the…" ;
     dct:description "`traverse_portal()` MUST check the portal's RDF type before executing the CONSTRUCT query. If the portal is `cga:SealedPortal`, it MUST raise `SealedPortalError` (a `ValueError` subclass) regardless of whether the portal carries a `constructQuery`." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "532"^^xsd:integer ;
+    specl:sourceLine "546"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-ec19ae50 ;
@@ -867,7 +896,7 @@ spec:R9.25 a specl:Requirement ;
     dct:title "`traverse()` MUST register the target interior graph as `cga:hasInterior` after…" ;
     dct:description "`traverse()` MUST register the target interior graph as `cga:hasInterior` after injection. It MUST look up existing registered interiors first and inject into the first one found; if none exist, it falls back to the `{target_iri}/interior` convention name. This ensures `validate_membrane()` can see the injected data." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "539"^^xsd:integer ;
+    specl:sourceLine "553"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-040f5fe0 ;
@@ -879,7 +908,7 @@ spec:R9.26 a specl:Requirement ;
     dct:title "`get_holon()` MUST use a direct filtered SPARQL query (O(1) in holarchy size)…" ;
     dct:description "`get_holon()` MUST use a direct filtered SPARQL query (O(1) in holarchy size) rather than scanning all holons via `iter_holons()`." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "546"^^xsd:integer ;
+    specl:sourceLine "560"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-4a33892f ;
@@ -891,7 +920,7 @@ spec:R9.27 a specl:Requirement ;
     dct:title "`validate_all()` MUST validate membranes for all holons and return `dict[str…" ;
     dct:description "`validate_all()` MUST validate membranes for all holons and return `dict[str, MembraneResult]`." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "553"^^xsd:integer ;
+    specl:sourceLine "567"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-427abfc7 ;
@@ -903,11 +932,11 @@ spec:R9.28 a specl:Requirement ;
     dct:title "`traverse()` MUST accept `fail_on_breach: bool = False`" ;
     dct:description "`traverse()` MUST accept `fail_on_breach: bool = False`. When True and validation returns COMPROMISED, it MUST roll back injected triples and raise `MembraneBreachError`. Rollback restores a pre-injection snapshot of the target interior." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "560"^^xsd:integer ;
+    specl:sourceLine "574"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-040f5fe0 ;
-    specl:acceptanceCriterion "Given a traversal that produces COMPROMISED validation, when `fail_on_breach=True`, then `MembraneBreachError` is raised and the target interior is unchanged. See OQ11 for the SHACL coverage gap." ;
+    specl:acceptanceCriterion "Given a traversal that produces COMPROMISED validation, when `fail_on_breach=True`, then `MembraneBreachError` is raised and the target interior is unchanged. Injected nodes of a type no shape targets compromise the membrane (R3.7)." ;
     specl:verifiedBy spec:test-f9074661 .
 
 spec:R9.29 a specl:Requirement ;
@@ -915,7 +944,7 @@ spec:R9.29 a specl:Requirement ;
     dct:title "`update_portal()` MUST update portal properties in-place without requiring…" ;
     dct:description "`update_portal()` MUST update portal properties in-place without requiring remove+add. Uses per-graph SPARQL DELETE for old values and Turtle parse for new values." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "567"^^xsd:integer ;
+    specl:sourceLine "581"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-7ce1c168 ;
@@ -927,7 +956,7 @@ spec:R9.30 a specl:Requirement ;
     dct:title "`traverse_path()` MUST execute multi-hop traversals by calling `find_path()`…" ;
     dct:description "`traverse_path()` MUST execute multi-hop traversals by calling `find_path()` then looping `traverse()`. Raises `ValueError` if no path exists. Records provenance per hop when `agent_iri` is provided." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "574"^^xsd:integer ;
+    specl:sourceLine "588"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-fba03f4f ;
@@ -939,7 +968,7 @@ spec:R9.31 a specl:Requirement ;
     dct:title "`dry_run()` MUST simulate a traversal without mutating state" ;
     dct:description "`dry_run()` MUST simulate a traversal without mutating state. Runs the CONSTRUCT, merges with existing interiors in memory, validates against boundary shapes, and returns `(projected_graph, membrane_result)`." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "581"^^xsd:integer ;
+    specl:sourceLine "595"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-21773f6b ;
@@ -951,7 +980,7 @@ spec:R9.32 a specl:Requirement ;
     dct:title "`last_traversal(holon_iri)` MUST return the most recent `TraversalRecord`…" ;
     dct:description "`last_traversal(holon_iri)` MUST return the most recent `TraversalRecord` targeting a holon. `derivation_chain(holon_iri)` MUST walk `prov:wasDerivedFrom` to return upstream holon IRIs." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "588"^^xsd:integer ;
+    specl:sourceLine "602"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-4f35c9f3 ;
@@ -964,7 +993,7 @@ spec:R9.33 a specl:Requirement ;
     dct:title "`compose(holon_iris)` MUST union interior graphs across multiple holons into a…" ;
     dct:description "`compose(holon_iris)` MUST union interior graphs across multiple holons into a single `rdflib.Graph`. Accepts optional `layers` parameter for specifying which layer types to include." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "595"^^xsd:integer ;
+    specl:sourceLine "609"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-5405f70e ;
@@ -976,7 +1005,7 @@ spec:R9.34 a specl:Requirement ;
     dct:title "`rollback_traversal(activity_iri)` MUST undo a traversal by re-running the…" ;
     dct:description "`rollback_traversal(activity_iri)` MUST undo a traversal by re-running the portal's CONSTRUCT and removing the projected triples from the target interior. Returns the number of triples removed." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "602"^^xsd:integer ;
+    specl:sourceLine "616"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-e00e5d25 ;
@@ -988,7 +1017,7 @@ spec:R9.35 a specl:Requirement ;
     dct:title "`traverse_portal()` MUST support source layer scoping" ;
     dct:description "`traverse_portal()` MUST support source layer scoping. When a portal declares `cga:sourceLayer cga:ProjectionRole`, the CONSTRUCT runs against projection graphs only. When no `sourceLayer` is declared but the source holon has projection graphs, the CONSTRUCT defaults to projection scope. Portals can force full-dataset access via `cga:sourceLayer cga:InteriorRole`." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "609"^^xsd:integer ;
+    specl:sourceLine "623"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-ec19ae50 ;
@@ -1000,7 +1029,7 @@ spec:R9.36 a specl:Requirement ;
     dct:title "`traverse()` MUST compute a SHA-256 hash of the projected graph and compare…" ;
     dct:description "`traverse()` MUST compute a SHA-256 hash of the projected graph and compare against a stored hash (`cga:lastProjectionHash`) in the target's context graph. When hashes match, injection is skipped and the traversal is recorded as a no-op. Hash tracking is active only when `agent_iri` is provided." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "616"^^xsd:integer ;
+    specl:sourceLine "630"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-040f5fe0 ;
@@ -1012,7 +1041,7 @@ spec:R9.37 a specl:Requirement ;
     dct:title "`freshness(holon_iri)` MUST return a `timedelta` since the most recent traversal" ;
     dct:description "`freshness(holon_iri)` MUST return a `timedelta` since the most recent traversal. `is_stale(holon_iri, max_age)` MUST return True when freshness exceeds the threshold. `stale_holons(max_age)` MUST return all holons exceeding the threshold." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "623"^^xsd:integer ;
+    specl:sourceLine "637"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-b0d589d2 ;
@@ -1026,7 +1055,7 @@ spec:R9.38 a specl:Requirement ;
     dct:title "`collect_audit_trail()` MUST accept optional `limit`, `offset`, `since`, and…" ;
     dct:description "`collect_audit_trail()` MUST accept optional `limit`, `offset`, `since`, and `kind` parameters for SPARQL-level pagination. Filtering is pushed to the SPARQL engine via `ORDER BY DESC(?timestamp) LIMIT/OFFSET` and `FILTER(?timestamp > ...)`. Calling with no arguments returns the full trail (backward compatible)." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "632"^^xsd:integer ;
+    specl:sourceLine "646"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-2e186a14 ;
@@ -1038,7 +1067,7 @@ spec:R9.39 a specl:Requirement ;
     dct:title "`get_activity(activity_iri)` MUST return a `TraversalRecord` or…" ;
     dct:description "`get_activity(activity_iri)` MUST return a `TraversalRecord` or `ValidationRecord` for a single provenance activity, or None if not found. Single SPARQL query per attempt." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "639"^^xsd:integer ;
+    specl:sourceLine "653"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-d798f0d0 ;
@@ -1050,7 +1079,7 @@ spec:R9.40 a specl:Requirement ;
     dct:title "`classify_sparql(query)` MUST return the SPARQL form (`'select'`, `'ask'`…" ;
     dct:description "`classify_sparql(query)` MUST return the SPARQL form (`'select'`, `'ask'`, `'construct'`, `'describe'`, `'update'`) by stripping comments and string literals before keyword matching. Raises `ValueError` for unclassifiable queries." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "646"^^xsd:integer ;
+    specl:sourceLine "660"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-06af4b4f ;
@@ -1062,7 +1091,7 @@ spec:R9.41 a specl:Requirement ;
     dct:title "`validate_iri(iri)` MUST be a public entry point to the library's IRI validation" ;
     dct:description "`validate_iri(iri)` MUST be a public entry point to the library's IRI validation. Raises `ValueError` for empty strings or characters unsafe in Turtle/SPARQL contexts." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "653"^^xsd:integer ;
+    specl:sourceLine "667"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-63a5d87d ;
@@ -1075,7 +1104,7 @@ spec:R9.42 a specl:Requirement ;
     dct:title "`holarchy_summary(max_age=, recent_limit=)` MUST return a `HolarchySummary`…" ;
     dct:description "`holarchy_summary(max_age=, recent_limit=)` MUST return a `HolarchySummary` dataclass aggregating holon count, portal count, root count, health distribution, staleness count, and recent activities." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "660"^^xsd:integer ;
+    specl:sourceLine "674"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-1d0c8a76 ;
@@ -1088,7 +1117,7 @@ spec:R9.43 a specl:Requirement ;
     dct:title "`on_traversal(callback)` and `on_validation(callback)` MUST register callbacks…" ;
     dct:description "`on_traversal(callback)` and `on_validation(callback)` MUST register callbacks that fire synchronously after each `traverse()` or `validate_membrane()`. Callbacks receive the relevant arguments (source, target, projected, membrane_result for traversal; holon_iri, result for validation)." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "667"^^xsd:integer ;
+    specl:sourceLine "681"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:constrains spec:component-7dba7e4c ;
@@ -1103,7 +1132,7 @@ spec:R9.44 a specl:Requirement ;
     dct:title "`MembraneResult.shape_violations` MUST carry a `list[ShapeViolation]` populated…" ;
     dct:description "`MembraneResult.shape_violations` MUST carry a `list[ShapeViolation]` populated from the pyshacl report graph. `ShapeViolation` has fields: `shape_iri`, `focus_node`, `path`, `value`, `message`, `severity`." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "674"^^xsd:integer ;
+    specl:sourceLine "688"^^xsd:integer ;
     specl:priority "MUST" ;
     specl:implementationStatus "verified" ;
     specl:verifiedBy spec:test-866539d7 ;
@@ -1117,7 +1146,7 @@ spec:US1 a specl:UserStory ;
     dct:title "As a knowledge engineer, I create a holon, add interior data from multiple…" ;
     dct:description "As a knowledge engineer, I create a holon, add interior data from multiple sources into named sub-graphs, declare boundary shapes, and validate the membrane — all from a single `HolonicDataset` instance against in-memory rdflib." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "685"^^xsd:integer ;
+    specl:sourceLine "699"^^xsd:integer ;
     specl:role spec:P1 ;
     specl:benefit "I can enforce structural contracts on holon interior data without standing up external infrastructure" ;
     specl:acceptanceCriterion "Given HolonicDataset() with an in-memory backend, when I create a holon with two interiors and a boundary shape and call validate_membrane, then I receive a MembraneResult with health and violation details." .
@@ -1127,7 +1156,7 @@ spec:US2 a specl:UserStory ;
     dct:title "As a systems integrator, I register a portal between two holons with a…" ;
     dct:description "As a systems integrator, I register a portal between two holons with a CONSTRUCT query that translates one vocabulary to another, traverse it, and see the target interior populated only when the membrane validates." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "690"^^xsd:integer ;
+    specl:sourceLine "704"^^xsd:integer ;
     specl:role spec:P2 ;
     specl:benefit "vocabulary translation between holons is governed rather than ad-hoc" ;
     specl:acceptanceCriterion "Given a source holon with CCO-shaped data and a target holon with Schema.org boundary shapes, when I register a CONSTRUCT portal and call traverse(source, target, validate=True), then Schema.org triples appear in the target only if validation passes." .
@@ -1137,7 +1166,7 @@ spec:US3 a specl:UserStory ;
     dct:title "As an operator-tool builder, I use `list_holons_summary()`…" ;
     dct:description "As an operator-tool builder, I use `list_holons_summary()`, `holon_neighborhood(iri, depth=2)`, and `to_graphology()` to render a sigma.js graph of the holarchy in a web console without any custom SPARQL." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "695"^^xsd:integer ;
+    specl:sourceLine "709"^^xsd:integer ;
     specl:role spec:P3 ;
     specl:benefit "I can ship a working web console without writing SPARQL in my frontend code" ;
     specl:acceptanceCriterion "Given a populated holarchy, when I call list_holons_summary() and holon_neighborhood(iri, depth=2).to_graphology(), then the returned dicts deserialize to JSON suitable for direct sigma.js consumption." .
@@ -1147,7 +1176,7 @@ spec:US4 a specl:UserStory ;
     dct:title "As a platform engineer, I deploy against Fuseki with bearer-token auth by…" ;
     dct:description "As a platform engineer, I deploy against Fuseki with bearer-token auth by passing `extra_headers={\"Authorization\": \"Bearer ...\"}` to `FusekiBackend` and the library transparently authenticates every SPARQL request." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "700"^^xsd:integer ;
+    specl:sourceLine "714"^^xsd:integer ;
     specl:role spec:P4 ;
     specl:benefit "secrets-based authentication flows through to the SPARQL endpoint without library modifications" ;
     specl:acceptanceCriterion "Given FusekiBackend(url, dataset=ds, extra_headers={\"Authorization\": \"Bearer x\"}), when any SPARQL request is issued, then the Authorization header reaches the server unchanged." .
@@ -1157,7 +1186,7 @@ spec:US5 a specl:UserStory ;
     dct:title "As an agent author, I use portal traversal as an agentic memory write path…" ;
     dct:description "As an agent author, I use portal traversal as an agentic memory write path: each agent turn runs through a portal with SHACL shape validation, and every turn produces a PROV-O record linking agent, input, output, and activity time." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "705"^^xsd:integer ;
+    specl:sourceLine "719"^^xsd:integer ;
     specl:role spec:P5 ;
     specl:benefit "agent memory writes are validated and auditable end-to-end" ;
     specl:acceptanceCriterion "Given an agent iterating through a governed portal with validate=True, when a turn completes, then the context graph contains a prov:Activity with prov:wasAssociatedWith the agent, prov:used the input, prov:generated the output, and prov:startedAtTime the turn timestamp." .
@@ -1167,7 +1196,7 @@ spec:US6 a specl:UserStory ;
     dct:title "As a data steward, I query the context graph across all holons in a holarchy…" ;
     dct:description "As a data steward, I query the context graph across all holons in a holarchy and receive an audit trail of traversals with membrane health, agent attribution, and timestamps." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "710"^^xsd:integer ;
+    specl:sourceLine "724"^^xsd:integer ;
     specl:role spec:P6 ;
     specl:benefit "I can produce a complete activity record for compliance review" ;
     specl:acceptanceCriterion "Given a holarchy with traversal history, when I run a SPARQL query over the union of context graphs, then I receive activity, agent, input, output, timestamp, and membrane health for every governed operation." .
@@ -1177,7 +1206,7 @@ spec:US7 a specl:UserStory ;
     dct:title "As a spec author, I translate this SPEC to Turtle via `specl-translate`…" ;
     dct:description "As a spec author, I translate this SPEC to Turtle via `specl-translate`, validate it against the shipped SHACL shapes, and publish a maturity badge in the README." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "715"^^xsd:integer ;
+    specl:sourceLine "729"^^xsd:integer ;
     specl:role spec:P7 ;
     specl:benefit "spec quality is machine-measurable and visible to external consumers" ;
     specl:acceptanceCriterion "Given docs/SPEC.md, when specl-translate and specl-validate score are run, then a maturity percentage and SVG badge artifact are produced and the spec's structural integrity is asserted by SHACL." .
@@ -1187,7 +1216,7 @@ spec:OQ1 a specl:OpenIssue ;
     dct:title "Registry-graph typing vs holon-graph-as-holon" ;
     dct:description "Registry-graph typing vs holon-graph-as-holon. If typed graphs (R9.1) are adopted, should the registry graph itself be typed as `cga:RegistryGraph`, and should it be modeled as the interior of a `RegistryHolon`? Bootstrapping implications unresolved." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "777"^^xsd:integer ;
+    specl:sourceLine "791"^^xsd:integer ;
     specl:owner spec:AG1 ;
     specl:recommendation "Type the registry graph explicitly as cga:RegistryRole (shipped in 0.3.4); defer the registry-as-holon question until after R9.1 ships." ;
     specl:resolutionStatus "resolved" .
@@ -1197,7 +1226,7 @@ spec:OQ2 a specl:OpenIssue ;
     dct:title "Subclass vs flat+roles for graph categories" ;
     dct:description "Subclass vs flat+roles for graph categories. `cga:InteriorGraph rdfs:subClassOf cga:HolonicGraph` versus `?g a cga:HolonicGraph ; cga:graphRole cga:InteriorRole`. Subclass is terser in queries; flat+roles supports multi-role graphs cleanly (e.g. a graph that is both an interior and a provenance aggregate)." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "782"^^xsd:integer ;
+    specl:sourceLine "796"^^xsd:integer ;
     specl:owner spec:AG1 ;
     specl:recommendation "Adopt flat+roles because the dual-role case is real (see cga:AggregateHolon); cost is one extra triple pattern per query. Shipped in 0.3.4 via D-0.3.4-1." ;
     specl:resolutionStatus "resolved" .
@@ -1207,7 +1236,7 @@ spec:OQ3 a specl:OpenIssue ;
     dct:title "Scope resolution ordering configurability" ;
     dct:description "Scope resolution ordering configurability. The proposed order (self → portal neighbors → siblings → parent → wider) serves network-proximity queries. Containment-first ordering serves governance queries. Reverse portal distance serves debugging queries." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "787"^^xsd:integer ;
+    specl:sourceLine "801"^^xsd:integer ;
     specl:owner spec:AG1 ;
     specl:recommendation "Default to network-proximity; accept an order= parameter on resolve() taking a strategy enum. Shipped in 0.3.4 with three modes: network, reverse-network, containment." ;
     specl:resolutionStatus "resolved" .
@@ -1217,7 +1246,7 @@ spec:OQ4 a specl:OpenIssue ;
     dct:title "Class-inventory staleness strategy" ;
     dct:description "Class-inventory staleness strategy. Materialized inventory in the registry needs a refresh policy: synchronous (slow writes), asynchronous (fast writes, stale reads), on-demand (explicit refresh), or TTL-based (configurable staleness)." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "792"^^xsd:integer ;
+    specl:sourceLine "806"^^xsd:integer ;
     specl:owner spec:AG1 ;
     specl:recommendation "Per-HolonicDataset strategy at construction time. Shipped in 0.3.3 with eager and off modes; lazy mode deferred to R9.12 gated on usage evidence. Resolved: that evidence never arrived, and the absence of usage was itself the determining criterion, so the gate answered the question rather than deferring it. Eager and off remain the shipped modes; reopen only if a consumer produces the usage R9.12 was waiting on." ;
     specl:resolutionStatus "resolved" .
@@ -1227,7 +1256,7 @@ spec:OQ5 a specl:OpenIssue ;
     dct:title "Graph-level metadata write amplification" ;
     dct:description "Graph-level metadata write amplification. If every portal traversal updates `cga:interiorTripleCount` and last-modified in the registry, write amplification dominates in high-throughput pipelines." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "797"^^xsd:integer ;
+    specl:sourceLine "811"^^xsd:integer ;
     specl:owner spec:AG1 ;
     specl:recommendation "Make metadata updates opt-in via a constructor kwarg. Shipped in 0.3.3 as metadata_updates=\"eager\"|\"off\" on HolonicDataset." ;
     specl:resolutionStatus "resolved" .
@@ -1237,7 +1266,7 @@ spec:OQ6 a specl:OpenIssue ;
     dct:title "Protocol rename (`GraphBackend` to `HolonicStore`)" ;
     dct:description "Protocol rename (`GraphBackend` to `HolonicStore`). Resolved in 0.4.0 via R9.8, R9.9. Deprecated alias removed in 0.5.0 via R9.18." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "802"^^xsd:integer ;
+    specl:sourceLine "816"^^xsd:integer ;
     specl:owner spec:AG1 ;
     specl:recommendation "Renamed in 0.4.0 via R9.8 and R9.9; the deprecated GraphBackend alias was removed in 0.5.0 via R9.18. No further action." ;
     specl:resolutionStatus "resolved" .
@@ -1247,7 +1276,7 @@ spec:OQ7 a specl:OpenIssue ;
     dct:title "Federation semantics across multiple registries are out of scope for 0.3.x" ;
     dct:description "Federation semantics across multiple registries are out of scope for 0.3.x. Open question preserved because the typed-graph design (R9.1) should not close the door on registry-to-registry declarations like `cga:federatesWith`." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "807"^^xsd:integer ;
+    specl:sourceLine "821"^^xsd:integer ;
     specl:owner spec:AG1 ;
     specl:recommendation "Defer to 0.5.0 design session; ensure R9.3's typed-graph vocabulary leaves room for a future federation property without schema migration." ;
     specl:resolutionStatus "deferred" .
@@ -1257,7 +1286,7 @@ spec:OQ8 a specl:OpenIssue ;
     dct:title "Graph-level tick semantics and transition rules" ;
     dct:description "Graph-level tick semantics and transition rules. Cagle's \"The Graph as State Machine\" (*The Inference Engineer*, April 2026) frames a holonic graph as a graph-level state machine in the Game-of-Life sense: Scene Graph (interior state), Boundary Graph (SHACL rules including `sh:SPARQLRule` transition functions), Event Graph (PROV-O transition history), and Projection Graph (external observation). The library implements all four layers structurally but does not implement a tick — portal traversals are event-triggered rather than clock-triggered, and SHACL is used for validation rather than for `$this`-based transformation rules. A future `HolonicDataset.tick()` primitive could fire SHACL transition rules across the whole holarchy, either accumulating PROV-O activities into the Event Graph or mutating the Scene Graph directly via SPARQL UPDATE. Whether to add this is a distinct architectural question from anything currently in the roadmap; adopting it would extend the library from a read-heavy, portal-triggered coordination layer into a living-system model with continuous dynamics." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "812"^^xsd:integer ;
+    specl:sourceLine "826"^^xsd:integer ;
     specl:owner spec:AG1 ;
     specl:recommendation "Wait for Part 2 of the Cagle series (Active Inference / Free Energy Principle) to land before committing to a tick API. Evaluate whether a tick is the right primitive or whether something finer-grained (an active-inference step, an energy-minimization iteration) is more apt. If pursued at all, target a `holonic.contrib` experimental module first to test the pattern without committing the core ontology. No release slot assigned; this may or may not be implemented." ;
     specl:resolutionStatus "deferred" .
@@ -1267,7 +1296,7 @@ spec:OQ9 a specl:OpenIssue ;
     dct:title "DOM-style event propagation as a coordination model" ;
     dct:description "DOM-style event propagation as a coordination model. Cagle proposes (LinkedIn thread, April 2026) that plural-orchestrator coordination can be resolved by treating the holarchy as a structure over which events propagate in the W3C Document Object Model's capture/target/bubble pattern. Under this framing: the containing holon makes no expectations on child interiors (opacity is first-class); external events arrive at a holon and are either consumed, delegated to children via portals, or ignored after propagation completes; \"eventually ignored\" is a legitimate outcome rather than a failure mode. This is distinct from OQ8's tick proposal — event propagation is structural (who receives an event depends on the containment topology) rather than clock-triggered. The library today implements something DOM-adjacent via portal traversal and multi-hop path finding, but does not expose explicit event-dispatch semantics. Open questions surface immediately when mapping DOM to holons: DOM events are synchronous and the DOM is a strict tree, whereas a federated holarchy is asynchronous and a containment graph may have multiple portal paths between two holons. Whether to adopt the DOM framing as library architecture, as a mental model for explaining existing capabilities, or neither, remains open." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "817"^^xsd:integer ;
+    specl:sourceLine "831"^^xsd:integer ;
     specl:owner spec:AG1 ;
     specl:recommendation "Before any implementation, verify whether the existing portal-traversal API strains under real use cases that DOM-style event dispatch would address more naturally. If strain emerges, the design question becomes: extend existing portal semantics with explicit event-phase hooks (capture/target/bubble), add a dedicated `dispatch_event` API parallel to `traverse`, or adopt the DOM model as framing while keeping the current API unchanged. The documentation at `docs/source/dom-comparison.md` establishes the mental-model mapping without committing to implementation. No release slot assigned; this may or may not be implemented." ;
     specl:resolutionStatus "deferred" .
@@ -1277,7 +1306,7 @@ spec:OQ10 a specl:OpenIssue ;
     dct:title "Upper-ontology alignment (BFO/CCO, gist)" ;
     dct:description "Upper-ontology alignment (BFO/CCO, gist). The CGA ontology's structural core (Holon, Portal, LayerGraph) is genuinely novel and does not reduce cleanly to existing upper-ontology categories. A holon is not a BFO Continuant, not an Occurrent, not a gist Content — it is a structural container with an inside/outside distinction, layer-scoped named graphs, and a membrane. Forcing it into an upper-ontology branch would misrepresent what it is. The governance vocabulary (DataDomain, BusinessProcess, ExternalSystem, Capability) maps more naturally to established categories (CCO Agent, CCO InformationBearingEntity, gist Organization). The recommended approach is alignment-not-import: ship optional alignment modules (`cga-bfo-alignment.ttl`, `cga-gist-alignment.ttl`) that downstream consumers load when interoperability with a specific upper ontology is required. The core ontology stays standalone, reasoner-free, and philosophically uncommitted. BFO/CCO alignment supports consumers in regulated industries (ISO 21838-2); gist alignment supports commercial enterprise consumers. Both can be developed in parallel without affecting the core." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "822"^^xsd:integer ;
+    specl:sourceLine "836"^^xsd:integer ;
     specl:owner spec:AG1 ;
     specl:resolutionStatus "open" ;
     specl:recommendation "Develop alignment modules as separate Turtle files under `src/holonic/ontology/`. Use `skos:broadMatch` / `skos:closeMatch` in the core ontology for lightweight cross-referencing without owl:imports. Document the alignment rationale in `docs/source/ontology.md`. Gated on a concrete downstream consumer requesting BFO or gist compatibility." .
@@ -1287,101 +1316,101 @@ spec:OQ11 a specl:OpenIssue ;
     dct:title "SHACL target-class validation gap for fail-on-breach" ;
     dct:description "SHACL target-class validation gap for fail-on-breach. Standard SHACL `sh:targetClass` validates only instances of the target class; when no instances exist, validation reports conformant. This means `fail_on_breach=True` cannot detect the case where a portal injects data of the WRONG type (e.g. `bad:Wrong` instead of `good:Required`). The membrane reports INTACT because there are no `good:Required` instances to validate against. The `fail_on_breach` mechanism (R9.28) is correctly implemented for cases where SHACL does report violations. Closing this gap requires one of: (a) non-standard SHACL interpretation where boundary shapes assert minimum cardinality on target-class instances, not just properties; (b) a pre-validation check that verifies at least one instance of each `sh:targetClass` exists in the interior after injection; (c) custom SPARQL-based validation in addition to SHACL. Two tests in `test_verified_gaps.py` are marked `xfail` pending resolution. This is a critical design decision because it affects whether `fail_on_breach` provides meaningful protection against schema-mismatch errors, not just constraint violations within the correct schema." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "827"^^xsd:integer ;
+    specl:sourceLine "841"^^xsd:integer ;
     specl:owner spec:AG1 ;
-    specl:resolutionStatus "open" ;
-    specl:recommendation "Approach (b) (pre-validation target-class instance check) is the lowest-risk option. It adds a SPARQL ASK before SHACL validation to verify at least one instance of each `sh:targetClass` exists in the data. If none exist, the membrane is WEAKENED rather than INTACT." .
+    specl:resolutionStatus "resolved" ;
+    specl:recommendation "Resolved in 0.9.0 by R3.7 (D-0.9.0-2) with a variant of approach (c) rather than (b). Option (b) fails a valid interior that has no instances of some class yet. Instead, membrane validation reports each typed node that no shape targets; a fail-closed traversal treats the nodes it injected as violations unless the holon permits their type, and the two tests in `test_verified_gaps.py` pass without `xfail`." .
 
 spec:DN1 a specl:DesignNote ;
     specl:partOf <https://zwelz3.github.io/holonic/spec.ttl> ;
     dct:title "The dataset is the holarchy" ;
     dct:description "The dataset is the holarchy. Python methods are convenience over SPARQL, not a separate object model. Dataclasses returned from queries are ephemeral views, not persistent state." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "759"^^xsd:integer .
+    specl:sourceLine "773"^^xsd:integer .
 
 spec:DN2 a specl:DesignNote ;
     specl:partOf <https://zwelz3.github.io/holonic/spec.ttl> ;
     dct:title "Named graphs are hypergraphs" ;
     dct:description "Named graphs are hypergraphs. Recognizing this subsumes the RDF-vs-LPG distinction and makes the four-graph model a natural consequence of standard RDF 1.1 semantics." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "760"^^xsd:integer .
+    specl:sourceLine "774"^^xsd:integer .
 
 spec:DN3 a specl:DesignNote ;
     specl:partOf <https://zwelz3.github.io/holonic/spec.ttl> ;
     dct:title "SPARQL is the primary control surface" ;
     dct:description "SPARQL is the primary control surface. Python handles only what SPARQL cannot express (Dijkstra path ranking, template rendering, pipeline orchestration)." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "761"^^xsd:integer .
+    specl:sourceLine "775"^^xsd:integer .
 
 spec:DN4 a specl:DesignNote ;
     specl:partOf <https://zwelz3.github.io/holonic/spec.ttl> ;
     dct:title "Minimal dependencies" ;
     dct:description "Minimal dependencies. The hard deps are rdflib and pyshacl. Optional extras add jupyter, aiohttp (Fuseki), owlrl (entailment), and visualization widgets. pydantic was removed in 0.6.0; the library uses plain dataclasses with `_DictMixin.to_dict()` for serialization." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "762"^^xsd:integer .
+    specl:sourceLine "776"^^xsd:integer .
 
 spec:DN5 a specl:DesignNote ;
     specl:partOf <https://zwelz3.github.io/holonic/spec.ttl> ;
     dct:title "PROV-O for activity-level provenance" ;
     dct:description "PROV-O for activity-level provenance. Graph-to-graph derivation via `prov:wasDerivedFrom`. Holon-to-holon structural dependency via `cga:derivedFrom`. These are distinct concepts and both exist." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "763"^^xsd:integer .
+    specl:sourceLine "777"^^xsd:integer .
 
 spec:DN6 a specl:DesignNote ;
     specl:partOf <https://zwelz3.github.io/holonic/spec.ttl> ;
     dct:title "SHACL shapes, not OWL axioms, for constraint checking" ;
     dct:description "SHACL shapes, not OWL axioms, for constraint checking. Reasoner-free by design; entailment is optional via the `owlrl` extra." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "764"^^xsd:integer .
+    specl:sourceLine "778"^^xsd:integer .
 
 spec:DN7 a specl:DesignNote ;
     specl:partOf <https://zwelz3.github.io/holonic/spec.ttl> ;
     dct:title "Nested Turtle notation everywhere the library emits RDF" ;
     dct:description "Nested Turtle notation everywhere the library emits RDF. Predicates grouped with `;`, object lists with `,`. No verbose explicit-triple form in examples, fixtures, or docs." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "765"^^xsd:integer .
+    specl:sourceLine "779"^^xsd:integer .
 
 spec:C1 a specl:Comment ;
     specl:partOf <https://zwelz3.github.io/holonic/spec.ttl> ;
     dct:title "The four layers (interior, boundary, projection, context) are explicit in the…" ;
     dct:description "The four layers (interior, boundary, projection, context) are explicit in the ontology as `cga:LayerRole` individuals (`cga:InteriorRole`, `cga:BoundaryRole`, `cga:ProjectionRole`, `cga:ContextRole`) and as bridging properties (`cga:hasInterior` etc. as sub-properties of `cga:hasLayer`). The model accommodates multiple graphs per role." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "769"^^xsd:integer .
+    specl:sourceLine "783"^^xsd:integer .
 
 spec:C2 a specl:Comment ;
     specl:partOf <https://zwelz3.github.io/holonic/spec.ttl> ;
     dct:title "The registry graph (`urn:holarchy:registry`) in R9 proposals refers to a…" ;
     dct:description "The registry graph (`urn:holarchy:registry`) in R9 proposals refers to a cross-cutting catalog graph for holarchy-level declarations. It is distinct from per-holon layer graphs and is declared at the holarchy level, not the holon level." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "770"^^xsd:integer .
+    specl:sourceLine "784"^^xsd:integer .
 
 spec:C3 a specl:Comment ;
     specl:partOf <https://zwelz3.github.io/holonic/spec.ttl> ;
     dct:title "`holonic-console` is the primary downstream consumer driving the 0.3.1 API…" ;
     dct:description "`holonic-console` is the primary downstream consumer driving the 0.3.1 API additions. Its stage 2 work (sigma.js neighborhood view, portal browser, provenance feed) is the functional proof for R6." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "771"^^xsd:integer .
+    specl:sourceLine "785"^^xsd:integer .
 
 spec:C4 a specl:Comment ;
     specl:partOf <https://zwelz3.github.io/holonic/spec.ttl> ;
     dct:title "`specl` provides the SHACL validation of this SPEC itself" ;
     dct:description "`specl` provides the SHACL validation of this SPEC itself. The spec is dogfood: the library under development is specified using a tool whose ontology was co-designed with it." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "772"^^xsd:integer .
+    specl:sourceLine "786"^^xsd:integer .
 
 spec:C5 a specl:Comment ;
     specl:partOf <https://zwelz3.github.io/holonic/spec.ttl> ;
     dct:title "Cagle's \"The Graph as State Machine\" (*The Inference Engineer*, April 2026)…" ;
     dct:description "Cagle's \"The Graph as State Machine\" (*The Inference Engineer*, April 2026) frames a holonic graph as a graph-level state machine where the four layers map to Scene / Boundary / Event / Projection and `sh:SPARQLRule` is the transition function driven by a clock-triggered tick. The library today implements the four layers structurally but operates event-triggered (portal traversals invoked by callers) rather than clock-triggered. Whether to add a tick primitive is captured as OQ8." ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "773"^^xsd:integer .
+    specl:sourceLine "787"^^xsd:integer .
 
 spec:P1 a specl:Persona ;
     specl:partOf <https://zwelz3.github.io/holonic/spec.ttl> ;
     dct:title "Knowledge engineer" ;
     dct:description "Knowledge engineer" ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "729"^^xsd:integer ;
+    specl:sourceLine "743"^^xsd:integer ;
     skos:prefLabel "knowledge engineer" ;
     skos:altLabel "ontologist" .
 
@@ -1390,7 +1419,7 @@ spec:P2 a specl:Persona ;
     dct:title "Systems integrator" ;
     dct:description "Systems integrator" ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "732"^^xsd:integer ;
+    specl:sourceLine "746"^^xsd:integer ;
     skos:prefLabel "systems integrator" .
 
 spec:P3 a specl:Persona ;
@@ -1398,7 +1427,7 @@ spec:P3 a specl:Persona ;
     dct:title "Operator-tool builder" ;
     dct:description "Operator-tool builder" ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "734"^^xsd:integer ;
+    specl:sourceLine "748"^^xsd:integer ;
     skos:prefLabel "operator-tool builder" ;
     skos:altLabel "console developer" .
 
@@ -1407,7 +1436,7 @@ spec:P4 a specl:Persona ;
     dct:title "Platform engineer" ;
     dct:description "Platform engineer" ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "737"^^xsd:integer ;
+    specl:sourceLine "751"^^xsd:integer ;
     skos:prefLabel "platform engineer" .
 
 spec:P5 a specl:Persona ;
@@ -1415,7 +1444,7 @@ spec:P5 a specl:Persona ;
     dct:title "Agent author" ;
     dct:description "Agent author" ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "739"^^xsd:integer ;
+    specl:sourceLine "753"^^xsd:integer ;
     skos:prefLabel "agent author" ;
     skos:altLabel "agent developer" .
 
@@ -1424,7 +1453,7 @@ spec:P6 a specl:Persona ;
     dct:title "Data steward" ;
     dct:description "Data steward" ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "742"^^xsd:integer ;
+    specl:sourceLine "756"^^xsd:integer ;
     skos:prefLabel "data steward" .
 
 spec:P7 a specl:Persona ;
@@ -1432,7 +1461,7 @@ spec:P7 a specl:Persona ;
     dct:title "Spec author" ;
     dct:description "Spec author" ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "744"^^xsd:integer ;
+    specl:sourceLine "758"^^xsd:integer ;
     skos:prefLabel "spec author" .
 
 spec:AG1 a specl:Agent ;
@@ -1440,7 +1469,7 @@ spec:AG1 a specl:Agent ;
     dct:title "Zach Welz" ;
     dct:description "Zach Welz" ;
     prov:wasDerivedFrom spec:source-dcc526b3 ;
-    specl:sourceLine "754"^^xsd:integer ;
+    specl:sourceLine "768"^^xsd:integer ;
     skos:prefLabel "zwelz3" .
 
 spec:component-01f906b6 a specl:Component ;
@@ -1491,6 +1520,9 @@ spec:component-1d833c38 a specl:Component ;
 spec:component-21773f6b a specl:Component ;
     dct:identifier "holonic/client.py (dry_run)" .
 
+spec:component-270c02a7 a specl:Component ;
+    dct:identifier "holonic.client._parse_shacl_report" .
+
 spec:component-2e186a14 a specl:Component ;
     dct:identifier "holonic/client.py (collect_audit_trail)" .
 
@@ -1511,6 +1543,9 @@ spec:component-3ee12192 a specl:Component ;
 
 spec:component-427abfc7 a specl:Component ;
     dct:identifier "holonic/client.py (validate_all)" .
+
+spec:component-47f1e737 a specl:Component ;
+    dct:identifier "holonic._membrane.find_untargeted" .
 
 spec:component-48830ea3 a specl:Component ;
     dct:identifier "projections.py" .
@@ -1638,6 +1673,9 @@ spec:component-ProjectionPipelineStep a specl:Component ;
 spec:component-RdflibBackend a specl:Component ;
     dct:identifier "RdflibBackend" .
 
+spec:component-UntargetedNode a specl:Component ;
+    dct:identifier "UntargetedNode" .
+
 spec:component-_fuseki_client a specl:Component ;
     dct:identifier "_fuseki_client" .
 
@@ -1671,6 +1709,9 @@ spec:component-b94288b5 a specl:Component ;
 spec:component-b955441d a specl:Component ;
     dct:identifier "sparql.py" .
 
+spec:component-ba636c12 a specl:Component ;
+    dct:identifier "holonic.client._health_from_report" .
+
 spec:component-bb929637 a specl:Component ;
     dct:identifier "holonic/client.py" .
 
@@ -1688,6 +1729,9 @@ spec:component-cca3829a a specl:Component ;
 
 spec:component-cfbc4336 a specl:Component ;
     dct:identifier "HolonicDataset discovery methods" .
+
+spec:component-d3f7b43c a specl:Component ;
+    dct:identifier "holonic._membrane.untargeted_policy" .
 
 spec:component-d6622f19 a specl:Component ;
     dct:identifier "holonic/sparql.py" .
@@ -1926,6 +1970,9 @@ spec:test-a3a36cca a specl:Test ;
 spec:test-a4a2b808 a specl:Test ;
     dct:identifier "src/holonic/test/test_deprecation_and_dispatch.py::test_add_holon_without_holon_type" .
 
+spec:test-a4c79acf a specl:Test ;
+    dct:identifier "src/holonic/test/test_membrane.py::TestUntargetedTypes" .
+
 spec:test-a6268b26 a specl:Test ;
     dct:identifier "manual timing at release rehearsal" .
 
@@ -1940,6 +1987,9 @@ spec:test-aa4f07a5 a specl:Test ;
 
 spec:test-ac4902cb a specl:Test ;
     dct:identifier "(pending implementation, gated on usage evidence)" .
+
+spec:test-b4128776 a specl:Test ;
+    dct:identifier "src/holonic/test/test_membrane.py::TestSeverityFailsClosed" .
 
 spec:test-b8307716 a specl:Test ;
     dct:identifier "docs/source/index.md \"Try in browser\" section + .readthedocs.yaml pre_build hooks + manual verification during release rehearsal" .

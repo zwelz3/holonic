@@ -39,6 +39,7 @@ from holonic.model import (
     ShapeViolation,
     SurfaceReport,
     TraversalRecord,
+    UntargetedNode,
     ValidationRecord,
 )
 from holonic.plugins import (
@@ -90,6 +91,7 @@ __all__ = [
     "MembraneBreachError",
     "SealedPortalError",
     "ShapeViolation",
+    "UntargetedNode",
     "classify_sparql",
     "validate_iri",
     "MembraneHealth",
