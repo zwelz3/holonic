@@ -743,3 +743,46 @@ class TestUntargetedTypes:
         _, result = ds.dry_run("urn:holon:src", "urn:holon:tgt")
         assert result.health == MembraneHealth.INTACT
         assert [u.focus_node for u in result.untargeted] == ["urn:o:new"]
+
+
+class TestConformsAgreesAcrossCallers:
+    """R3.6 -- ``conforms`` is false only for results above ``sh:Info``.
+
+    ``dry_run`` passed ``allow_infos=True`` to pyshacl and
+    ``validate_membrane`` did not, so an Info-only report gave
+    ``conforms=True`` from one and ``False`` from the other.
+    """
+
+    @staticmethod
+    def _setup(ds, severity: str) -> None:
+        shapes = f"""
+            @prefix ex: <urn:ex:> .
+            <urn:shapes:S> a sh:NodeShape ; sh:targetClass ex:Item ;
+                sh:property [ sh:path ex:name ; sh:minCount 1 ; sh:severity {severity} ] .
+            """
+        ds.add_holon("urn:holon:src", "Src")
+        ds.add_interior("urn:holon:src", "@prefix ex: <urn:ex:> . <urn:i:1> a ex:Item .")
+        ds.add_holon("urn:holon:tgt", "Tgt")
+        ds.add_interior(
+            "urn:holon:tgt",
+            "@prefix ex: <urn:ex:> . <urn:i:1> a ex:Item .",
+            graph_iri="urn:holon:tgt/interior",
+        )
+        ds.add_boundary("urn:holon:tgt", shapes)
+        ds.add_portal(
+            "urn:portal:p",
+            "urn:holon:src",
+            "urn:holon:tgt",
+            "CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o }",
+        )
+
+    @pytest.mark.parametrize(
+        ("severity", "conforms"),
+        [("sh:Info", True), ("sh:Warning", False), ("sh:Violation", False)],
+    )
+    def test_validate_membrane_and_dry_run_agree(self, ds, severity, conforms):
+        self._setup(ds, severity)
+        validated = ds.validate_membrane("urn:holon:tgt")
+        _, dry = ds.dry_run("urn:holon:src", "urn:holon:tgt")
+        assert validated.conforms is conforms
+        assert dry.conforms is conforms

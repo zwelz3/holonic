@@ -624,9 +624,12 @@ class TraversalEngine:
 
         .. versionadded:: 0.6.0
         """
-        import pyshacl
-
-        from holonic._membrane import find_untargeted, untargeted_policy, untargeted_severity_label
+        from holonic._membrane import (
+            find_untargeted,
+            run_shacl,
+            untargeted_policy,
+            untargeted_severity_label,
+        )
         from holonic.client import _bind_iri, _health_from_report, _parse_shacl_report
 
         portal = self._ds.find_portal(source_iri, target_iri)
@@ -659,11 +662,7 @@ class TraversalEngine:
                 report_text=self._ds._no_shapes_report(missing_boundaries),
             )
 
-        conforms, report_graph, report_text = pyshacl.validate(
-            data_graph,
-            shacl_graph=shapes_graph,
-            allow_infos=True,
-        )
+        conforms, report_graph, report_text = run_shacl(data_graph, shapes_graph)
 
         report = _parse_shacl_report(report_graph)
 

@@ -156,12 +156,13 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
   - acceptance: Given a governed traversal with validate=True, when the activity is read from the context graph, then cga:membraneHealth is present and matches the MembraneResult.health value.
   - verifiedBy: src/holonic/test/test_audit.py::TestCollectAuditTrail::test_validation_recorded_in_trail
 
-- R3.6 Membrane validation MUST fail closed on SHACL result severity. A result whose `sh:resultSeverity` is `sh:Violation`, or is absent, or is any term other than `sh:Warning` and `sh:Info`, MUST be counted as a violation; `sh:Warning` results MUST lower health to `Weakened`; `sh:Info` results MUST be reported in `MembraneResult.infos` and MUST NOT lower health. `validate_membrane()` and `dry_run()` MUST apply the same rule.
+- R3.6 Membrane validation MUST fail closed on SHACL result severity. A result whose `sh:resultSeverity` is `sh:Violation`, or is absent, or is any term other than `sh:Warning` and `sh:Info`, MUST be counted as a violation; `sh:Warning` results MUST lower health to `Weakened`; `sh:Info` results MUST be reported in `MembraneResult.infos` and MUST NOT lower health. `MembraneResult.conforms` MUST be false exactly when the SHACL report holds a result above `sh:Info`. `validate_membrane()` and `dry_run()` MUST apply the same rule.
   - priority: MUST
   - implementation: verified
   - constrains: holonic.client._parse_shacl_report, holonic.client._health_from_report, MembraneResult
   - acceptance: Given a boundary shape that declares a custom severity and an interior that violates it, when `traverse()` is called with `fail_on_breach=True`, then `MembraneBreachError` is raised.
   - verifiedBy: src/holonic/test/test_membrane.py::TestSeverityFailsClosed
+  - verifiedBy: src/holonic/test/test_membrane.py::TestConformsAgreesAcrossCallers
 
 - R3.7 Membrane validation MUST report each typed interior node that no boundary shape targets as an `UntargetedNode` in `MembraneResult.untargeted`. Targeting follows SHACL Core (`sh:targetClass` with `rdfs:subClassOf*` in the data graph, implicit class targets, `sh:targetNode`, `sh:targetSubjectsOf`, `sh:targetObjectsOf`); a boundary with a SPARQL-based target skips the check. A class named by `cga:permitsType` in the holon's boundary, and its subclasses, MUST be exempt. The severity MUST be the holon's `cga:untargetedTypeSeverity` when declared, resolved as R3.6 resolves SHACL severities; otherwise Info for `validate_membrane()` and `dry_run()`, and Violation for the nodes `traverse(fail_on_breach=True)` injects.
   - priority: MUST
@@ -530,7 +531,7 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
 - R9.22 The `add_portal()` method MUST support creation of all portal subtypes declared in the CGA ontology (`cga:TransformPortal`, `cga:IconPortal`, `cga:SealedPortal`) as well as downstream subclasses via three additive parameters: `construct_query` is optional (default `None`); `portal_type` is a customizable RDF type (default `"cga:TransformPortal"`); `extra_ttl` accepts additional Turtle triples for predicates carried by downstream portal subclasses. All existing positional calls continue to work unchanged. Portal discovery (`find_portals_from/to/direct`) MUST match any portal subtype — the pre-0.4.2 hardcoded filter on `cga:TransformPortal` is relaxed because the `cga:sourceHolon` + `cga:targetHolon` predicate pair uniquely identifies a portal regardless of its specific subtype. Discovery queries use `SELECT DISTINCT` to deduplicate results across the boundary graph and registry mirror. The CGA ontology ships `cga:IconPortal` (previously undeclared) and SHACL shapes (`cga:IconPortalShape`, `cga:SealedPortalShape`) that warn when these subtypes carry `cga:constructQuery`; `cga:TransformPortalShape` continues to require exactly one `cga:constructQuery`.
   - priority: MUST
   - implementation: verified
-  - constrains: HolonicDataset.add_portal, holonic/client.py, holonic/sparql.py (FIND_PORTALS_FROM, FIND_PORTALS_TO, FIND_PORTAL_DIRECT), holonic/ontology/cga.ttl (cga:IconPortal), holonic/ontology/cga-shapes.ttl (cga:IconPortalShape, cga:SealedPortalShape)
+  - constrains: HolonicDataset.add_portal, holonic/client.py, holonic/sparql.py (FIND_PORTALS_FROM), holonic/sparql.py (FIND_PORTALS_TO), holonic/sparql.py (FIND_PORTAL_DIRECT), holonic/ontology/cga.ttl (cga:IconPortal), holonic/ontology/cga-shapes.ttl (cga:IconPortalShape), holonic/ontology/cga-shapes.ttl (cga:SealedPortalShape)
   - acceptance: Given a portal created with `portal_type="cga:SealedPortal"` and no `construct_query`, when `find_portals_from(source)` is called, then exactly one `PortalInfo` is returned with `construct_query=None`; and given a portal created with `extra_ttl` carrying a downstream predicate, when the boundary graph is queried by SPARQL for that predicate, then the extra triples are present; and given a TransformPortal without a constructQuery or a SealedPortal/IconPortal carrying one, when the registry is validated against `cga-shapes.ttl`, then the corresponding shape reports a violation (for TransformPortal) or warning (for SealedPortal and IconPortal).
   - verifiedBy: src/holonic/test/test_lifecycle.py::TestAddPortalExtensibility and src/holonic/test/test_ontology.py::TestPortalSubtypeShapeSemantics
 
@@ -539,7 +540,7 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
 - R9.23 Portal discovery queries MUST return the portal's RDF type (excluding base `cga:Portal`) as a `portal_type` field on `PortalInfo`, `PortalSummary`, and `PortalDetail`. All five discovery SPARQL queries include `OPTIONAL { ?portal a ?portalType . FILTER(?portalType != cga:Portal) }`.
   - priority: MUST
   - implementation: verified
-  - constrains: holonic/model.py (PortalInfo), holonic/console_model.py (PortalSummary, PortalDetail), holonic/sparql.py, holonic/client.py
+  - constrains: holonic/model.py (PortalInfo), holonic/console_model.py (PortalSummary), holonic/console_model.py (PortalDetail), holonic/sparql.py, holonic/client.py
   - acceptance: Given a TransformPortal, when `find_portals_from()` is called, then `portal.portal_type` contains `"urn:holonic:ontology:TransformPortal"`. Given a SealedPortal, when `get_portal()` is called, then `detail.portal_type` contains `"SealedPortal"`.
   - verifiedBy: src/holonic/test/test_verified_gaps.py::TestPortalTypeInDataModel
 
@@ -602,7 +603,7 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
 - R9.32 `last_traversal(holon_iri)` MUST return the most recent `TraversalRecord` targeting a holon. `derivation_chain(holon_iri)` MUST walk `prov:wasDerivedFrom` to return upstream holon IRIs.
   - priority: MUST
   - implementation: verified
-  - constrains: holonic/client.py (last_traversal, derivation_chain)
+  - constrains: holonic/client.py (last_traversal), holonic/client.py (derivation_chain)
   - acceptance: Given traversals A->B->C, when `derivation_chain("C")` is called, then `["B", "A"]` is returned. When `last_traversal("C")` is called, then a `TraversalRecord` with `target_iri="C"` is returned.
   - verifiedBy: src/holonic/test/test_verified_gaps.py::TestPerHolonProvenanceHelpers
 
@@ -637,7 +638,7 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
 - R9.37 `freshness(holon_iri)` MUST return a `timedelta` since the most recent traversal. `is_stale(holon_iri, max_age)` MUST return True when freshness exceeds the threshold. `stale_holons(max_age)` MUST return all holons exceeding the threshold.
   - priority: MUST
   - implementation: verified
-  - constrains: holonic/client.py (freshness, is_stale, stale_holons)
+  - constrains: holonic/client.py (freshness), holonic/client.py (is_stale), holonic/client.py (stale_holons)
   - acceptance: Given a traversal with agent_iri, when `freshness()` is called, then a `timedelta` is returned.
   - verifiedBy: src/holonic/test/test_verified_gaps.py::TestStalenessTracking
 
@@ -667,7 +668,7 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
 - R9.41 `validate_iri(iri)` MUST be a public entry point to the library's IRI validation. Raises `ValueError` for empty strings or characters unsafe in Turtle/SPARQL contexts.
   - priority: MUST
   - implementation: verified
-  - constrains: holonic/client.py (validate_iri, _validate_iri)
+  - constrains: holonic/client.py (validate_iri), holonic/client.py (_validate_iri)
   - acceptance: Given `validate_iri("<unsafe>")`, when called, then `ValueError` is raised.
   - verifiedBy: src/holonic/test/test_audit_remediation.py::TestIRIValidation
 
@@ -681,7 +682,7 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
 - R9.43 `on_traversal(callback)` and `on_validation(callback)` MUST register callbacks that fire synchronously after each `traverse()` or `validate_membrane()`. Callbacks receive the relevant arguments (source, target, projected, membrane_result for traversal; holon_iri, result for validation).
   - priority: MUST
   - implementation: verified
-  - constrains: holonic/client.py (on_traversal, on_validation, traverse, validate_membrane)
+  - constrains: holonic/client.py (on_traversal), holonic/client.py (on_validation), holonic/client.py (traverse), holonic/client.py (validate_membrane)
   - acceptance: Given a registered callback, when `traverse()` completes, then the callback has been called exactly once with the traversal arguments.
   - verifiedBy: (callback mechanism; exercised by downstream console EventBroker)
 
@@ -689,7 +690,7 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
   - priority: MUST
   - implementation: verified
   - verifiedBy: src/holonic/test/test_membrane.py::TestShapeViolationDetail::test_focus_node_identifies_the_offending_node
-  - constrains: holonic/model.py (ShapeViolation, MembraneResult), holonic/client.py (_parse_shacl_report)
+  - constrains: holonic/model.py (ShapeViolation), holonic/model.py (MembraneResult), holonic/client.py (_parse_shacl_report)
   - acceptance: Given a membrane violation, when `validate_membrane()` returns, then `result.shape_violations[0].focus_node` identifies the offending node.
 
 ### Deferred to 0.8.0+

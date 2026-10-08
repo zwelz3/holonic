@@ -61,6 +61,24 @@ def no_shapes_report(missing: list[str]) -> str:
     )
 
 
+def run_shacl(data: Graph, shapes: Graph) -> tuple[bool, Graph, str]:
+    """Run pyshacl the one way membrane validation and ``dry_run`` both use.
+
+    ``allow_infos=True`` makes ``conforms`` false only for results above
+    ``sh:Info``, matching membrane health, which Info results never lower
+    (R3.6). Before 0.9.0 ``dry_run`` passed the flag and ``validate_membrane``
+    did not, so the two disagreed on ``conforms`` for an Info-only report.
+
+    .. versionadded:: 0.9.0
+    """
+    import pyshacl
+
+    conforms, report_graph, report_text = pyshacl.validate(
+        data, shacl_graph=shapes, allow_infos=True
+    )
+    return bool(conforms), report_graph, str(report_text)
+
+
 def _is_shape(shapes: Graph, node: Node) -> bool:
     return (node, RDF.type, SH.NodeShape) in shapes or (node, RDF.type, SH.PropertyShape) in shapes
 
@@ -176,8 +194,6 @@ class MembraneValidator:
         that injects a type no shape covers breaches the membrane while nodes
         already in the interior do not.
         """
-        import pyshacl
-
         from holonic.client import _bind_iri, _health_from_report, _parse_shacl_report
 
         log.debug("validate_membrane(%s)", holon_iri)
@@ -207,10 +223,7 @@ class MembraneValidator:
                 report_text=no_shapes_report(missing_boundaries),
             )
 
-        conforms, report_graph, report_text = pyshacl.validate(
-            data_graph,
-            shacl_graph=shapes_graph,
-        )
+        conforms, report_graph, report_text = run_shacl(data_graph, shapes_graph)
 
         # Parse violations and warnings from the structured report graph
         report = _parse_shacl_report(report_graph)
@@ -262,6 +275,7 @@ __all__ = [
     "MembraneValidator",
     "find_untargeted",
     "no_shapes_report",
+    "run_shacl",
     "untargeted_policy",
     "untargeted_severity_label",
 ]

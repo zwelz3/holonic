@@ -119,6 +119,18 @@ All notable changes to this project will be documented in this file.
   results, previously discarded, are kept in the new `MembraneResult.infos`
   and never lower health. `validate_membrane` and `dry_run` share one health
   rule (R3.6).
+- **`MembraneResult.conforms` agrees between `validate_membrane` and
+  `dry_run`.** `dry_run` passed `allow_infos=True` to pyshacl and
+  `validate_membrane` did not, so a report holding only `sh:Info` results gave
+  `conforms=True` from one and `False` from the other. Both now run SHACL
+  through `run_shacl`, and `conforms` is false only for a result above
+  `sh:Info` (R3.6).
+- **Sixteen malformed `specl:Component` identifiers in `docs/SPEC.ttl`.**
+  specl splits a `constrains:` value on every comma, and seven requirements
+  listed symbols as `path (a, b)`, which produced components such as
+  `holonic/client.py (freshness` and `is_stale)`. The lists are now written
+  `path (a), path (b)`, and `test_spec_constrains_items_have_no_comma_inside_parentheses`
+  fails on the old pattern.
 - **Six CGA terms carried no `skos:definition`, `rdfs:label` or
   `rdfs:comment`** — `MembraneHealth`, `interiorTripleCount`, `lastIngestion`,
   `splitRationale`, `mergeRationale` and `splitTarget`, each sitting beside
