@@ -97,6 +97,16 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- **`fail_on_breach` no longer fails open on an unrecognized SHACL severity**
+  ([#30](https://github.com/zwelz3/holonic/issues/30)). `_parse_shacl_report`
+  matched severities by suffix and dropped any result it could not classify,
+  so a shape declaring a custom severity left the membrane INTACT and
+  `traverse(..., fail_on_breach=True)` injected the breaching data. Severities
+  are now compared with `sh:Violation`, `sh:Warning` and `sh:Info` exactly, and
+  a result with any other severity, or none, counts as a violation. `sh:Info`
+  results, previously discarded, are kept in the new `MembraneResult.infos`
+  and never lower health. `validate_membrane` and `dry_run` share one health
+  rule (R3.6).
 - **Six CGA terms carried no `skos:definition`, `rdfs:label` or
   `rdfs:comment`** — `MembraneHealth`, `interiorTripleCount`, `lastIngestion`,
   `splitRationale`, `mergeRationale` and `splitTarget`, each sitting beside

@@ -171,7 +171,10 @@ Eliminates polling for same-process event detection.
 **Structured violations.** `ShapeViolation` dataclass with
 `shape_iri`, `focus_node`, `path`, `value`, `message`, `severity`.
 `MembraneResult.shape_violations` carries a `list[ShapeViolation]`
-populated from the pyshacl report graph.
+populated from the pyshacl report graph. A result whose severity is not
+`sh:Warning` or `sh:Info` counts as a violation, including a custom or
+missing severity, so an unrecognized report cannot pass a breach (0.9.0).
+`sh:Info` results are kept in `MembraneResult.infos` and never lower health.
 
 ## Store Protocol (0.4.0)
 

@@ -605,7 +605,7 @@ class TraversalEngine:
         """
         import pyshacl
 
-        from holonic.client import _bind_iri, _parse_shacl_report
+        from holonic.client import _bind_iri, _health_from_report, _parse_shacl_report
 
         portal = self._ds.find_portal(source_iri, target_iri)
         if portal is None:
@@ -643,25 +643,18 @@ class TraversalEngine:
             allow_infos=True,
         )
 
-        violations, warnings_list, shape_viols = _parse_shacl_report(
-            report_graph,
-        )
-
-        if violations:
-            health = MembraneHealth.COMPROMISED
-        elif warnings_list:
-            health = MembraneHealth.WEAKENED
-        else:
-            health = MembraneHealth.INTACT
+        report = _parse_shacl_report(report_graph)
+        health = _health_from_report(report)
 
         return projected, MembraneResult(
             holon_iri=target_iri,
             conforms=conforms,
             health=health,
             report_text=report_text,
-            violations=violations,
-            warnings=warnings_list,
-            shape_violations=shape_viols,
+            violations=report.violations,
+            warnings=report.warnings,
+            infos=report.infos,
+            shape_violations=report.shape_violations,
         )
 
 

@@ -67,6 +67,11 @@ class MembraneResult(_DictMixin):
     violations: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     shape_violations: list[ShapeViolation] = field(default_factory=list)
+    infos: list[str] = field(default_factory=list)
+    """SHACL results at ``sh:Info`` severity. They never lower health.
+
+    .. versionadded:: 0.9.0
+    """
 
     def summary(self) -> str:
         """Return a summary of the Holon's Membrane."""
@@ -81,6 +86,10 @@ class MembraneResult(_DictMixin):
             lines.append(f"  warnings ({len(self.warnings)}):")
             for w in self.warnings[:5]:
                 lines.append(f"    - {w}")
+        if self.infos:
+            lines.append(f"  infos ({len(self.infos)}):")
+            for i in self.infos[:5]:
+                lines.append(f"    - {i}")
         return "\n".join(lines)
 
     @property

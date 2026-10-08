@@ -156,6 +156,13 @@ Make it practical to build holarchies for digital engineering, enterprise knowle
   - acceptance: Given a governed traversal with validate=True, when the activity is read from the context graph, then cga:membraneHealth is present and matches the MembraneResult.health value.
   - verifiedBy: src/holonic/test/test_audit.py::TestCollectAuditTrail::test_validation_recorded_in_trail
 
+- R3.6 Membrane validation MUST fail closed on SHACL result severity. A result whose `sh:resultSeverity` is `sh:Violation`, or is absent, or is any term other than `sh:Warning` and `sh:Info`, MUST be counted as a violation; `sh:Warning` results MUST lower health to `Weakened`; `sh:Info` results MUST be reported in `MembraneResult.infos` and MUST NOT lower health. `validate_membrane()` and `dry_run()` MUST apply the same rule.
+  - priority: MUST
+  - implementation: verified
+  - constrains: holonic.client._parse_shacl_report, holonic.client._health_from_report, MembraneResult
+  - acceptance: Given a boundary shape that declares a custom severity and an interior that violates it, when `traverse()` is called with `fail_on_breach=True`, then `MembraneBreachError` is raised.
+  - verifiedBy: src/holonic/test/test_membrane.py::TestSeverityFailsClosed
+
 ## R4 Portal and Traversal Semantics
 
 - R4.1 Portals MUST be first-class RDF entities stored in boundary graphs with `cga:sourceHolon`, `cga:targetHolon`, and (for `cga:TransformPortal`) `cga:constructQuery`.

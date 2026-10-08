@@ -75,7 +75,7 @@ class MembraneValidator:
         """
         import pyshacl
 
-        from holonic.client import _bind_iri, _parse_shacl_report
+        from holonic.client import _bind_iri, _health_from_report, _parse_shacl_report
 
         log.debug("validate_membrane(%s)", holon_iri)
 
@@ -110,25 +110,18 @@ class MembraneValidator:
         )
 
         # Parse violations and warnings from the structured report graph
-        violations, warnings, shape_violations = _parse_shacl_report(
-            report_graph,
-        )
-
-        if violations:
-            health = MembraneHealth.COMPROMISED
-        elif warnings:
-            health = MembraneHealth.WEAKENED
-        else:
-            health = MembraneHealth.INTACT
+        report = _parse_shacl_report(report_graph)
+        health = _health_from_report(report)
 
         result = MembraneResult(
             holon_iri=holon_iri,
             conforms=conforms,
             health=health,
             report_text=report_text,
-            violations=violations,
-            warnings=warnings,
-            shape_violations=shape_violations,
+            violations=report.violations,
+            warnings=report.warnings,
+            infos=report.infos,
+            shape_violations=report.shape_violations,
         )
 
         # Fire notification hooks

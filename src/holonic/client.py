@@ -14,7 +14,7 @@ from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 from uuid import uuid4
 
 from rdflib import Dataset, Graph, Literal, Namespace, URIRef
@@ -282,22 +282,45 @@ def _run_construct_on_graph(graph: Graph | Dataset, construct_query: str) -> Gra
     return result.graph
 
 
-def _parse_shacl_report(
-    report_graph: Graph,
-) -> tuple[list[str], list[str], list[ShapeViolation]]:
-    """Extract violations and warnings from a SHACL validation report graph.
+_SEVERITY_LABELS: dict[URIRef, str] = {
+    SH.Violation: "Violation",
+    SH.Warning: "Warning",
+    SH.Info: "Info",
+}
+
+
+class ParsedShaclReport(NamedTuple):
+    """Results of a SHACL report graph, sorted by severity.
+
+    ``violations``, ``warnings``, and ``infos`` are human-readable summary
+    strings. ``shape_violations`` holds a :class:`ShapeViolation` for each
+    violation and warning; Info results appear only in ``infos``.
+    """
+
+    violations: list[str]
+    warnings: list[str]
+    infos: list[str]
+    shape_violations: list[ShapeViolation]
+
+
+def _parse_shacl_report(report_graph: Graph) -> ParsedShaclReport:
+    """Extract results from a SHACL validation report graph, failing closed.
 
     Parses the structured ``sh:ValidationResult`` entries rather than
     scanning the human-readable text, making the result independent
     of pyshacl's text-formatting choices.
 
-    Returns ``(violations, warnings, shape_violations)`` where
-    ``violations`` and ``warnings`` are human-readable summary strings,
-    and ``shape_violations`` is a list of structured
-    :class:`ShapeViolation` objects.
+    A result is classified by comparing its ``sh:resultSeverity`` with
+    ``sh:Violation``, ``sh:Warning``, and ``sh:Info``. A result whose
+    severity is absent or is any other term (a custom severity IRI, a
+    literal) is counted as a violation, so a report the parser does not
+    recognize can never make a membrane healthier than its shapes
+    found it. Before 0.9.0 such results were dropped, which let
+    ``fail_on_breach`` pass a breach (issue #30).
     """
     violations: list[str] = []
     warnings: list[str] = []
+    infos: list[str] = []
     structured: list[ShapeViolation] = []
 
     for result in report_graph.objects(predicate=SH.result):
@@ -308,7 +331,6 @@ def _parse_shacl_report(
         source_shape = report_graph.value(result, SH.sourceShape)
         value = report_graph.value(result, SH.value)
 
-        severity_str = str(severity) if severity else ""
         msg = str(message) if message else "No message"
         focus_str = str(focus) if focus else ""
         path_str = str(path) if path else ""
@@ -318,18 +340,21 @@ def _parse_shacl_report(
             detail_parts.append(f"focus={focus_str}")
         if path_str:
             detail_parts.append(f"path={path_str}")
+
+        sev_label = _SEVERITY_LABELS.get(severity) if isinstance(severity, URIRef) else None
+        if sev_label is None:
+            shown = severity.n3() if severity is not None else "none"
+            detail_parts.append(f"unrecognized severity {shown}, counted as Violation")
+            sev_label = "Violation"
         detail = "; ".join(detail_parts)
 
-        sev_label = "Violation"
-        if severity_str.endswith("Violation"):
-            violations.append(f"Violation: {detail}")
-            sev_label = "Violation"
-        elif severity_str.endswith("Warning"):
-            warnings.append(f"Warning: {detail}")
-            sev_label = "Warning"
-        else:
-            # Info severity: skip for violation/warning lists
+        if sev_label == "Info":
+            infos.append(f"Info: {detail}")
             continue
+        if sev_label == "Violation":
+            violations.append(f"Violation: {detail}")
+        else:
+            warnings.append(f"Warning: {detail}")
 
         structured.append(
             ShapeViolation(
@@ -342,7 +367,16 @@ def _parse_shacl_report(
             )
         )
 
-    return violations, warnings, structured
+    return ParsedShaclReport(violations, warnings, infos, structured)
+
+
+def _health_from_report(report: ParsedShaclReport) -> MembraneHealth:
+    """Map a parsed report to membrane health; Info results never lower it."""
+    if report.violations:
+        return MembraneHealth.COMPROMISED
+    if report.warnings:
+        return MembraneHealth.WEAKENED
+    return MembraneHealth.INTACT
 
 
 @lru_cache(maxsize=1)
